@@ -1,0 +1,6 @@
+{
+  "_state": "Run B not started. Gate G0 is met, so Run B may begin.",
+  "_rule": "A source is a page opened in this run. A search snippet is not a source. Record URL, title, author, year, date fetched, and the passage relied on.",
+  "cap": 25,
+  "sources": []
+}

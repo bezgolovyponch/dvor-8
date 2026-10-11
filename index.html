@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ДВОР-8 — смотри со своего балкона</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>ДВОР-8</h1>
+  <p class="sub">вид с балкона · <span id="hudHint"></span></p>
+</header>
+
+<main>
+  <div class="frame">
+    <canvas id="yard" aria-label="Двор, вид с балкона"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="hud">
+      <div><b id="hudScanned">0 / 0</b><span>распознано</span></div>
+      <div><b id="hudBroken">0</b><span>разбито</span></div>
+      <div><b id="hudRocks">6</b><span>камней</span></div>
+    </div>
+    <div class="buttons">
+      <button id="scanBtn" type="button">СКАНИРОВАТЬ ДВОР</button>
+      <button id="resetBtn" type="button" class="ghost">ЗАНОВО</button>
+    </div>
+    <div id="log" class="log" aria-live="polite"></div>
+    <p class="note">
+      Бросок — не насилие: предмет просто падает. Здесь нет людей, которым можно навредить,
+      и нет задачи что-то испортить.
+    </p>
+  </div>
+</main>
+
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
