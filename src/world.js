@@ -1,29 +1,34 @@
 // The yard as a thing that can be hit. Plain data and pure functions: no canvas, no clock of its own.
 //
 // The picture is an array of palette indices. Breaking something does not draw anything — it rewrites the
-// indices of that thing to the void, and the renderer shows whatever the array now says.
+// indices of that thing to its own wreck, and the renderer shows whatever the array now says.
 
-import { OUTLINE, VOID } from './palette.js';
+import { OUTLINE, VOID, scorchMap } from './palette.js';
 import { mulberry32 } from './rng.js';
 
-export const COMBO_WINDOW = 2.5;   // seconds a combo stays alive after a hit
-export const NEAR = 6;             // a tap this close to a thing counts as a tap on it
-export const DEBRIS_MAX = 260;     // pieces a broken thing throws; more than this is noise, not impact
+export const NEAR = 7;             // a tap this close to a thing counts as a tap on it: a finger is not a pixel
+export const DEBRIS_MAX = 220;     // pieces a broken thing throws; more than this is noise, not impact
 
-export function makeWorld({ w, h, photo, st, seg, seed = 1 }) {
+export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1 }) {
+  const picture = Uint8Array.from(idx);
+  // A dark line round each thing, so it stands off the yard the way a sprite does.
+  for (const r of regions) {
+    for (const p of r.pixels) {
+      const x = p % w, y = (p / w) | 0;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || owner[p - 1] !== r.id || owner[p + 1] !== r.id || owner[p - w] !== r.id || owner[p + w] !== r.id) picture[p] = OUTLINE;
+    }
+  }
   return {
-    w, h, photo, seed,
-    idx: Uint8Array.from(st.idx),
-    owner: seg.owner,
-    regions: seg.regions.map((r) => ({ ...r, hits: 0, gone: false, seen: false })),
+    w, h, photo, seed, palette, scorch: scorchMap(palette),
+    idx: picture, owner,
+    regions: regions.map((r) => ({ ...r, hits: 0, gone: false, seen: false })),
     rubble: new Uint8Array(w * h).fill(255),   // what has fallen and stayed, as palette indices
-    heights: new Uint8Array(w),                // how high the rubble stands in each column
-    score: 0, combo: 0, comboLeft: 0, maxCombo: 0,
-    throws: 0, hits: 0, broken: 0, strikes: 0, time: 0, done: false,
+    score: 0, combo: 0, comboLeft: 0, comboWindow: 2.5, maxCombo: 0,
+    throws: 0, hits: 0, broken: 0, strikes: 0, time: 0, done: regions.length === 0,
   };
 }
 
-// What is under a point. The exact pixel first; failing that, the nearest live thing within NEAR.
+// What is under a point. The exact pixel first; failing that, the nearest standing thing within NEAR.
 export function pick(world, x, y) {
   const xi = Math.round(x), yi = Math.round(y);
   const at = (px, py) => {
@@ -45,25 +50,26 @@ export function pick(world, x, y) {
   return best;
 }
 
-// One hit. Returns what happened and the pieces that came off, for the effects to throw around.
-export function strike(world, region, x, y) {
+// One impact on one thing. Returns what happened and the pieces that came off, for the effects to throw.
+export function strike(world, region, x, y, { damage = 1, combo = 2.5 } = {}) {
   if (!region || region.gone) return null;
   const rnd = mulberry32(world.seed + (world.strikes += 1) * 7919);
-  const { w, idx, owner } = world;
-  region.hits += 1;
+  const { w, idx, owner, scorch } = world;
+  region.hits += damage;
   world.hits += 1;
   world.combo = world.comboLeft > 0 ? world.combo + 1 : 1;
-  world.comboLeft = COMBO_WINDOW;
+  world.comboLeft = world.comboWindow = combo;
   world.maxCombo = Math.max(world.maxCombo, world.combo);
+  const floor = Math.min(world.h - 1, region.y + region.h);   // pieces come to rest at the thing's own foot
   const debris = [];
   let kind, points;
   if (region.hits >= region.hp) {
     kind = 'break';
     const every = Math.max(1, Math.ceil(region.area / DEBRIS_MAX));
     region.pixels.forEach((p, n) => {
-      if (n % every === 0) debris.push({ x: p % w, y: (p / w) | 0, c: idx[p] });
       const px = p % w, py = (p / w) | 0;
-      idx[p] = (px * 3 + py * 5) % 7 === 0 ? OUTLINE : VOID;
+      if (n % every === 0 && idx[p] !== OUTLINE) debris.push({ x: px, y: py, c: idx[p], floor: floor + ((px * 7 + py * 3) % 5) });
+      idx[p] = (px * 3 + py * 5) % 6 === 0 ? VOID : scorch[idx[p]];
     });
     region.gone = true;
     world.broken += 1;
@@ -71,8 +77,14 @@ export function strike(world, region, x, y) {
     if (world.broken === world.regions.length) world.done = true;
   } else {
     kind = 'crack';
-    // Three jagged cracks out of the point of impact, drawn into the thing itself.
-    const reach = Math.max(6, Math.sqrt(region.area) / 1.4);
+    // A dent where it landed, and three jagged cracks out of it, drawn into the thing itself.
+    for (let dy = -4; dy <= 4; dy += 1) for (let dx = -4; dx <= 4; dx += 1) {
+      const xi = Math.round(x) + dx, yi = Math.round(y) + dy;
+      if (dx * dx + dy * dy > 16 || xi < 0 || yi < 0 || xi >= w || yi >= world.h) continue;
+      const p = yi * w + xi;
+      if (owner[p] === region.id) idx[p] = scorch[idx[p]];
+    }
+    const reach = Math.max(6, Math.sqrt(region.area) / 1.3);
     for (let ray = 0; ray < 3; ray += 1) {
       let a = rnd() * Math.PI * 2, px = x, py = y;
       for (let step = 0; step < reach; step += 1) {
@@ -82,7 +94,7 @@ export function strike(world, region, x, y) {
         if (xi < 0 || yi < 0 || xi >= w || yi >= world.h) break;
         const p = yi * w + xi;
         if (owner[p] !== region.id) continue;
-        if (idx[p] !== OUTLINE && step % 3 === 0) debris.push({ x: xi, y: yi, c: idx[p] });
+        if (idx[p] !== OUTLINE && step % 3 === 0) debris.push({ x: xi, y: yi, c: idx[p], floor: floor + (step % 4) });
         idx[p] = OUTLINE;
       }
     }

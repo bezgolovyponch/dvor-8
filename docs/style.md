@@ -24,34 +24,40 @@ external source; numbers set by eye.
 | F12 | Jan Willem Nijman on one pistol shot in Nuclear Throne: the camera kicks back 6 pixels and screenshake adds 4; a hit starts "with white frame"; the game freezes "about 10-20 milliseconds whenever you hit something". | SOURCED[10] |
 | F13 | Nijman's talk also lists permanence — debris and marks that stay — among the tricks. | SNIPPET (search result; the talk page returned 404) |
 
-**Not found:** a source for how games show cannabis, or depression as distinct from grief. The weed look is
-built from F4 and is a `CHOICE`; the depression look leans on F5, which is about grief.
+| F14 | Small objects "are represented by small number of pixels in the image and lack sufficient details, making them difficult to detect"; slicing the image and detecting per slice raised average precision by 5.1–6.8 points for three detectors without retraining. | SOURCED[11] |
+| F15 | In a study of four versions of one action RPG — no, medium, high and extreme juiciness — "both Medium Juiciness and High Juiciness outperform No Juiciness and Extreme Juiciness across all measures" (Kao, *Entertainment Computing* 34, 2020). | SNIPPET (search result; the paper was not opened) |
+| F16 | MediaPipe's ObjectDetector runs in the browser from a `.tflite` model; `detect()` calls "run synchronously and block the user interface thread". | SOURCED[12] |
+
+**Not found:** a source for how games show cannabis, or depression as distinct from grief. The weed mode is
+built from F4 and is a `CHOICE`; the depression mode leans on F5, which is about grief.
 
 ## Decisions
 
+Rewritten 2026-10-11 for the third build. What changed from the second, and why, is in `docs/concept.md`.
+
 | # | Decision | Tag | Held by test |
 |---|---|---|---|
-| D1 | The yard is stored as palette indices and looked up through an 18-entry table each frame. A filter is another table. | DERIVED[F1, F3] | *a filter changes the table and nothing else* |
-| D2 | Two ramps, cool and warm, eight tones each, dark purple to white and dark plum to pale gold; the middle of each is saturated. | DERIVED[F8, F9, F11]; the colours are CHOICE | *both ramps run dark to light* · *high contrast: at least 8x* · *two different hues* · *neon, not pastel* |
-| D3 | The picture is 144 × 192 pixels (or 192 × 144), scaled up without smoothing. | DERIVED[F9] | — |
-| D4 | A photograph is stylised in four steps: brightness stretched to the full range, warm/cool chosen per pixel, eight tones with ordered dithering, outlines where brightness changes sharply. | CHOICE | *every pixel is a palette index* · *a dark photograph is stretched* · *a daylight yard uses both ramps and has outlines* |
-| D5 | Things are found on the device: patches of similar brightness and warmth, fenced by outlines, between 0.15% and 10% of the picture. Too few, and the busiest cells of a grid become targets. It finds shapes, not names. | CHOICE | *between 4 and 10 things* on a demo, a flat, a noisy and a dark picture |
-| D6 | The frame tilts from side to side all the time, about 1°. | F10 is only a SNIPPET; treated as CHOICE | *the frame always leans a little* |
-| D7 | Scanlines over the picture; hard offset shadows in pink and cyan on every title and button; nothing rounded. | DERIVED[F11]; details CHOICE | — (by eye) |
-| D8 | A tap is answered in the same frame (a ring) and the rock lands 110 ms later. | CHOICE | *a tap is answered in the same frame* · *from tap to impact is under 150 ms* |
-| D9 | Hit pause: 30 ms on a hit, 90 ms on a break. The source's figure is 10–20 ms; ours is longer because at 60 frames a second 16 ms is one frame and cannot be seen on a phone. | SOURCED[F12] for the trick; lengths CHOICE | *a break stops the game for an instant* |
-| D10 | Shake: 2 px on a hit, 5 on a break, never more than 7; a white flash on impact. Scaled down from the source's 4–6 px for a picture 144 wide. | SOURCED[F12]; scale CHOICE | *a break kicks the picture, within the stated maximum* · *many breaks at once do not shake the picture off the screen* |
-| D11 | What breaks leaves a void where it stood, and its pieces fall and stay as rubble along the bottom. | SOURCED[F9]; F13 SNIPPET | *every pixel of it becomes the void* · *what falls STAYS* · *rubble never piles past its cap* |
-| D12 | Hits within 2.5 s of each other build a combo that multiplies points. The combo runs out on its own; a miss does not end it and nothing is ever taken away. | SOURCED[F8] for the combo; no penalty is from brief Q8 | *hits in quick succession build a combo* · *a combo runs out on its own; nothing is taken away* |
-| D13 | «ЕЩЁ РАЗ» restarts the same yard at once: the photograph, the picture and the found things are kept, and no model is asked again. | SOURCED[F8, F9] | *«ещё раз» is a clean yard* |
-| D14 | The pitch of a hit rises with the combo. | CHOICE | — |
-| D15 | **Depression:** saturation × 0.12, brightness × 0.72, mixed toward cold blue-grey; the frame is still and the page stops drifting. | DERIVED[F2, F5]; numbers CHOICE | *depression: nearly colourless, darker, cold* · *depression holds it still* |
-| D16 | **Alcohol:** saturation × 0.70, mixed 30% toward amber; the frame leans up to 4°, the picture sways, and a faint second copy is drawn offset. Distortion, channel separation and vignette from F6 are left out. | SOURCED[F6, F7]; selection CHOICE | *alcohol: warmer and less saturated* · *alcohol leans furthest and sees double* |
-| D17 | **Weed:** the whole colour wheel turned by 0.30 and drifting ±0.06 on a 10.5 s cycle; the frame leans slowly. | DERIVED[F4]; that this reads as weed is CHOICE | *weed: the whole wheel is turned, and keeps turning* · *only weed moves the palette over time* |
-| D18 | A filter may not reorder the tones: after the hue is turned, each colour is pulled back to the brightness it had. | CHOICE (a test failed without it) | *under every filter the ramps still run dark to light* |
-| D19 | A filter is a look, never a rule. A tap is carried back through the same tilt, sway and shake the picture was drawn with. | CHOICE, from brief Q8 | *a tap lands on the pixel that was DRAWN under the finger* · *the same tap ends the same way under each* |
-| D20 | With reduced motion requested by the device, nothing tilts and nothing shakes. | CHOICE | *with reduced motion asked for* |
-| D21 | The photograph leaves the device only if a model key was entered, and the page says so before the picture is taken. | CHOICE | *with no key there is no recogniser and no request* · *a lane that cannot see is never sent the photograph* |
+| D1 | The yard is stored as palette indices and looked up through a table each frame. A filter's look is another table. | DERIVED[F1, F3] | *sober shows the yard's own table* |
+| D2 | **The table is made from the photograph**: its 28 best colours by median cut, after a grade — contrast stretched to the photo's own range, saturation × 1.45, shadows pulled toward purple, lights toward warm white. The second build mapped brightness onto two fixed neon ramps, which turned every yard into the same heat-map. | CHOICE; "high-contrast" from F8, F9 | *a red car is red* · *a blue car is blue* · *a green tree is green* · *deep shadows and bright lights, shadows toward purple* |
+| D3 | The picture is 192 × 256 pixels, about an 8-bit console's screen, with ordered dithering so plain surfaces keep texture. | DERIVED[F9]; size CHOICE | *the size of an 8-bit console screen* · *most of the palette is in use* |
+| D4 | **Targets are real things found by an object detector on the device** (EfficientDet-Lite0 through MediaPipe, vendored). Nothing is uploaded. What the detector cannot name is not a target; the game invents nothing to hit. | SOURCED[F16]; the choice of model is CHOICE | `tools/check.mjs` on real photographs · *every found thing becomes a target with a name* |
+| D5 | The photograph is searched whole and in 13 overlapping slices, because a car from a balcony is too small to survive shrinking the whole photo to the model's input. | SOURCED[F14] | *searched whole and in overlapping slices* · *one car seen in two slices is one car* |
+| D6 | People and animals are never targets and never named. | CHOICE, from the brief's "not violent" | *people and animals are never targets* |
+| D7 | A target's pixels are those in its box whose colour is unlike the ring just outside the box; if that fails, a rounded box. Each target gets a dark outline. | CHOICE | *a target's pixels are the thing, not the asphalt* · *a dark line round it, like a sprite* |
+| D8 | A wrecked thing stays where it was, dark and broken, and its pieces come to rest at its own foot. | SOURCED[F9]; F13 SNIPPET | *what is left is dark, but still where the car was* · *what falls STAYS, at the foot of the thing* |
+| D9 | The frame tilts about 1° all the time; scanlines; hard pink and cyan offset shadows; nothing rounded. | F10 SNIPPET, F11; details CHOICE | *the frame always leans a little* |
+| D10 | A tap is answered in the same frame. Hit pause 30 ms, wreck pause 90 ms; shake 2 and 5 px, never over 7; a flash. The source gives 10–20 ms and 4–6 px for a different game; ours are set for one visible frame on a phone and a picture 192 wide. | SOURCED[F12]; amounts CHOICE | *a tap is answered in the same frame* · *a wreck stops the game for an instant* · *within the stated maximum* |
+| D11 | The amounts in D10 are kept moderate on purpose and capped. | F15 SNIPPET | *many wrecks at once do not shake the picture off the screen* |
+| D12 | Hits in quick succession build a combo that multiplies points; it runs out on its own; a miss costs nothing. A best score is kept on the device. | SOURCED[F8]; no penalty from brief Q8 | *hits in quick succession build a combo* · *nothing in any mode takes anything away* |
+| D13 | «ЕЩЁ РАЗ» restarts the same yard at once, without searching the photograph again. | SOURCED[F8, F9] | *«ещё раз» is a clean yard* |
+| D14 | **Every filter is a way to play, not only a look.** Each changes what is in the hand and what can be seen clearly. This reverses the second build's "a filter is a look, never a rule", which was reported as "the filters don't change anything". | CHOICE, at the creator's direction | *every mode but sober changes BOTH the throw and the focus* · *no two modes put the same thing in the hand* |
+| D15 | **Sober — a stone.** Lands where aimed, 110 ms, everything sharp. | CHOICE | *sober: the throw lands exactly where it was aimed* |
+| D16 | **Weed — a slipper.** Flies slowly, then skips to up to two more things; a combo lasts 5 s; the edges of the yard go soft; colours richer and drifting. | look DERIVED[F4]; play CHOICE | *the slipper skips on* · *a combo forgives a pause twice as long* · *the colours keep drifting* |
+| D17 | **Alcohol — a bottle.** Bursts over everything within 22 px, but lands up to 10 px from where it was aimed; nothing is in focus; warm, leaning, double vision. | look SOURCED[F6, F7]; play CHOICE | *a bottle bursts over everything near* · *the hand strays, never further than the stated scatter* |
+| D18 | **Depression — a brick.** Wrecks anything in one throw, 0.7 s before the next; only a small circle round the finger is visible, the rest is dark, so things have to be looked for; drag to look, tap to throw; grey, cold, still. | look DERIVED[F2, F5]; play CHOICE | *a brick wrecks a car in one throw* · *the hand is not free again at once* · *only what is near where you look can be seen* |
+| D19 | No look reorders light and dark. | CHOICE (a test failed without it) | *the yard stays readable through all of them* |
+| D20 | A tap is carried back through the same tilt, sway and shake the picture was drawn with. Alcohol's scatter is applied after that, on purpose. | CHOICE | *a tap lands on the pixel that was DRAWN under the finger* |
+| D21 | With reduced motion requested by the device, nothing tilts and nothing shakes. | CHOICE | *with reduced motion asked for* |
 
 ## Sources — pages opened on 2026-10-11
 
@@ -66,5 +72,8 @@ built from F4 and is a `CHOICE`; the depression look leans on F5, which is about
 9. Marcus Estrada, "Aesthetic Excellence: Hotline Miami 2", Cliqist, 2015 — https://cliqist.com/2015/03/30/aesthetic-excellence-hotline-miami-2/
 10. Tom Armitage, "Making Game 'Feel'", infovore.org, 2013 — https://infovore.org/tag/feel/
 
-All ten were read through a summarising fetch. The quotations are as it returned them and have not been
+11. Akyon, Altinuc, Temizel, "Slicing Aided Hyper Inference and Fine-tuning for Small Object Detection" — https://arxiv.org/abs/2202.06934
+12. Google, "Object detection guide for Web", MediaPipe — https://developers.google.com/edge/mediapipe/solutions/vision/object_detector/web_js
+
+All twelve were read through a summarising fetch. The quotations are as it returned them and have not been
 checked against the pages by a second reading.

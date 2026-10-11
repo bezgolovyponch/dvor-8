@@ -27,39 +27,42 @@
 
     <section id="title" class="card">
       <h2>СНИМИ СВОЙ ДВОР</h2>
-      <p>Сфотографируй двор с балкона. Он станет игрой: всё, что в нём найдётся, можно разнести.</p>
+      <p>Сфотографируй двор с балкона. Машины, скамейки, велосипеды на снимке станут целями — настоящие, твои.</p>
       <label class="btn">СНЯТЬ ДВОР
         <input id="shot" type="file" accept="image/*" capture="environment" hidden>
       </label>
       <button id="demoBtn" type="button" class="btn alt">ДЕМО-ДВОР</button>
-      <p id="privacy" class="fine"></p>
+      <p class="fine">Снимок не покидает телефон: вещи на нём ищет сам телефон.</p>
+    </section>
+
+    <section id="empty" class="card" hidden>
+      <h2>НИЧЕГО НЕ УЗНАЛ</h2>
+      <p id="emptyWhy"></p>
+      <p class="fine">Узнаю машины, грузовики, автобусы, мотоциклы, велосипеды, скамейки, стулья, цветы в горшках. Людей и животных не трогаю никогда. Сними так, чтобы что-то из этого было видно целиком.</p>
+      <label class="btn">СНЯТЬ ЕЩЁ РАЗ
+        <input id="shot2" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <button id="demoBtn2" type="button" class="btn alt">ДЕМО-ДВОР</button>
     </section>
 
     <section id="end" class="card" hidden>
       <h2>ДВОР РАЗНЕСЁН</h2>
       <p class="big"><b id="endScore">0</b></p>
+      <p id="endBest" class="best"></p>
       <p id="endLine"></p>
       <button id="againBtn" type="button" class="btn">ЕЩЁ РАЗ</button>
       <button id="newBtn" type="button" class="btn alt">НОВЫЙ ДВОР</button>
     </section>
   </div>
 
+  <div class="hand"><span>в руке</span><b id="hand"></b><i><u id="coolBar"></u></i><em id="hint"></em></div>
   <div id="filters" class="row" aria-label="взгляд"></div>
   <div class="row">
     <button id="restartBtn" type="button" class="btn small alt">ЗАНОВО</button>
     <button id="homeBtn" type="button" class="btn small alt">НОВЫЙ ДВОР</button>
     <button id="soundBtn" type="button" class="btn small alt" aria-pressed="true">ЗВУК</button>
   </div>
-
-  <p id="hudSource" class="source"></p>
-  <details class="keys">
-    <summary>КЛЮЧИ МОДЕЛЕЙ (необязательно)</summary>
-    <p class="fine">
-      С ключом модель называет найденное: один запрос на двор. <b>Тогда снимок уходит этому сервису.</b>
-      Без ключа снимок не покидает телефон, а цели остаются под номерами. Ключ хранится только в этом браузере.
-    </p>
-    <div id="keyForm"></div>
-  </details>
+  <p id="note" class="source"></p>
 </main>
 
 <script type="module" src="src/main.js"></script>

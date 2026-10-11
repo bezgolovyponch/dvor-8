@@ -74,9 +74,13 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; width: 100%; }
 
 .source { margin: 0; width: 100%; font-size: 10px; line-height: 1.5; min-height: 15px; color: #fff; }
-.keys { width: 100%; background: rgba(11, 0, 24, .7); border: 2px solid var(--pink); padding: 9px; font-size: 11px; }
-.keys summary { cursor: pointer; letter-spacing: .08em; }
-.keys label { display: grid; grid-template-columns: 78px 1fr; align-items: center; gap: 8px; margin-top: 6px; }
-.keys input { font: 11px var(--mono); padding: 7px; background: var(--ink); color: var(--pale); border: 1px solid var(--cyan); min-width: 0; }
+.banner.hold { opacity: 1; transform: rotate(-4deg); }
+.best { font: italic 900 15px/1 var(--display); color: var(--cyan); letter-spacing: .06em; }
+.hand { width: 100%; display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 4px 10px; }
+.hand span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
+.hand b { font: italic 900 20px/1 var(--display); color: #fff; text-shadow: 2px 2px 0 var(--pink); }
+.hand i { display: block; height: 6px; background: rgba(11, 0, 24, .6); }
+.hand u { display: block; height: 100%; width: 100%; background: var(--cyan); }
+.hand em { grid-column: 1 / -1; font-style: normal; font-size: 11px; line-height: 1.4; min-height: 15px; }
 
 @media (prefers-reduced-motion: reduce) { body { animation: none; } .pop, .banner.show, .bump { animation-duration: .01s; } }

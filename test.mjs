@@ -1,234 +1,205 @@
-// DVOR-8 tests. They assert BEHAVIOUR: that any photograph becomes a playable yard, that a tap hits what
-// was under it, that every interaction is answered, and that the look obeys its own rules.
+// DVOR-8 tests. They assert BEHAVIOUR: that the yard stays the yard, that real things become targets and
+// people never do, that a tap hits what was under it, that every mode plays differently and says why,
+// and that every interaction is answered.
 //
-// What they cannot assert is that any of it is FUN. The "answered fast, answered always" checks below are
-// the measurable part of that; the rest needs a person with a phone. See docs/concept.md.
+// Two things are NOT here. The detector itself needs a browser: `node --experimental-websocket
+// tools/check.mjs` runs it on real photographs. And whether any of it is fun needs a person.
 //
 // Usage:  node test.mjs
 
-import { paletteFor, FILTERS, TONES, COOL, WARM, OUTLINE, VOID, SIZE, luma, toHsl } from './src/palette.js';
+import { buildPalette, grade, lookThrough, scorchMap, nearest, luma, toHsl, LOOKS, COLOURS, OUTLINE, VOID, SIZE } from './src/palette.js';
 import { stylise } from './src/stylise.js';
-import { segment, MIN_OBJECTS, MAX_OBJECTS } from './src/segment.js';
-import { demoPhoto } from './src/demo.js';
-import { makeWorld, pick, strike, tick, left, COMBO_WINDOW, DEBRIS_MAX } from './src/world.js';
-import { makeFx, throwRock, impact, burst, stepFx, shakeOffset, ROCK_TIME, HIT_PAUSE, BREAK_PAUSE, SHAKE_MAX, RUBBLE_MAX } from './src/fx.js';
+import { TARGETS, tilesFor, merge, toRegions, MAX_TARGETS, MIN_SCORE } from './src/objects.js';
+import { demoYard } from './src/demo.js';
+import { makeWorld, pick, strike, tick, left, DEBRIS_MAX } from './src/world.js';
+import { makeFx, throwThing, impact, burst, stepFx, shakeOffset, HIT_PAUSE, BREAK_PAUSE, SHAKE_MAX } from './src/fx.js';
+import { MODES, aimWith, splashTargets, chainNext, inFocus } from './src/modes.js';
 import { viewMotion, clientToWorld, worldToClient, LONG, SHORT, SCAN_TIME } from './src/view.js';
 import { mulberry32 } from './src/rng.js';
-import { makeRecogniser, buildMessages, scanCost, laneAffords, parseLabels, MAX_ITEMS, VISION } from './src/recognise.js';
-import { PROVIDERS } from './src/llm.js';
+import { readFileSync, readdirSync } from 'node:fs';
 
 let pass = 0, fail = 0;
 const rows = [];
 const section = (name) => rows.push({ name });
 const check = (what, ok, detail = '') => { rows.push({ what, ok: Boolean(ok), detail: String(detail) }); if (ok) pass += 1; else fail += 1; };
 const W = SHORT, H = LONG, N = W * H;
-const yardFrom = (rgba, w = W, h = H) => { const st = stylise(rgba, w, h); return { st, seg: segment(st, w, h) }; };
-const worldFrom = (rgba) => { const y = yardFrom(rgba); return makeWorld({ w: W, h: H, photo: rgba, st: y.st, seg: y.seg, seed: 8 }); };
-const flat = () => new Uint8ClampedArray(N * 4).fill(128);
-const noisy = () => { const r = mulberry32(3); return Uint8ClampedArray.from({ length: N * 4 }, () => r() * 255); };
-const dark = () => { const r = mulberry32(5); return Uint8ClampedArray.from({ length: N * 4 }, () => r() * 22); };
-const PHOTOS = { demo: demoPhoto(W, H, 8), flat: flat(), noise: noisy(), night: dark() };
+const DEMO = demoYard(W, H, 8);
+const yard = () => { const st = stylise(DEMO.rgba, W, H); const seg = toRegions(DEMO.dets, DEMO.rgba, W, H); return makeWorld({ w: W, h: H, photo: DEMO.rgba, idx: st.idx, palette: st.palette, ...seg, seed: 8 }); };
+const byKind = (w, kind, n = 0) => w.regions.filter((r) => r.kind === kind)[n];
 
-// ---- the look --------------------------------------------------------------------------------------
-section('the look');
-const sober = paletteFor('sober');
-check('the palette is 18 entries: two ramps of eight, an outline, a void', sober.length === SIZE && SIZE === 2 * TONES + 2);
-const rises = (pal, from) => Array.from({ length: TONES - 1 }, (_, i) => luma(pal[from + i + 1]) > luma(pal[from + i])).every(Boolean);
-check('both ramps run dark to light, so brightness in the photo is brightness in the picture', rises(sober, COOL) && rises(sober, WARM));
-check('high contrast: the lightest tone is at least 8x the darkest', luma(sober[COOL + 7]) / luma(sober[COOL]) > 8 && luma(sober[WARM + 7]) / luma(sober[WARM]) > 8,
-  `${(luma(sober[COOL + 7]) / luma(sober[COOL])).toFixed(0)}x cool, ${(luma(sober[WARM + 7]) / luma(sober[WARM])).toFixed(0)}x warm`);
-const mid = (pal, from) => toHsl(pal[from + 3]);
-check('the two ramps are two different hues: a warm thing and a cool thing stay different', Math.abs(mid(sober, COOL)[0] - mid(sober, WARM)[0]) > 0.2);
-check('the middle of both ramps is saturated: neon, not pastel', mid(sober, COOL)[1] > 0.7 && mid(sober, WARM)[1] > 0.7,
-  `cool ${mid(sober, COOL)[1].toFixed(2)}, warm ${mid(sober, WARM)[1].toFixed(2)}`);
-check('the outline and the void are darker than every tone', [OUTLINE, VOID].every((k) => luma(sober[k]) < luma(sober[COOL]) && luma(sober[k]) < luma(sober[WARM])));
+// ---- the yard stays the yard -------------------------------------------------------------------------
+section('the picture: the yard stays the yard');
+const st = stylise(DEMO.rgba, W, H);
+check('the picture is the size of an 8-bit console screen', W === 192 && H === 256, `${W} x ${H}`);
+check('the palette is made from the photograph: 28 colours, an outline, a void', st.palette.length === SIZE && SIZE === COLOURS + 2);
+check('every pixel is a palette index', st.idx.length === N && st.idx.every((v) => v < COLOURS));
+check('the same photograph gives the same picture', stylise(DEMO.rgba, W, H).idx.join() === st.idx.join(), 'deterministic');
+const at = (x, y) => st.palette[st.idx[Math.round((y / 192) * H) * W + Math.round((x / 144) * W)]];
+const red = at(30, 134), blue = at(100, 150), green = at(124, 94), sky = at(70, 10);
+check('a red car is red in the picture', red[0] > red[1] * 1.6 && red[0] > red[2] * 1.3, `rgb ${red}`);
+check('a blue car is blue', blue[2] > blue[0] * 1.4 && blue[2] > blue[1] * 1.1, `rgb ${blue}`);
+check('a green tree is green', green[1] > green[0] * 1.2 && green[1] > green[2] * 1.2, `rgb ${green}`);
+check('the sky is light and bluish, not white-hot', sky[2] >= sky[0] && luma(sky) > 0.5, `rgb ${sky}`);
+check('detail survives: most of the palette is in use', new Set(st.idx).size >= 22, `${new Set(st.idx).size} of ${COLOURS} colours used`);
+const tones = st.palette.slice(0, COLOURS).map(luma);
+check('the look: deep shadows and bright lights, with the shadows pulled toward purple',
+  Math.min(...tones) < 0.16 && Math.max(...tones) > 0.8 && (() => { const d = st.palette[0]; return d[2] > d[1]; })(), `darkest rgb ${st.palette[0]}`);
+const dull = grade(120, 110, 100), g0 = toHsl([120, 110, 100]);
+check('the grade adds colour: a dull pixel comes out more saturated', toHsl(dull)[1] > g0[1], `${g0[1].toFixed(2)} → ${toHsl(dull)[1].toFixed(2)}`);
+const flat = stylise(new Uint8ClampedArray(N * 4).fill(128), W, H);
+check('a blank photograph does not crash the palette', flat.palette.length === SIZE && flat.idx.every((v) => v < COLOURS));
 
-// ---- filters ---------------------------------------------------------------------------------------
-section('filters');
-const sat = (pal) => pal.slice(0, 16).reduce((n, c) => n + toHsl(c)[1], 0) / 16;
-const lum = (pal) => pal.slice(0, 16).reduce((n, c) => n + luma(c), 0) / 16;
-const heat = (pal) => pal.slice(0, 16).reduce((n, c) => n + c[0] - c[2], 0) / 16;
-const P = (id, t = 0) => paletteFor(id, t);
-check('every filter is a full table', Object.keys(FILTERS).every((id) => P(id, 1.7).length === SIZE && P(id, 1.7).every((c) => c.every((v) => Number.isInteger(v) && v >= 0 && v <= 255))));
-check('under every filter the ramps still run dark to light: the yard stays readable',
-  Object.keys(FILTERS).every((id) => [0, 2.6, 7].every((t) => rises(P(id, t), COOL) && rises(P(id, t), WARM))), Object.keys(FILTERS).join(' '));
-check('depression: nearly colourless, darker, cold', sat(P('depression')) < sat(sober) * 0.35 && lum(P('depression')) < lum(sober) && heat(P('depression')) < 0,
-  `sat ${sat(sober).toFixed(2)} → ${sat(P('depression')).toFixed(2)}`);
-check('alcohol: warmer and less saturated', heat(P('alcohol')) > heat(sober) && sat(P('alcohol')) < sat(sober), `red-blue ${heat(sober).toFixed(0)} → ${heat(P('alcohol')).toFixed(0)}`);
-check('weed: the whole wheel is turned, and keeps turning', toHsl(P('weed')[WARM + 3])[0] !== toHsl(sober[WARM + 3])[0]
-  && P('weed', 0).join() !== P('weed', 2.6).join() && P('weed', 0).join() === P('weed', Math.PI / 0.6).join(), 'colour cycling');
-check('only weed moves the palette over time', ['sober', 'alcohol', 'depression'].every((id) => P(id, 0).join() === P(id, 9).join()));
-check('a filter changes the table and nothing else: the picture\'s indices are untouched',
-  (() => { const w = worldFrom(PHOTOS.demo); const before = w.idx.join(); for (const id of Object.keys(FILTERS)) paletteFor(id, 3); return w.idx.join() === before; })());
+// ---- real things -----------------------------------------------------------------------------------
+section('real things become targets');
+const D = (label, score, x, y, w, h) => ({ label, score, x, y, w, h });
+check('people and animals are never targets', ['person', 'dog', 'cat', 'bird', 'horse'].every((k) => !TARGETS[k]) && merge([D('person', 0.99, 0.1, 0.1, 0.2, 0.4), D('dog', 0.9, 0.5, 0.5, 0.1, 0.1)]).length === 0);
+check('a car, a bench, a bicycle are', ['car', 'bench', 'bicycle', 'truck'].every((k) => TARGETS[k]?.ru && TARGETS[k].hp >= 1));
+check('a guess is not a target', merge([D('car', MIN_SCORE - 0.05, 0.1, 0.1, 0.2, 0.2)]).length === 0, `below ${MIN_SCORE}`);
+check('a thing too small for a finger is not a target', merge([D('car', 0.9, 0.1, 0.1, 0.01, 0.01)]).length === 0);
+const twice = merge([D('car', 0.7, 0.2, 0.2, 0.2, 0.15), D('car', 0.8, 0.22, 0.21, 0.12, 0.14), D('car', 0.6, 0.7, 0.7, 0.15, 0.1)]);
+check('one car seen in two slices is one car, and the whole box is kept, not the cut-off one', twice.length === 2 && twice.some((d) => d.w === 0.2), `${twice.length} cars`);
+check('never more targets than a thumb can clear', merge(Array.from({ length: 40 }, (_, i) => D('car', 0.9, (i % 8) * 0.12, Math.floor(i / 8) * 0.18, 0.08, 0.1))).length === MAX_TARGETS);
+const tiles = tilesFor(1600, 1200);
+const covered = (x, y) => tiles.some((t) => x >= t.x && x < t.x + t.w && y >= t.y && y < t.y + t.h && t.w < 1600);
+check('the photograph is searched whole and in overlapping slices that cover all of it', tiles.length === 14 && tiles[0].w === 1600 && covered(0, 0) && covered(1599, 1199) && covered(800, 600)
+  && tiles.every((t) => t.x >= 0 && t.y >= 0 && t.x + t.w <= 1600 && t.y + t.h <= 1200), `${tiles.length} slices`);
+const seg = toRegions(DEMO.dets, DEMO.rgba, W, H);
+check('every found thing becomes a target with a name, a place and pixels of its own', seg.regions.length === DEMO.dets.length && seg.regions.every((r) => r.label && r.area > 12 && r.pixels.every((p) => seg.owner[p] === r.id)),
+  seg.regions.map((r) => r.label).join(', '));
+const car = seg.regions.find((r) => r.kind === 'car');
+const carRed = [...car.pixels].filter((p) => DEMO.rgba[p * 4] > 140 && DEMO.rgba[p * 4 + 2] < 110).length;
+check('a target\'s pixels are the thing, not the asphalt in its box', car.area < car.w * car.h && carRed / car.area > 0.45, `${Math.round((car.area / (car.w * car.h)) * 100)}% of its box`);
+check('a box with no contrast still becomes a target where the box is', toRegions([D('car', 0.9, 0.3, 0.3, 0.2, 0.2)], new Uint8ClampedArray(N * 4).fill(128), W, H).regions.length === 1);
+check('a tougher thing takes more hits', TARGETS.car.hp > TARGETS['potted plant'].hp);
 
-// ---- the photograph becomes a picture ---------------------------------------------------------------
-section('photograph → picture');
-const demo = yardFrom(PHOTOS.demo);
-check('every pixel of the picture is a palette index', demo.st.idx.every((v) => v < SIZE) && demo.st.idx.length === N);
-check('the same photograph gives the same picture', stylise(PHOTOS.demo, W, H).idx.join() === demo.st.idx.join(), 'deterministic');
-const used = new Set(demo.st.idx);
-check('a daylight yard uses both ramps and has outlines', [...used].some((v) => v < 8) && [...used].some((v) => v >= 8 && v < 16) && used.has(OUTLINE), `${used.size} of ${SIZE} indices used`);
-const nightUsed = new Set(stylise(PHOTOS.night, W, H).idx);
-check('a dark photograph is stretched, not left black', Math.max(...[...nightUsed].filter((v) => v < 16).map((v) => v % 8)) >= 5, `brightest tone ${Math.max(...[...nightUsed].filter((v) => v < 16).map((v) => v % 8))} of 7`);
-check('a landscape photograph works as well as a portrait one', (() => { const y = yardFrom(demoPhoto(LONG, SHORT, 8), LONG, SHORT); return y.seg.regions.length >= MIN_OBJECTS; })());
-
-// ---- the things in it -------------------------------------------------------------------------------
-section('finding things');
-for (const [name, rgba] of Object.entries(PHOTOS)) {
-  const { seg } = yardFrom(rgba);
-  const n = seg.regions.length;
-  const inside = seg.regions.every((r) => r.x >= 0 && r.y >= 0 && r.x + r.w <= W && r.y + r.h <= H && r.area > 0);
-  const owned = seg.regions.every((r) => r.pixels.every((p) => seg.owner[p] === r.id));
-  check(`${name}: between ${MIN_OBJECTS} and ${MAX_OBJECTS} things, all in the picture, none overlapping`, n >= MIN_OBJECTS && n <= MAX_OBJECTS && inside && owned, `${n} things`);
-}
-check('the same photograph gives the same things', JSON.stringify(yardFrom(PHOTOS.demo).seg.regions.map((r) => [r.x, r.y, r.area])) === JSON.stringify(demo.seg.regions.map((r) => [r.x, r.y, r.area])));
-check('things are numbered top to bottom, the way the scan meets them', demo.seg.regions.every((r, i, a) => i === 0 || r.cy >= a[i - 1].cy));
-check('a bigger thing takes more hits', (() => { const rs = [...demo.seg.regions].sort((a, b) => a.area - b.area); return rs[0].hp <= rs[rs.length - 1].hp && rs.every((r) => r.hp >= 1 && r.hp <= 3); })(),
-  demo.seg.regions.map((r) => r.hp).join(''));
-
-// ---- hitting ----------------------------------------------------------------------------------------
+// ---- hitting -----------------------------------------------------------------------------------------
 section('hitting');
-let w = worldFrom(PHOTOS.demo);
+let w = yard();
 check('a tap on a thing picks THAT thing', w.regions.every((r) => { const p = r.pixels[r.pixels.length >> 1]; return pick(w, p % W, (p / W) | 0) === r; }), `${w.regions.length} of ${w.regions.length}`);
-const corner = (() => { for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) { let far = true; for (const r of w.regions) if (x > r.x - 12 && x < r.x + r.w + 12 && y > r.y - 12 && y < r.y + r.h + 12) far = false; if (far) return [x, y]; } return null; })();
-check('a tap on nothing picks nothing', corner && pick(w, corner[0], corner[1]) === null, corner ? `at ${corner}` : 'no empty spot');
-const edge = w.regions[0];
-check('a near miss still counts: a finger is not a pixel', pick(w, edge.x - 3, edge.cy) === edge || pick(w, edge.cx, edge.y - 3) === edge);
-const big = w.regions.find((r) => r.hp > 1) || w.regions[0];
+check('a tap on nothing picks nothing', pick(w, 10, 10) === null);
+const bench = byKind(w, 'bench');
+check('a near miss still counts: a finger is not a pixel', pick(w, bench.x - 4, bench.cy) === bench);
+check('each thing has a dark line round it, like a sprite', w.regions.every((r) => [...r.pixels].some((p) => w.idx[p] === OUTLINE)));
+const c1 = byKind(w, 'car');
 const before = w.idx.join();
-let res = strike(w, big, big.cx, big.cy);
-check('a first hit on a tough thing cracks it: the picture changes, the thing stands', big.hp > 1 ? (res.kind === 'crack' && !big.gone && w.idx.join() !== before) : res.kind === 'break', res.kind);
-while (!big.gone) res = strike(w, big, big.cx, big.cy);
-check('enough hits break it: every pixel of it becomes the void', res.kind === 'break' && big.pixels.every((p) => w.idx[p] === VOID || w.idx[p] === OUTLINE) && left(w) === w.regions.length - 1);
-check('a broken thing throws pieces, but never more than the cap', res.debris.length > 0 && res.debris.length <= DEBRIS_MAX + 1, `${res.debris.length} pieces`);
-check('a broken thing cannot be picked or hit again', pick(w, big.cx, big.cy) !== big && strike(w, big, big.cx, big.cy) === null);
-w = worldFrom(PHOTOS.demo);
-const a1 = strike(w, w.regions[0], w.regions[0].cx, w.regions[0].cy);
-const a2 = strike(w, w.regions[1], w.regions[1].cx, w.regions[1].cy);
-check('hits in quick succession build a combo, and a combo multiplies the points', a1.combo === 1 && a2.combo === 2 && w.maxCombo === 2, `x${a1.combo} → x${a2.combo}`);
-tick(w, COMBO_WINDOW + 0.01);
+let res = strike(w, c1, c1.cx, c1.cy);
+check('a first hit on a car dents and cracks it: the picture changes, the car stands', res.kind === 'crack' && !c1.gone && w.idx.join() !== before);
+while (!c1.gone) res = strike(w, c1, c1.cx, c1.cy);
+const wreck = [...c1.pixels].map((p) => w.palette[w.idx[p]]);
+check('enough hits wreck it: what is left is dark, but it is still where the car was', res.kind === 'break' && c1.hits === 3
+  && wreck.reduce((n, c) => n + luma(c), 0) / wreck.length < 0.2 && [...c1.pixels].some((p) => w.idx[p] === VOID), `mean brightness ${(wreck.reduce((n, c) => n + luma(c), 0) / wreck.length).toFixed(2)}`);
+check('a wrecked thing throws pieces, but never more than the cap', res.debris.length > 0 && res.debris.length <= DEBRIS_MAX + 1, `${res.debris.length} pieces`);
+check('a wrecked thing cannot be picked or hit again', pick(w, c1.cx, c1.cy) !== c1 && strike(w, c1, c1.cx, c1.cy) === null);
+w = yard();
+const a1 = strike(w, w.regions[0], w.regions[0].cx, w.regions[0].cy), a2 = strike(w, w.regions[1], w.regions[1].cx, w.regions[1].cy);
+check('hits in quick succession build a combo, and a combo multiplies the points', a1.combo === 1 && a2.combo === 2, `x${a1.combo} → x${a2.combo}`);
+tick(w, 2.51);
 check('a combo runs out on its own; nothing is taken away when it does', w.combo === 0 && w.score === a1.points + a2.points, `score kept: ${w.score}`);
-w = worldFrom(PHOTOS.demo);
+w = yard();
 for (const r of w.regions) while (!r.gone) strike(w, r, r.cx, r.cy);
-check('breaking everything ends the yard', w.done && left(w) === 0 && w.score > 0, `score ${w.score}`);
-const again = worldFrom(PHOTOS.demo);
-check('«ещё раз» is a clean yard: same things, nothing broken, no score', again.regions.length === w.regions.length && again.regions.every((r) => !r.gone && r.hits === 0) && again.score === 0);
+check('wrecking everything ends the yard', w.done && left(w) === 0 && w.score > 0, `score ${w.score}`);
+check('«ещё раз» is a clean yard: same things, nothing broken, no score', (() => { const n = yard(); return n.regions.length === w.regions.length && n.regions.every((r) => !r.gone && r.hits === 0) && n.score === 0; })());
 
-// ---- feel -------------------------------------------------------------------------------------------
+// ---- modes -------------------------------------------------------------------------------------------
+section('modes: every filter is a different way to play, and says why');
+const ids = Object.keys(MODES);
+check('every mode has a look to go with it', ids.every((id) => LOOKS[id]) && Object.keys(LOOKS).every((id) => MODES[id]));
+check('every mode says what is in the hand, how to use it, and why it exists', ids.every((id) => MODES[id].thing && MODES[id].hint && MODES[id].why.length > 40));
+check('no two modes put the same thing in the hand', new Set(ids.map((id) => MODES[id].thing)).size === ids.length, ids.map((id) => MODES[id].thing).join(', '));
+const sig = (m) => [m.flight, m.damage, m.scatter, m.splash, m.chain, m.cooldown].join();
+check('every mode but sober changes BOTH the throw and the focus', ids.filter((id) => id !== 'sober').every((id) => sig(MODES[id]) !== sig(MODES.sober) && MODES[id].focus) && MODES.sober.focus === null);
+const R = () => mulberry32(4);
+check('sober: the throw lands exactly where it was aimed', (() => { const a = aimWith(MODES.sober, 50, 60, R()); return a.x === 50 && a.y === 60; })());
+const strays = (() => { const r = R(); return Array.from({ length: 200 }, () => { const a = aimWith(MODES.alcohol, 50, 60, r); return Math.hypot(a.x - 50, a.y - 60); }); })();
+check('alcohol: the hand strays, but never further than the stated scatter', Math.max(...strays) <= MODES.alcohol.scatter && Math.max(...strays) > 3, `up to ${Math.max(...strays).toFixed(1)} of ${MODES.alcohol.scatter} px`);
+w = yard();
+const plant = byKind(w, 'potted plant'), chair = byKind(w, 'chair');
+const mx = (plant.cx + chair.cx) / 2, my = (plant.cy + chair.cy) / 2;
+check('alcohol: a bottle bursts over everything near where it lands', splashTargets(w, mx, my, MODES.alcohol.splash).length >= 2 && splashTargets(w, 5, 5, MODES.alcohol.splash).length === 0,
+  splashTargets(w, mx, my, MODES.alcohol.splash).map((r) => r.label).join(' + '));
+const hop = chainNext(w, plant, new Set([plant.id]));
+check('weed: the slipper skips on to the nearest standing thing it has not touched', hop && hop !== plant && !chainNext(w, plant, new Set(w.regions.map((r) => r.id))), hop ? `${plant.label} → ${hop.label}` : 'nothing in reach');
+check('weed: a combo forgives a pause twice as long', MODES.weed.combo >= MODES.sober.combo * 2 && (() => { strike(w, plant, plant.cx, plant.cy, { combo: MODES.weed.combo }); tick(w, 4); return w.combo === 1; })());
+w = yard();
+const cc = byKind(w, 'car');
+check('depression: a brick wrecks a car in one throw', strike(w, cc, cc.cx, cc.cy, { damage: MODES.depression.damage }).kind === 'break');
+check('depression: only what is near where you look can be seen', inFocus(MODES.depression, w, cc, cc.cx, cc.cy) && !inFocus(MODES.depression, w, cc, cc.cx + 120, cc.cy) && inFocus(MODES.sober, w, cc, 0, 0));
+check('alcohol: nothing at all is in focus', MODES.alcohol.focus.radius === 0 && MODES.alcohol.focus.out === 'soft');
+let fx = makeFx(w);
+throwThing(fx, w, MODES.depression, 'depression', 40, 40, null);
+check('depression: the brick is heavy — the hand is not free again at once', fx.cool === MODES.depression.cooldown && (() => { for (let i = 0; i < 60; i += 1) stepFx(fx, w, 1 / 60); return fx.cool === 0; })(), `${MODES.depression.cooldown} s`);
+check('nothing in any mode takes anything away from the player', ids.every((id) => MODES[id].damage >= 1 && MODES[id].combo >= 2.5));
+const P = (id, t = 0) => lookThrough(st.palette, id, t);
+const sat = (p) => p.slice(0, COLOURS).reduce((n, c) => n + toHsl(c)[1], 0) / COLOURS;
+const heat = (p) => p.slice(0, COLOURS).reduce((n, c) => n + c[0] - c[2], 0) / COLOURS;
+const lum = (p) => p.slice(0, COLOURS).reduce((n, c) => n + luma(c), 0) / COLOURS;
+check('sober shows the yard\'s own table, untouched', P('sober') === st.palette);
+check('depression: nearly colourless, darker, colder', sat(P('depression')) < sat(P('sober')) * 0.4 && lum(P('depression')) < lum(P('sober')) && heat(P('depression')) < heat(P('sober')), `sat ${sat(P('sober')).toFixed(2)} → ${sat(P('depression')).toFixed(2)}`);
+check('alcohol: warmer and less saturated', heat(P('alcohol')) > heat(P('sober')) && sat(P('alcohol')) < sat(P('sober')));
+check('weed: more saturated, and the colours keep drifting', sat(P('weed')) > sat(P('sober')) && P('weed', 0).join() !== P('weed', 2.6).join());
+check('no look reorders light and dark: the yard stays readable through all of them', ids.every((id) => [0, 2.6].every((t) => { const p = P(id, t).slice(0, COLOURS).map(luma); return p.every((v, i) => i === 0 || v >= p[i - 1] - 0.03); })));
+
+// ---- feel --------------------------------------------------------------------------------------------
 section('feel: answered fast, answered always');
 check('the opening scan takes under two seconds', SCAN_TIME < 2, `${SCAN_TIME} s`);
-check('from tap to impact is under 150 ms', ROCK_TIME <= 0.15, `${ROCK_TIME * 1000} ms`);
-w = worldFrom(PHOTOS.demo);
-let fx = makeFx();
-throwRock(fx, w, 40, 40, null);
-check('a tap is answered in the same frame, before the rock lands', fx.rings.length === 1 && fx.rocks.length === 1);
+check('from tap to impact is never more than 350 ms, and 110 ms when sober', ids.every((id) => MODES[id].flight <= 0.35) && MODES.sober.flight <= 0.12, ids.map((id) => MODES[id].flight * 1000).join(' / ') + ' ms');
+w = yard(); fx = makeFx(w);
+throwThing(fx, w, MODES.sober, 'sober', 40, 40, null);
+check('a tap is answered in the same frame, before anything lands', fx.rings.length === 1 && fx.rocks.length === 1);
 let landed = 0, steps = 0;
 while (fx.rocks.length && steps < 100) { landed += stepFx(fx, w, 1 / 60).length; steps += 1; }
-check('the rock lands once, on time', landed === 1 && steps <= Math.ceil(ROCK_TIME * 60) + 1, `${steps} frames`);
-const target = w.regions.find((r) => r.hp === 1) || w.regions[0];
-while (!target.gone) res = strike(w, target, target.cx, target.cy);
-impact(fx, 'break');
-burst(fx, res.debris, target.cx, target.cy, mulberry32(1), 150);
+check('the throw lands once, on time', landed === 1 && steps <= Math.ceil(MODES.sober.flight * 60) + 1, `${steps} frames`);
+const t1 = byKind(w, 'chair');
+res = strike(w, t1, t1.cx, t1.cy);
+impact(fx, res.kind);
+burst(fx, res.debris, t1.cx, t1.cy, mulberry32(1), 150);
 const frozenAt = fx.particles.map((p) => p.x + p.y).join();
 stepFx(fx, w, BREAK_PAUSE / 2);
-check('a break stops the game for an instant: nothing moves during the pause', fx.particles.map((p) => p.x + p.y).join() === frozenAt && fx.freeze > 0, `${BREAK_PAUSE * 1000} ms, a hit ${HIT_PAUSE * 1000} ms`);
-check('a break kicks the picture, within the stated maximum', (() => { stepFx(fx, w, BREAK_PAUSE); const o = shakeOffset(fx); return fx.shake > 0 && Math.abs(o.x) <= SHAKE_MAX && Math.abs(o.y) <= SHAKE_MAX; })());
+check('a wreck stops the game for an instant: nothing moves during the pause', res.kind === 'break' && fx.particles.map((p) => p.x + p.y).join() === frozenAt && fx.freeze > 0, `${BREAK_PAUSE * 1000} ms, a hit ${HIT_PAUSE * 1000} ms`);
+check('a wreck kicks the picture, within the stated maximum', (() => { stepFx(fx, w, BREAK_PAUSE); const o = shakeOffset(fx); return fx.shake > 0 && Math.abs(o.x) <= SHAKE_MAX && Math.abs(o.y) <= SHAKE_MAX; })());
 for (let i = 0; i < 300; i += 1) stepFx(fx, w, 1 / 60);
 check('the kick dies away and the pieces all come to rest', fx.shake === 0 && fx.particles.length === 0 && fx.flash === 0);
-const rubble = w.rubble.filter((v) => v !== 255).length;
-check('what falls STAYS: the rubble is still there afterwards', rubble > 0, `${rubble} pixels of rubble`);
-check('rubble never piles past its cap', Math.max(...w.heights) <= RUBBLE_MAX, `highest ${Math.max(...w.heights)} of ${RUBBLE_MAX}`);
+const fallen = []; w.rubble.forEach((v, p) => { if (v !== 255) fallen.push((p / W) | 0); });
+check('what falls STAYS, at the foot of the thing it came off — not at the bottom of the photograph', fallen.length > 0 && fallen.every((y) => y >= t1.y && y <= t1.y + t1.h + 6),
+  `${fallen.length} pixels, rows ${Math.min(...fallen)}–${Math.max(...fallen)}`);
 for (let i = 0; i < 6; i += 1) impact(fx, 'break');
-check('many breaks at once do not shake the picture off the screen', fx.shake <= SHAKE_MAX);
-fx = makeFx(); impact(fx, 'break', true);
+check('many wrecks at once do not shake the picture off the screen', fx.shake <= SHAKE_MAX);
+fx = makeFx(w); impact(fx, 'break', true);
 check('with reduced motion asked for, nothing shakes and nothing tilts', fx.shake === 0 && viewMotion('alcohol', 3, true).angle === 0);
 
-// ---- the view ---------------------------------------------------------------------------------------
+// ---- the view ----------------------------------------------------------------------------------------
 section('the view');
 const rect = { left: 30, top: 80, width: 300, height: 400 };
 let worst = 0;
-for (const id of Object.keys(FILTERS)) {
-  for (let t = 0; t < 20; t += 0.37) {
-    const m = viewMotion(id, t);
-    const shift = { x: m.x + 3, y: m.y - 2 };
-    for (const [x, y] of [[10, 12], [72, 96], [140, 188]]) {
-      const c = worldToClient(x, y, rect, m.angle, shift, W, H);
-      const back = clientToWorld(c.x, c.y, rect, m.angle, shift, W, H);
-      worst = Math.max(worst, Math.abs(back.x - x), Math.abs(back.y - y));
-    }
+for (const id of ids) for (let t = 0; t < 20; t += 0.37) {
+  const m = viewMotion(id, t), shift = { x: m.x + 3, y: m.y - 2 };
+  for (const [x, y] of [[10, 12], [96, 128], [188, 250]]) {
+    const c = worldToClient(x, y, rect, m.angle, shift, W, H), back = clientToWorld(c.x, c.y, rect, m.angle, shift, W, H);
+    worst = Math.max(worst, Math.abs(back.x - x), Math.abs(back.y - y));
   }
 }
 check('a tap lands on the pixel that was DRAWN under the finger, whatever the tilt, sway and shake', worst < 1e-6, `worst error ${worst.toExponential(1)} px`);
-check('the frame always leans a little; depression holds it still', viewMotion('sober', 1).angle !== 0 && viewMotion('depression', 1).angle === 0 && !viewMotion('depression', 1).ghost);
+check('the frame always leans a little; depression holds it still', viewMotion('sober', 1).angle !== 0 && viewMotion('depression', 1).angle === 0);
 check('alcohol leans furthest and sees double', Math.abs(viewMotion('alcohol', 1.7).angle) > Math.abs(viewMotion('sober', 1.7).angle) && viewMotion('alcohol', 1.7).ghost);
-const outcomes = Object.keys(FILTERS).map((id) => {
-  const ww = worldFrom(PHOTOS.demo), m = viewMotion(id, 7.1), shift = { x: m.x, y: m.y }, t = ww.regions[2];
-  const c = worldToClient(t.cx, t.cy, rect, m.angle, shift, W, H);
-  const at = clientToWorld(c.x, c.y, rect, m.angle, shift, W, H);
-  const r = strike(ww, pick(ww, at.x, at.y), at.x, at.y);
-  return `${r.region.id}:${r.kind}:${r.points}`;
-});
-check('a filter is a look, never a rule: the same tap ends the same way under each', outcomes.every((o) => o === outcomes[0]), outcomes[0]);
 
-// ---- naming, routed ---------------------------------------------------------------------------------
-section('naming the things: one bounded call, down the free-tier cascade (network stubbed)');
-const calls = [];
-const sse = (text) => new Response(`data: ${JSON.stringify({ model: 'stub-model', choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { status: 200 });
-const refuse = (status, headers = {}) => new Response(JSON.stringify({ error: { message: `stub ${status}` } }), { status, headers });
-const laneOf = (url) => Object.keys(PROVIDERS).find((id) => PROVIDERS[id].url === url);
-const stub = (answer) => {
-  calls.length = 0;
-  globalThis.fetch = async (url, init) => {
-    const user = JSON.parse(init.body).messages[1].content;
-    const call = { lane: laneOf(url), sent: JSON.parse(user[0].text).length, image: user[1]?.image_url?.url };
-    calls.push(call);
-    return answer(call.lane, call.sent);
-  };
-};
-const IMG = 'data:image/jpeg;base64,AAAA';
-const good = JSON.stringify({ items: [{ id: 0, label: 'окно' }, { id: '1', label: 'мусорный бак' }] });
-const key = (c) => c.repeat(30);
-w = worldFrom(PHOTOS.demo);
-const cost = scanCost(buildMessages(w, w.regions, IMG));
-check('one request fits a third of the minute on every lane that can see', VISION.every((id) => laneAffords(PROVIDERS[id], cost)), `${cost} tokens`);
-stub(() => { throw new Error('must not be called'); });
-check('with no key there is no recogniser and no request: the photograph stays on the device', makeRecogniser({}) === null && calls.length === 0);
-let r = await makeRecogniser({ groq: key('g'), cerebras: key('c') }).recognise(w, IMG);
-check('a lane that cannot see is never sent the photograph', r.source === 'local' && calls.length === 0, r.why);
-stub(() => sse(good));
-r = await makeRecogniser({ gemini: key('k') }).recognise(w, IMG);
-check('one key, one yard, exactly ONE request, and it carries the photograph', r.source === 'routed' && calls.length === 1 && calls[0].image === IMG, `${calls.length} call via ${r.lane}`);
-check('ids sent back as text are still matched', r.labels.length === 2 && r.labels[1].id === 1);
-stub((lane) => (lane === 'gemini' ? refuse(429, { 'retry-after': '7' }) : sse(good)));
-const two = makeRecogniser({ gemini: key('k'), mistral: key('m') });
-r = await two.recognise(w, IMG);
-check('a 429 cools the lane for as long as the provider says and the NEXT lane serves', r.lane === 'mistral' && two.router.cooldownSeconds('gemini') === 7, calls.map((c) => c.lane).join(' → '));
-calls.length = 0;
-r = await two.recognise(w, IMG);
-check('the next yard waits the cooldown out: the cooled lane is not asked', calls.length === 1 && calls[0].lane === 'mistral');
-stub((lane, sent) => (sent > 4 ? refuse(413) : sse(good)));
-r = await makeRecogniser({ gemini: key('k') }).recognise(w, IMG);
-check('a 413 is SPLIT, not retried at the same size', calls.length >= 2 && calls.every((c, i) => i === 0 || c.sent < calls[i - 1].sent), calls.map((c) => c.sent).join(' → ') + ' boxes');
-stub((lane) => (lane === 'gemini' ? refuse(401) : sse(good)));
-const auth = makeRecogniser({ gemini: key('x'), mistral: key('m') });
-r = await auth.recognise(w, IMG);
-check('a rejected key is not a rate limit: no cooldown, the next lane serves', r.lane === 'mistral' && auth.router.cooldownSeconds('gemini') === 0);
-stub(() => { throw new TypeError('network down'); });
-r = await makeRecogniser({ gemini: key('k'), mistral: key('m') }).recognise(w, IMG);
-check('with the network down nothing is named and the yard is exactly as playable', r.source === 'local' && w.regions.every((o) => !o.gone) && pick(w, w.regions[0].cx, w.regions[0].cy));
-const dirty = JSON.stringify({ items: [{ id: 99, label: 'сосед' }, { id: 0, label: 'x'.repeat(60) }, { id: 0, label: 'бак' }, { id: 0, label: 'ещё бак' },
-  ...w.regions.map((o) => ({ id: o.id, label: 'вещь' })), ...w.regions.map((o) => ({ id: o.id, label: 'вещь' }))] });
-const clean = parseLabels(dirty, w.regions);
-check('the answer is bounded and checked: known ids only, one name each, short, at most eight',
-  clean.length <= MAX_ITEMS && clean.length >= Math.min(MAX_ITEMS, w.regions.length) - 1 && clean.every((l) => l.id !== 99 && l.label.length <= 28) && new Set(clean.map((l) => l.id)).size === clean.length, `${clean.length} kept`);
-check('an answer that is not JSON names nothing', parseLabels('двор как двор', w.regions).length === 0);
+// ---- nothing in vain ---------------------------------------------------------------------------------
+section('nothing in vain');
+const files = readdirSync(new URL('./src/', import.meta.url)).filter((f) => f.endsWith('.js'));
+const sources = Object.fromEntries(files.map((f) => [f, readFileSync(new URL(`./src/${f}`, import.meta.url), 'utf8')]));
+const imported = (f) => Object.entries(sources).some(([g, text]) => g !== f && text.includes(`'./${f}'`));
+check('every module is used by another, or is the entry point', files.every((f) => f === 'main.js' || imported(f)), files.filter((f) => f !== 'main.js' && !imported(f)).join(' ') || `${files.length} modules`);
+const concept = readFileSync(new URL('./docs/concept.md', import.meta.url), 'utf8');
+check('every module has its reason written down in docs/concept.md', files.every((f) => concept.includes(`\`${f}\``)), files.filter((f) => !concept.includes(`\`${f}\``)).join(' ') || 'all listed');
+const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8'), mainJs = sources['main.js'];
+const controls = [...html.matchAll(/id="([a-zA-Z0-9]+)"/g)].map((m) => m[1]);
+check('every element the page names is used by the game', controls.every((id) => mainJs.includes(`'${id}'`)), controls.filter((id) => !mainJs.includes(`'${id}'`)).join(' ') || `${controls.length} elements`);
 
-// ---- report -----------------------------------------------------------------------------------------
+// ---- report ------------------------------------------------------------------------------------------
 const pad = (s, n) => String(s).padEnd(n);
 console.log('DVOR-8 — the tests');
 for (const r of rows) {
   if (r.name) { console.log(`\n  ${r.name}`); continue; }
-  console.log(`    ${pad(r.ok ? 'PASS' : 'FAIL', 5)} ${pad(r.what.slice(0, 86), 88)} ${r.detail.slice(0, 30)}`);
+  console.log(`    ${pad(r.ok ? 'PASS' : 'FAIL', 5)} ${pad(r.what.slice(0, 92), 94)} ${r.detail.slice(0, 34)}`);
 }
 console.log(`\nPASS ${pass}   FAIL ${fail}   of ${pass + fail} checks`);
 process.exit(fail === 0 ? 0 : 1);

@@ -1,37 +1,17 @@
-// The palette. The yard is stored as INDICES, never as colours, and is looked up through this table every
-// frame — so a filter is a different table, not a different picture (docs/style.md, F1 and F3).
+// The palette. The yard is stored as INDICES and looked up through a table every frame, so a filter is a
+// different table, not a different picture (docs/style.md, F1 and F3).
 //
-// Eighteen entries: a cool ramp and a warm ramp of eight tones each, dark to light, then the outline and
-// the void a destroyed thing leaves behind. Two ramps because one would turn a photograph into a duotone
-// poster; a warm thing and a cool thing of the same brightness must stay different things.
+// The table is made FROM THE PHOTOGRAPH: the 28 colours that describe this yard best, after it has been
+// graded toward the look — more contrast, more colour, purple in the shadows. A red car stays red and a
+// green tree stays green; the first version mapped brightness onto two fixed ramps and turned every yard
+// into the same heat-map, which is why nothing in it could be recognised.
 
-export const TONES = 8;
-export const COOL = 0;
-export const WARM = TONES;
-export const OUTLINE = 16;
-export const VOID = 17;
-export const SIZE = 18;
+export const COLOURS = 28;
+export const OUTLINE = COLOURS;       // the dark line round a thing
+export const VOID = COLOURS + 1;      // what is left where something was
+export const SIZE = COLOURS + 2;
+const OUTLINE_RGB = [11, 0, 24], VOID_RGB = [4, 0, 10];
 
-const BASE = [
-  '#12052e', '#27106b', '#3b1fa8', '#3b55e0', '#2f9bff', '#3fe0f0', '#a8fff0', '#ffffff',
-  '#1c0530', '#560d6e', '#a3178c', '#f0286e', '#ff5a3c', '#ff9a2e', '#ffd23f', '#fff6c2',
-  '#0b0018', '#04000a',
-];
-
-//   hue     turns the whole wheel by this fraction      sat, light   multiply
-//   toward  a colour everything is mixed toward, and by how much
-//   drift   how far the hue wanders over time (colour cycling), and how fast
-export const FILTERS = {
-  sober:      { label: 'трезвый' },
-  weed:       { label: 'трава',     hue: 0.30, sat: 1.10, drift: 0.06, driftRate: 0.6 },
-  alcohol:    { label: 'алкоголь',  sat: 0.70, toward: '#ff9a3c', mix: 0.30 },
-  depression: { label: 'депрессия', sat: 0.12, light: 0.72, toward: '#33405c', mix: 0.20 },
-};
-
-export function hexToRgb(hex) {
-  const h = hex.replace('#', '');
-  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
-}
 export function toHsl([r, g, b]) {
   const [rn, gn, bn] = [r / 255, g / 255, b / 255];
   const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn);
@@ -62,27 +42,91 @@ export function fromHsl([h, s, l]) {
 }
 export const luma = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 
-// The table for one filter at one moment: eighteen [r, g, b] triples.
-export function paletteFor(filterId, seconds = 0) {
-  const f = FILTERS[filterId] || FILTERS.sober;
-  return BASE.map((hex) => {
-    let rgb = hexToRgb(hex);
-    if (f === FILTERS.sober) return rgb;
-    let [h, s, l] = toHsl(rgb);
-    h = (h + (f.hue || 0) + (f.drift || 0) * Math.sin(seconds * (f.driftRate || 0)) + 2) % 1;
-    s = Math.max(0, Math.min(1, s * (f.sat ?? 1)));
+// The grade: what makes a phone photograph look like this game. lo/hi are the photo's own darkest and
+// brightest brightness, so a grey overcast yard still gets blacks and whites.
+export const SHADOW = [44, 12, 96], LIGHT = [255, 240, 200];
+export function grade(r, g, b, lo = 0, hi = 1) {
+  const span = Math.max(0.08, hi - lo);
+  const l0 = luma([r, g, b]);
+  const l1 = Math.max(0, Math.min(1, (l0 - lo) / span));
+  const k = l0 > 0.004 ? l1 / l0 : 0;
+  let [h, s, l] = toHsl([Math.min(255, r * k), Math.min(255, g * k), Math.min(255, b * k)]);
+  s = Math.min(1, s * 1.45 + 0.04);
+  const out = fromHsl([h, s, l]);
+  const dark = (1 - l1) ** 2 * 0.5, bright = l1 ** 3 * 0.14;
+  return out.map((v, i) => v + (SHADOW[i] - v) * dark + (LIGHT[i] - v) * bright);
+}
+
+// Median cut: split the photograph's colours into boxes along their widest channel until there are
+// COLOURS of them; each box's average is one palette entry.
+export function buildPalette(pixels, count = COLOURS) {
+  let boxes = [pixels];
+  while (boxes.length < count) {
+    let pick = -1, widest = -1, channel = 0;
+    boxes.forEach((box, i) => {
+      if (box.length < 2) return;
+      for (let c = 0; c < 3; c += 1) {
+        let min = 255, max = 0;
+        for (const p of box) { if (p[c] < min) min = p[c]; if (p[c] > max) max = p[c]; }
+        // weighted by how many pixels the box holds, so large plain areas are split before rare specks
+        const range = (max - min) * Math.sqrt(box.length);
+        if (range > widest) { widest = range; pick = i; channel = c; }
+      }
+    });
+    if (pick < 0 || widest <= 0) break;
+    const box = boxes[pick].sort((a, b) => a[channel] - b[channel]);
+    const half = box.length >> 1;
+    boxes.splice(pick, 1, box.slice(0, half), box.slice(half));
+  }
+  const table = boxes.map((box) => [0, 1, 2].map((c) => Math.round(box.reduce((n, p) => n + p[c], 0) / Math.max(1, box.length))));
+  while (table.length < count) table.push(table[table.length - 1] || [0, 0, 0]);
+  table.sort((a, b) => luma(a) - luma(b));
+  return [...table, OUTLINE_RGB, VOID_RGB];
+}
+
+export function nearest(table, r, g, b, upto = COLOURS) {
+  let best = 0, bestD = 1e12;
+  for (let i = 0; i < upto; i += 1) {
+    const c = table[i], d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+// For each colour, the colour its wreck has: the nearest entry to a dark, greyed version of it.
+export function scorchMap(table) {
+  return Uint8Array.from({ length: SIZE }, (_, i) => {
+    if (i >= COLOURS) return i;
+    const [r, g, b] = table[i], grey = luma(table[i]) * 255;
+    return nearest(table, (r * 0.4 + grey * 0.6) * 0.34, (g * 0.4 + grey * 0.6) * 0.34, (b * 0.4 + grey * 0.6) * 0.34);
+  });
+}
+
+//   sat, light   multiply          toward, mix   a colour everything is mixed toward, and by how much
+//   drift        how far the hue wanders over time (colour cycling), and how fast
+export const LOOKS = {
+  sober:      {},
+  weed:       { sat: 1.60, toward: '#39ff14', mix: 0.07, drift: 0.05, driftRate: 0.6 },
+  alcohol:    { sat: 0.75, toward: '#ff9a3c', mix: 0.28 },
+  depression: { sat: 0.10, light: 0.70, toward: '#33405c', mix: 0.22 },
+};
+const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+
+// The yard's table as one filter shows it at one moment.
+export function lookThrough(table, filterId, seconds = 0) {
+  const f = LOOKS[filterId];
+  if (!f || filterId === 'sober') return table;
+  return table.map((rgb) => {
     const want = luma(rgb) * (f.light ?? 1);
-    rgb = fromHsl([h, s, l]);
-    // Turning the hue changes how bright a colour LOOKS even when its lightness is kept — a blue turned
-    // yellow jumps up the ramp. The look is pulled back to the brightness it had, so a filter can never
-    // reorder the tones and make the yard unreadable.
-    const got = luma(rgb);
-    if (got > 0) rgb = rgb.map((v) => Math.min(255, (v * want) / got));
-    if (f.toward) {
-      const to = hexToRgb(f.toward);
-      rgb = rgb.map((v, i) => v + (to[i] - v) * f.mix);
-    }
-    return rgb.map((v) => Math.round(Math.max(0, Math.min(255, v))));
+    let [h, s, l] = toHsl(rgb);
+    h = (h + (f.drift || 0) * Math.sin(seconds * (f.driftRate || 0)) + 1) % 1;
+    s = Math.max(0, Math.min(1, s * (f.sat ?? 1)));
+    let out = fromHsl([h, s, l]);
+    // turning the hue changes how bright a colour looks; it is pulled back so no filter reorders the tones
+    const got = luma(out);
+    if (got > 0) out = out.map((v) => Math.min(255, (v * want) / got));
+    if (f.toward) { const to = hex(f.toward); out = out.map((v, i) => v + (to[i] - v) * f.mix); }
+    return out.map((v) => Math.round(Math.max(0, Math.min(255, v))));
   });
 }
 export const css = ([r, g, b]) => `rgb(${r},${g},${b})`;

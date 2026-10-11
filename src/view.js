@@ -7,7 +7,7 @@
 
 const DEG = Math.PI / 180;
 
-export const LONG = 192, SHORT = 144;   // the picture in pixels: small enough to be pixel art
+export const LONG = 256, SHORT = 192;   // the picture in pixels: the size of an 8-bit console's screen
 export const SCAN_TIME = 1.4;           // seconds; the opening must not outstay its welcome
 
 //   angle   the tilt of the whole frame, radians      x, y   a shift of the picture inside it, pixels

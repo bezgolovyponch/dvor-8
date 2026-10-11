@@ -1,10 +1,10 @@
 # ДВОР-8 / DVOR-8
 
-Photograph your yard from the balcony. The scan turns it into a neon pixel level, finds the things in it,
-and you take them apart — fast, with a combo, and again.
+Photograph your yard from the balcony. It becomes an 8-bit picture of the same yard, the real cars,
+benches and bicycles in it are found and named, and you take them apart.
 
-**Web first.** No build step, no dependencies, no account. The photograph stays on the phone unless you
-enter a model key.
+**Web first.** No build step, no account, no key. The photograph never leaves the phone: the things in it
+are found by a detector running on the phone itself.
 
 ## Run it
 
@@ -16,57 +16,66 @@ enter a model key.
     ipconfig getifaddr en0        # e.g. 192.168.88.237 → http://192.168.88.237:4310/
 
 This serves the whole folder to everyone on that network for as long as it runs. Stop it with Ctrl-C.
+The first load fetches about 20 MB (the detector and its model) from your computer.
 
 ## Play
 
 | | |
 |---|---|
-| **СНЯТЬ ДВОР** | opens the phone's camera; on a computer, a file picker |
-| **ДЕМО-ДВОР** | a drawn stand-in, for a desk without a yard |
-| tap a bracketed thing | throw a rock at it; big things take up to three |
-| hit again within 2.5 s | the combo climbs and multiplies the points |
-| **ТРЕЗВЫЙ · ТРАВА · АЛКОГОЛЬ · ДЕПРЕССИЯ** | how you see it: colours and motion, never the rules |
+| **СНЯТЬ ДВОР** | the phone's camera; on a computer, a file picker |
+| **ДЕМО-ДВОР** | a drawn yard, for a desk without a balcony |
+| tap a bracketed thing | throw at it; the pips under it are the hits it can still take |
+| hit again quickly | the combo climbs and multiplies the points |
 | **ЗАНОВО** / **ЕЩЁ РАЗ** | the same yard, clean, at once |
+
+Each filter is a way to play:
+
+| | in the hand | how it plays | what you see |
+|---|---|---|---|
+| **ТРЕЗВЫЙ** | stone | lands where you tap, fast | everything sharp |
+| **ТРАВА** | slipper | slow, then skips to two more things; combos last twice as long | edges go soft, colours drift |
+| **АЛКОГОЛЬ** | bottle | bursts over everything near, but strays from your aim | nothing in focus, double vision |
+| **ДЕПРЕССИЯ** | brick | wrecks anything in one throw, slow to throw again | only a small circle round your finger — drag to look, tap to throw |
+
+It recognises cars, trucks, buses, motorcycles, bicycles, benches, chairs, potted plants and a few dozen
+other everyday things. It does not know bins, swings or trees. People and animals are never targets.
 
 ## Test
 
-    node test.mjs
+    node test.mjs                                              # 70 checks, no browser
+    node --experimental-websocket tools/check.mjs out/ a.jpg   # plays the real page in headless Chrome
 
-63 checks, in eight groups: the look, the filters, photograph → picture, finding things, hitting, feel,
-the view, and naming through the model cascade (network stubbed). They assert behaviour — any photograph
-becomes a playable yard, a tap hits what was under it, every interaction is answered. **They do not and
-cannot assert that it is fun**; see the last section of `docs/concept.md`.
+The first asserts behaviour: a red car stays red, people are never targets, a tap hits what was under it,
+every mode plays differently and says why, every part has a written reason. The second runs the detector
+on real photographs (paths under the served folder) and saves screenshots. **Neither can say whether it
+is fun.**
 
 ## Structure
 
-    index.html, style.css   the page; the look is as much here as in the canvas
-    src/palette.js          18 colours, and the same 18 under each filter
-    src/stylise.js          photograph → picture of palette indices
-    src/segment.js          picture → the things in it, found on the device
-    src/demo.js             the stand-in photograph
-    src/world.js            what a hit does: cracks, breaks, combo, score
-    src/fx.js               what a hit feels like: pause, shake, flash, pieces, rubble
-    src/view.js             tilt and sway, and the way back from a finger to a pixel
+    index.html, style.css   the page
+    src/detect.js           the object detector, on the device
+    src/objects.js          found things → fair targets and their pixels
+    src/stylise.js          photograph → 8-bit picture of the same yard
+    src/palette.js          the yard's own 28 colours, and the same through each mode
+    src/modes.js            the four ways to play
+    src/world.js            what a hit does
+    src/fx.js               what a hit feels like
+    src/view.js             lean, sway, and the way back from a finger to a pixel
     src/render.js           drawing
-    src/audio.js            sound from oscillators; no files
-    src/recognise.js        one bounded model call per yard, to name things
-    src/llm.js              providers, limits and the router, carried over from partner-sim
-    src/main.js             the flow and the wiring
-    docs/concept.md         the concept on the skeleton's twelve slots — read this first
+    src/audio.js, demo.js, rng.js, main.js
+    vendor/mediapipe/       the detector runtime and model (Apache 2.0), pinned
+    tools/                  a dependency-free headless-Chrome driver and the play-through check
+    docs/concept.md         the concept, the "nothing in vain" rule, what went wrong before — read first
     docs/style.md           every look-and-feel decision, its source, its test
-    docs/routing.md         the model call: request, cost, routing sequence
-    brief.md, game-skeleton/  the intake and the skeleton files
+    brief.md, game-skeleton/, standards/   the intake and earlier material, kept for the record
 
-`standards/` holds the 2D art standards the first build followed. The rebuilt look does not use parallax
-layers and does not follow them; they are kept for the record.
+Earlier builds are tags: `mvp-1-miami` (neon heat-map, tone patches, model-naming cascade).
 
 ## What this is not yet
 
-- **Not played by anyone.** Driven in headless Chrome with three real photographs; never on a phone.
-- **Shapes, not objects.** Without a model the device finds patches of tone, not bins and benches.
-- **No live model call.** The naming path is tested against a stubbed network only, and which providers
-  accept an image is unverified.
-- **No live viewfinder.** The camera opens through the phone's own camera app. A viewfinder in the page
-  needs HTTPS.
-- **No reason to come back.** No best score, no memory of yards, no story, no residents.
-- **The skeleton's research is not done.** Runs B–F of the master prompt have not run.
+- **Not played by anyone in this form.**
+- **Untimed on a phone.** The search takes 1.6–1.8 s on a Mac; a phone will be slower.
+- **Tried on street-level photographs only.** From a high balcony cars are small; slicing is there for
+  that and is untested on such a view.
+- **No reason to come back** beyond a best score. No story, no residents.
+- **The skeleton's research runs B–F are not done.**
