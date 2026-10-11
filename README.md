@@ -70,7 +70,7 @@ or input restriction except the 8-step colour ladder the era implies.
 
 - **No camera scan.** `src/yard.js` generates the yard from a seed; a real scan that reads a photograph
   replaces that one module and nothing else.
-- **No LLM recogniser.** `src/scan.js` has the seam — an async `recognise` function and a `source` field —
-  and the routed implementation is not written. See `docs/routing.md`.
+- **No live model call yet.** The routed scan is written and tested against a stubbed network only; no
+  provider has been called. The first scan with a real key is the first real evidence. See `docs/routing.md`.
 - **No residents.** The concept names a courier and angry drunks; neither exists yet. The scan's interface
   deliberately returns object kinds only, so adding people is a product decision rather than a plumbing one.
