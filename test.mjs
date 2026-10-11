@@ -1,265 +1,234 @@
-// DVOR-8 tests. Every claim in the README is checked here, and the tests assert BEHAVIOUR rather than the
-// presence of code: a yard is playable if the scan recognises everything and a rock can break something.
+// DVOR-8 tests. They assert BEHAVIOUR: that any photograph becomes a playable yard, that a tap hits what
+// was under it, that every interaction is answered, and that the look obeys its own rules.
+//
+// What they cannot assert is that any of it is FUN. The "answered fast, answered always" checks below are
+// the measurable part of that; the rest needs a person with a phone. See docs/concept.md.
 //
 // Usage:  node test.mjs
 
-import { buildYard, yardSummary, WORLD_W, WORLD_H, GROUND } from './src/yard.js';
-import { VIEW_H } from './src/render.js';
-import { makeScan, startScan, stepScan, SCAN_MS } from './src/scan.js';
-import { makeEffect, throwAt, stepEffect } from './src/throw.js';
-import { KINDS, LAYERS, hitObject, spendRock } from './src/state.js';
-import { forLayer, onLadder, shade } from './src/palette.js';
-import { applyLabels } from './src/scan.js';
-import { makeRecogniser, buildMessages, scanCost, laneAffords, parseLabels, MAX_ITEMS } from './src/recognise.js';
+import { paletteFor, FILTERS, TONES, COOL, WARM, OUTLINE, VOID, SIZE, luma, toHsl } from './src/palette.js';
+import { stylise } from './src/stylise.js';
+import { segment, MIN_OBJECTS, MAX_OBJECTS } from './src/segment.js';
+import { demoPhoto } from './src/demo.js';
+import { makeWorld, pick, strike, tick, left, COMBO_WINDOW, DEBRIS_MAX } from './src/world.js';
+import { makeFx, throwRock, impact, burst, stepFx, shakeOffset, ROCK_TIME, HIT_PAUSE, BREAK_PAUSE, SHAKE_MAX, RUBBLE_MAX } from './src/fx.js';
+import { viewMotion, clientToWorld, worldToClient, LONG, SHORT, SCAN_TIME } from './src/view.js';
+import { mulberry32 } from './src/rng.js';
+import { makeRecogniser, buildMessages, scanCost, laneAffords, parseLabels, MAX_ITEMS, VISION } from './src/recognise.js';
 import { PROVIDERS } from './src/llm.js';
 
 let pass = 0, fail = 0;
 const rows = [];
-const check = (what, ok, detail = '') => { rows.push({ what, ok, detail: String(detail) }); if (ok) pass += 1; else fail += 1; };
+const section = (name) => rows.push({ name });
+const check = (what, ok, detail = '') => { rows.push({ what, ok: Boolean(ok), detail: String(detail) }); if (ok) pass += 1; else fail += 1; };
+const W = SHORT, H = LONG, N = W * H;
+const yardFrom = (rgba, w = W, h = H) => { const st = stylise(rgba, w, h); return { st, seg: segment(st, w, h) }; };
+const worldFrom = (rgba) => { const y = yardFrom(rgba); return makeWorld({ w: W, h: H, photo: rgba, st: y.st, seg: y.seg, seed: 8 }); };
+const flat = () => new Uint8ClampedArray(N * 4).fill(128);
+const noisy = () => { const r = mulberry32(3); return Uint8ClampedArray.from({ length: N * 4 }, () => r() * 255); };
+const dark = () => { const r = mulberry32(5); return Uint8ClampedArray.from({ length: N * 4 }, () => r() * 22); };
+const PHOTOS = { demo: demoPhoto(W, H, 8), flat: flat(), noise: noisy(), night: dark() };
 
-// ---- the yard ------------------------------------------------------------------------------------
-const a = buildYard('двор-1');
-const b = buildYard('двор-1');
-const c = buildYard('другой двор');
-check('the yard generates', a.objects.length > 0, a.objects.length + ' objects');
-check('the same seed gives the same yard',
-  JSON.stringify(a.objects.map((o) => [o.kind, o.x, o.y])) === JSON.stringify(b.objects.map((o) => [o.kind, o.x, o.y])),
-  'deterministic');
-check('a different seed gives a different yard',
-  JSON.stringify(a.objects.map((o) => o.x)) !== JSON.stringify(c.objects.map((o) => o.x)), 'not fixed');
-check('every object is inside the world',
-  a.objects.every((o) => o.x >= 0 && o.x + o.w <= WORLD_W && o.y >= 0 && o.y + o.h <= WORLD_H),
-  `${WORLD_W}x${WORLD_H}`);
-check('the world is as tall as the picture, and every object is VISIBLE: in the view, above the rail',
-  WORLD_H === VIEW_H && a.objects.every((o) => o.y >= 0 && o.y + o.h <= GROUND),
-  `lowest edge ${Math.max(...a.objects.map((o) => o.y + o.h))} of ${GROUND}`);
-check('every object has a kind the renderer knows',
-  a.objects.every((o) => KINDS[o.kind]), [...new Set(a.objects.map((o) => o.kind))].join(', '));
-check('every kind states a silhouette class and a break count',
-  Object.values(KINDS).every((k) => k.silhouette && k.breaks > 0), Object.keys(KINDS).length + ' kinds');
-check('the yard holds enough to be worth scanning and breaking',
-  a.objects.length >= 20 && a.objects.filter((o) => o.layer === 'yard').length >= 8,
-  a.objects.filter((o) => o.layer === 'yard').length + ' in the gameplay layer');
+// ---- the look --------------------------------------------------------------------------------------
+section('the look');
+const sober = paletteFor('sober');
+check('the palette is 18 entries: two ramps of eight, an outline, a void', sober.length === SIZE && SIZE === 2 * TONES + 2);
+const rises = (pal, from) => Array.from({ length: TONES - 1 }, (_, i) => luma(pal[from + i + 1]) > luma(pal[from + i])).every(Boolean);
+check('both ramps run dark to light, so brightness in the photo is brightness in the picture', rises(sober, COOL) && rises(sober, WARM));
+check('high contrast: the lightest tone is at least 8x the darkest', luma(sober[COOL + 7]) / luma(sober[COOL]) > 8 && luma(sober[WARM + 7]) / luma(sober[WARM]) > 8,
+  `${(luma(sober[COOL + 7]) / luma(sober[COOL])).toFixed(0)}x cool, ${(luma(sober[WARM + 7]) / luma(sober[WARM])).toFixed(0)}x warm`);
+const mid = (pal, from) => toHsl(pal[from + 3]);
+check('the two ramps are two different hues: a warm thing and a cool thing stay different', Math.abs(mid(sober, COOL)[0] - mid(sober, WARM)[0]) > 0.2);
+check('the middle of both ramps is saturated: neon, not pastel', mid(sober, COOL)[1] > 0.7 && mid(sober, WARM)[1] > 0.7,
+  `cool ${mid(sober, COOL)[1].toFixed(2)}, warm ${mid(sober, WARM)[1].toFixed(2)}`);
+check('the outline and the void are darker than every tone', [OUTLINE, VOID].every((k) => luma(sober[k]) < luma(sober[COOL]) && luma(sober[k]) < luma(sober[WARM])));
 
-// ---- the scan, the game's opening move -----------------------------------------------------------
-const w2 = buildYard('двор-1');
-const scan = makeScan(w2);
-check('nothing is recognised before the scan', yardSummary(w2).scanned === 0);
-startScan(scan, 0);
-let done = null;
-for (let t = 50; t <= SCAN_MS + 400 && !done; t += 50) { const r = stepScan(scan, t); if (r && r.done) done = r; }
-check('the scan finishes', Boolean(done), done ? 'completed' : 'never completed');
-check('a finished scan recognises EVERY object, with none left behind',
-  w2.objects.every((o) => o.scanned), yardSummary(w2).scanned + ' / ' + w2.objects.length);
-check('the scan reports where the recognition came from', done && done.source === 'local', done ? done.source : '-');
-const w3 = buildYard('двор-1');
-const s3 = makeScan(w3);
-startScan(s3, 0);
-const before = w3.scanned;
-stepScan(s3, 1e6);
-check('a second pass cannot double-count what is already recognised', w3.scanned === before + w3.objects.length,
-  'counted once');
+// ---- filters ---------------------------------------------------------------------------------------
+section('filters');
+const sat = (pal) => pal.slice(0, 16).reduce((n, c) => n + toHsl(c)[1], 0) / 16;
+const lum = (pal) => pal.slice(0, 16).reduce((n, c) => n + luma(c), 0) / 16;
+const heat = (pal) => pal.slice(0, 16).reduce((n, c) => n + c[0] - c[2], 0) / 16;
+const P = (id, t = 0) => paletteFor(id, t);
+check('every filter is a full table', Object.keys(FILTERS).every((id) => P(id, 1.7).length === SIZE && P(id, 1.7).every((c) => c.every((v) => Number.isInteger(v) && v >= 0 && v <= 255))));
+check('under every filter the ramps still run dark to light: the yard stays readable',
+  Object.keys(FILTERS).every((id) => [0, 2.6, 7].every((t) => rises(P(id, t), COOL) && rises(P(id, t), WARM))), Object.keys(FILTERS).join(' '));
+check('depression: nearly colourless, darker, cold', sat(P('depression')) < sat(sober) * 0.35 && lum(P('depression')) < lum(sober) && heat(P('depression')) < 0,
+  `sat ${sat(sober).toFixed(2)} → ${sat(P('depression')).toFixed(2)}`);
+check('alcohol: warmer and less saturated', heat(P('alcohol')) > heat(sober) && sat(P('alcohol')) < sat(sober), `red-blue ${heat(sober).toFixed(0)} → ${heat(P('alcohol')).toFixed(0)}`);
+check('weed: the whole wheel is turned, and keeps turning', toHsl(P('weed')[WARM + 3])[0] !== toHsl(sober[WARM + 3])[0]
+  && P('weed', 0).join() !== P('weed', 2.6).join() && P('weed', 0).join() === P('weed', Math.PI / 0.6).join(), 'colour cycling');
+check('only weed moves the palette over time', ['sober', 'alcohol', 'depression'].every((id) => P(id, 0).join() === P(id, 9).join()));
+check('a filter changes the table and nothing else: the picture\'s indices are untouched',
+  (() => { const w = worldFrom(PHOTOS.demo); const before = w.idx.join(); for (const id of Object.keys(FILTERS)) paletteFor(id, 3); return w.idx.join() === before; })());
 
-// ---- throwing and breaking ------------------------------------------------------------------------
-const w4 = buildYard('двор-1');
-w4.objects.forEach((o) => { o.scanned = true; });
-const fx = makeEffect();
-const target = w4.objects.find((o) => o.kind === 'bin');
-const aim = { x: target.x + target.w / 2, y: target.y + target.h / 2 };
-const t1 = throwAt(fx, w4, aim.x, aim.y);
-check('a throw costs a rock', t1.thrown === true && w4.inventory.rocks === 5, w4.inventory.rocks + ' left');
-let landed = [];
-for (let i = 0; i < 300 && fx.rocks.length; i += 1) landed = landed.concat(stepEffect(fx, w4, 0.016));
-const firstHit = landed.find((l) => l.hit);
-check('a throw can hit something', Boolean(firstHit), firstHit ? firstHit.target.kind : 'missed every time');
-check('a throw hits what was AIMED at, not whatever is nearest',
-  Boolean(firstHit && firstHit.target.id === target.id),
-  firstHit ? `aimed ${target.kind}, hit ${firstHit.target.kind}` : '-');
-check('a hit is counted on the object', Boolean(firstHit && firstHit.target.hits > 0),
-  firstHit ? firstHit.target.hits + ' hits' : '-');
-// Break it all the way.
-let broke = false;
-for (let i = 0; i < 6 && !broke; i += 1) {
-  throwAt(fx, w4, aim.x, aim.y);
-  let res = [];
-  for (let s = 0; s < 300 && fx.rocks.length; s += 1) res = res.concat(stepEffect(fx, w4, 0.016));
-  if (res.some((r) => r.hit && r.broke && r.target.id === target.id)) broke = true;
+// ---- the photograph becomes a picture ---------------------------------------------------------------
+section('photograph → picture');
+const demo = yardFrom(PHOTOS.demo);
+check('every pixel of the picture is a palette index', demo.st.idx.every((v) => v < SIZE) && demo.st.idx.length === N);
+check('the same photograph gives the same picture', stylise(PHOTOS.demo, W, H).idx.join() === demo.st.idx.join(), 'deterministic');
+const used = new Set(demo.st.idx);
+check('a daylight yard uses both ramps and has outlines', [...used].some((v) => v < 8) && [...used].some((v) => v >= 8 && v < 16) && used.has(OUTLINE), `${used.size} of ${SIZE} indices used`);
+const nightUsed = new Set(stylise(PHOTOS.night, W, H).idx);
+check('a dark photograph is stretched, not left black', Math.max(...[...nightUsed].filter((v) => v < 16).map((v) => v % 8)) >= 5, `brightest tone ${Math.max(...[...nightUsed].filter((v) => v < 16).map((v) => v % 8))} of 7`);
+check('a landscape photograph works as well as a portrait one', (() => { const y = yardFrom(demoPhoto(LONG, SHORT, 8), LONG, SHORT); return y.seg.regions.length >= MIN_OBJECTS; })());
+
+// ---- the things in it -------------------------------------------------------------------------------
+section('finding things');
+for (const [name, rgba] of Object.entries(PHOTOS)) {
+  const { seg } = yardFrom(rgba);
+  const n = seg.regions.length;
+  const inside = seg.regions.every((r) => r.x >= 0 && r.y >= 0 && r.x + r.w <= W && r.y + r.h <= H && r.area > 0);
+  const owned = seg.regions.every((r) => r.pixels.every((p) => seg.owner[p] === r.id));
+  check(`${name}: between ${MIN_OBJECTS} and ${MAX_OBJECTS} things, all in the picture, none overlapping`, n >= MIN_OBJECTS && n <= MAX_OBJECTS && inside && owned, `${n} things`);
 }
-check('enough hits destroy an object', broke && target.gone, target.gone ? 'gone' : 'still standing');
-check('a destroyed object stops being a target', hitObject(w4, target.id).hit === false, 'not hit again');
-check('destruction is counted', yardSummary(w4).broken >= 1, yardSummary(w4).broken + ' broken');
-check('rocks run out', (() => { const w = buildYard('x'); w.inventory.rocks = 1; spendRock(w); return spendRock(w) === false; })(),
-  'no infinite throwing');
+check('the same photograph gives the same things', JSON.stringify(yardFrom(PHOTOS.demo).seg.regions.map((r) => [r.x, r.y, r.area])) === JSON.stringify(demo.seg.regions.map((r) => [r.x, r.y, r.area])));
+check('things are numbered top to bottom, the way the scan meets them', demo.seg.regions.every((r, i, a) => i === 0 || r.cy >= a[i - 1].cy));
+check('a bigger thing takes more hits', (() => { const rs = [...demo.seg.regions].sort((a, b) => a.area - b.area); return rs[0].hp <= rs[rs.length - 1].hp && rs.every((r) => r.hp >= 1 && r.hp <= 3); })(),
+  demo.seg.regions.map((r) => r.hp).join(''));
 
-// ---- the standards the look must obey -------------------------------------------------------------
-const speeds = LAYERS.map((l) => l.speed);
-check('parallax: sky scrolls slowest and the gameplay layer not at all',
-  LAYERS[0].speed === 0.05 && LAYERS[LAYERS.length - 1].speed === 1, speeds.join(' → '));
-check('parallax: the speeds increase with depth',
-  speeds.every((s, i) => i === 0 || s > speeds[i - 1]), 'monotonic');
-check('the standard asks for 3-5 layers', LAYERS.length >= 3 && LAYERS.length <= 5, LAYERS.length + ' layers');
-check('atmospheric perspective: a colour gets more saturated as it comes closer', (() => {
-  const sat = (hex) => {
-    const [r, g, bl] = hex.replace('#', '').match(/../g).map((v) => parseInt(v, 16) / 255);
-    const max = Math.max(r, g, bl), min = Math.min(r, g, bl);
-    return max === min ? 0 : (max - min) / (1 - Math.abs(max + min - 1));
-  };
-  const values = ['sky', 'far', 'mid', 'near', 'yard'].map((l) => sat(forLayer('#c94f4f', l)));
-  return values.every((v, i) => i === 0 || v >= values[i - 1]);
-})(), 'sky → yard rises');
-check('the five depths are five different colours, so the scene is not flat', (() => {
-  const set = new Set(['sky', 'far', 'mid', 'near', 'yard'].map((l) => forLayer('#c94f4f', l)));
-  return set.size === 5;
-})(), '5 of 5');
-check('every colour is on the 8-step ladder', (() => {
-  const hexToRgb = (h) => h.replace('#', '').match(/../g).map((v) => parseInt(v, 16));
-  return ['sky', 'far', 'mid', 'near', 'yard'].every((l) => hexToRgb(forLayer('#3a7a5a', l)).every(onLadder));
-})(), 'quantised');
-check('a shade step stays on the ladder too',
-  [shade('#3a7a5a', 0.2), shade('#3a7a5a', -0.2)].every((h) => h.replace('#', '').match(/../g).map((v) => parseInt(v, 16)).every(onLadder)),
-  'shading cannot escape the palette');
+// ---- hitting ----------------------------------------------------------------------------------------
+section('hitting');
+let w = worldFrom(PHOTOS.demo);
+check('a tap on a thing picks THAT thing', w.regions.every((r) => { const p = r.pixels[r.pixels.length >> 1]; return pick(w, p % W, (p / W) | 0) === r; }), `${w.regions.length} of ${w.regions.length}`);
+const corner = (() => { for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) { let far = true; for (const r of w.regions) if (x > r.x - 12 && x < r.x + r.w + 12 && y > r.y - 12 && y < r.y + r.h + 12) far = false; if (far) return [x, y]; } return null; })();
+check('a tap on nothing picks nothing', corner && pick(w, corner[0], corner[1]) === null, corner ? `at ${corner}` : 'no empty spot');
+const edge = w.regions[0];
+check('a near miss still counts: a finger is not a pixel', pick(w, edge.x - 3, edge.cy) === edge || pick(w, edge.cx, edge.y - 3) === edge);
+const big = w.regions.find((r) => r.hp > 1) || w.regions[0];
+const before = w.idx.join();
+let res = strike(w, big, big.cx, big.cy);
+check('a first hit on a tough thing cracks it: the picture changes, the thing stands', big.hp > 1 ? (res.kind === 'crack' && !big.gone && w.idx.join() !== before) : res.kind === 'break', res.kind);
+while (!big.gone) res = strike(w, big, big.cx, big.cy);
+check('enough hits break it: every pixel of it becomes the void', res.kind === 'break' && big.pixels.every((p) => w.idx[p] === VOID || w.idx[p] === OUTLINE) && left(w) === w.regions.length - 1);
+check('a broken thing throws pieces, but never more than the cap', res.debris.length > 0 && res.debris.length <= DEBRIS_MAX + 1, `${res.debris.length} pieces`);
+check('a broken thing cannot be picked or hit again', pick(w, big.cx, big.cy) !== big && strike(w, big, big.cx, big.cy) === null);
+w = worldFrom(PHOTOS.demo);
+const a1 = strike(w, w.regions[0], w.regions[0].cx, w.regions[0].cy);
+const a2 = strike(w, w.regions[1], w.regions[1].cx, w.regions[1].cy);
+check('hits in quick succession build a combo, and a combo multiplies the points', a1.combo === 1 && a2.combo === 2 && w.maxCombo === 2, `x${a1.combo} → x${a2.combo}`);
+tick(w, COMBO_WINDOW + 0.01);
+check('a combo runs out on its own; nothing is taken away when it does', w.combo === 0 && w.score === a1.points + a2.points, `score kept: ${w.score}`);
+w = worldFrom(PHOTOS.demo);
+for (const r of w.regions) while (!r.gone) strike(w, r, r.cx, r.cy);
+check('breaking everything ends the yard', w.done && left(w) === 0 && w.score > 0, `score ${w.score}`);
+const again = worldFrom(PHOTOS.demo);
+check('«ещё раз» is a clean yard: same things, nothing broken, no score', again.regions.length === w.regions.length && again.regions.every((r) => !r.gone && r.hits === 0) && again.score === 0);
 
-// ---- the routed recogniser: one bounded call, down the free-tier cascade ---------------------------
-// The network is stubbed with the refusals the providers actually send. No provider is called from here.
+// ---- feel -------------------------------------------------------------------------------------------
+section('feel: answered fast, answered always');
+check('the opening scan takes under two seconds', SCAN_TIME < 2, `${SCAN_TIME} s`);
+check('from tap to impact is under 150 ms', ROCK_TIME <= 0.15, `${ROCK_TIME * 1000} ms`);
+w = worldFrom(PHOTOS.demo);
+let fx = makeFx();
+throwRock(fx, w, 40, 40, null);
+check('a tap is answered in the same frame, before the rock lands', fx.rings.length === 1 && fx.rocks.length === 1);
+let landed = 0, steps = 0;
+while (fx.rocks.length && steps < 100) { landed += stepFx(fx, w, 1 / 60).length; steps += 1; }
+check('the rock lands once, on time', landed === 1 && steps <= Math.ceil(ROCK_TIME * 60) + 1, `${steps} frames`);
+const target = w.regions.find((r) => r.hp === 1) || w.regions[0];
+while (!target.gone) res = strike(w, target, target.cx, target.cy);
+impact(fx, 'break');
+burst(fx, res.debris, target.cx, target.cy, mulberry32(1), 150);
+const frozenAt = fx.particles.map((p) => p.x + p.y).join();
+stepFx(fx, w, BREAK_PAUSE / 2);
+check('a break stops the game for an instant: nothing moves during the pause', fx.particles.map((p) => p.x + p.y).join() === frozenAt && fx.freeze > 0, `${BREAK_PAUSE * 1000} ms, a hit ${HIT_PAUSE * 1000} ms`);
+check('a break kicks the picture, within the stated maximum', (() => { stepFx(fx, w, BREAK_PAUSE); const o = shakeOffset(fx); return fx.shake > 0 && Math.abs(o.x) <= SHAKE_MAX && Math.abs(o.y) <= SHAKE_MAX; })());
+for (let i = 0; i < 300; i += 1) stepFx(fx, w, 1 / 60);
+check('the kick dies away and the pieces all come to rest', fx.shake === 0 && fx.particles.length === 0 && fx.flash === 0);
+const rubble = w.rubble.filter((v) => v !== 255).length;
+check('what falls STAYS: the rubble is still there afterwards', rubble > 0, `${rubble} pixels of rubble`);
+check('rubble never piles past its cap', Math.max(...w.heights) <= RUBBLE_MAX, `highest ${Math.max(...w.heights)} of ${RUBBLE_MAX}`);
+for (let i = 0; i < 6; i += 1) impact(fx, 'break');
+check('many breaks at once do not shake the picture off the screen', fx.shake <= SHAKE_MAX);
+fx = makeFx(); impact(fx, 'break', true);
+check('with reduced motion asked for, nothing shakes and nothing tilts', fx.shake === 0 && viewMotion('alcohol', 3, true).angle === 0);
+
+// ---- the view ---------------------------------------------------------------------------------------
+section('the view');
+const rect = { left: 30, top: 80, width: 300, height: 400 };
+let worst = 0;
+for (const id of Object.keys(FILTERS)) {
+  for (let t = 0; t < 20; t += 0.37) {
+    const m = viewMotion(id, t);
+    const shift = { x: m.x + 3, y: m.y - 2 };
+    for (const [x, y] of [[10, 12], [72, 96], [140, 188]]) {
+      const c = worldToClient(x, y, rect, m.angle, shift, W, H);
+      const back = clientToWorld(c.x, c.y, rect, m.angle, shift, W, H);
+      worst = Math.max(worst, Math.abs(back.x - x), Math.abs(back.y - y));
+    }
+  }
+}
+check('a tap lands on the pixel that was DRAWN under the finger, whatever the tilt, sway and shake', worst < 1e-6, `worst error ${worst.toExponential(1)} px`);
+check('the frame always leans a little; depression holds it still', viewMotion('sober', 1).angle !== 0 && viewMotion('depression', 1).angle === 0 && !viewMotion('depression', 1).ghost);
+check('alcohol leans furthest and sees double', Math.abs(viewMotion('alcohol', 1.7).angle) > Math.abs(viewMotion('sober', 1.7).angle) && viewMotion('alcohol', 1.7).ghost);
+const outcomes = Object.keys(FILTERS).map((id) => {
+  const ww = worldFrom(PHOTOS.demo), m = viewMotion(id, 7.1), shift = { x: m.x, y: m.y }, t = ww.regions[2];
+  const c = worldToClient(t.cx, t.cy, rect, m.angle, shift, W, H);
+  const at = clientToWorld(c.x, c.y, rect, m.angle, shift, W, H);
+  const r = strike(ww, pick(ww, at.x, at.y), at.x, at.y);
+  return `${r.region.id}:${r.kind}:${r.points}`;
+});
+check('a filter is a look, never a rule: the same tap ends the same way under each', outcomes.every((o) => o === outcomes[0]), outcomes[0]);
+
+// ---- naming, routed ---------------------------------------------------------------------------------
+section('naming the things: one bounded call, down the free-tier cascade (network stubbed)');
 const calls = [];
-const sse = (text) => new Response(
-  `data: ${JSON.stringify({ model: 'stub-model', choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
-  { status: 200 });
+const sse = (text) => new Response(`data: ${JSON.stringify({ model: 'stub-model', choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`, { status: 200 });
 const refuse = (status, headers = {}) => new Response(JSON.stringify({ error: { message: `stub ${status}` } }), { status, headers });
 const laneOf = (url) => Object.keys(PROVIDERS).find((id) => PROVIDERS[id].url === url);
 const stub = (answer) => {
   calls.length = 0;
   globalThis.fetch = async (url, init) => {
-    const lane = laneOf(url);
-    const sent = JSON.parse(JSON.parse(init.body).messages[1].content).length;
-    calls.push({ lane, sent });
-    return answer(lane, sent, calls.length);
+    const user = JSON.parse(init.body).messages[1].content;
+    const call = { lane: laneOf(url), sent: JSON.parse(user[0].text).length, image: user[1]?.image_url?.url };
+    calls.push(call);
+    return answer(call.lane, call.sent);
   };
 };
-const good = JSON.stringify({ items: [{ id: 'bin-1', label: 'ржавый бак' }, { id: 'bench-1', label: 'лавка у подъезда' }] });
-
-const yard = () => buildYard('двор-1');
-const full = buildMessages(yard().objects);
-const cost = scanCost(full);
-check('one scan request fits a third of EVERY lane\'s minute, the smallest included',
-  Object.values(PROVIDERS).every((c) => laneAffords(c, cost)), `${cost} tok, groq ${PROVIDERS.groq.tokensPerMinute}/3`);
-
+const IMG = 'data:image/jpeg;base64,AAAA';
+const good = JSON.stringify({ items: [{ id: 0, label: 'окно' }, { id: '1', label: 'мусорный бак' }] });
+const key = (c) => c.repeat(30);
+w = worldFrom(PHOTOS.demo);
+const cost = scanCost(buildMessages(w, w.regions, IMG));
+check('one request fits a third of the minute on every lane that can see', VISION.every((id) => laneAffords(PROVIDERS[id], cost)), `${cost} tokens`);
 stub(() => { throw new Error('must not be called'); });
-check('with no key there is no recogniser and no request', makeRecogniser({}) === null && calls.length === 0);
-
+check('with no key there is no recogniser and no request: the photograph stays on the device', makeRecogniser({}) === null && calls.length === 0);
+let r = await makeRecogniser({ groq: key('g'), cerebras: key('c') }).recognise(w, IMG);
+check('a lane that cannot see is never sent the photograph', r.source === 'local' && calls.length === 0, r.why);
 stub(() => sse(good));
-let rw = yard();
-let r = await makeRecogniser({ gemini: 'k'.repeat(30) }).recognise(rw);
-check('one key, one scan, exactly ONE request', r.source === 'routed' && calls.length === 1, `${calls.length} call via ${r.lane}`);
-const rs = makeScan(rw); startScan(rs, 0);
-check('the source is local until labels are applied, then routed',
-  rs.source === 'local' && applyLabels(rs, r.labels).length === 2 && rs.source === 'routed'
-  && rw.objects.find((o) => o.id === 'bin-1').label === 'ржавый бак', rs.source);
-
-stub((lane) => (lane === 'cerebras' ? refuse(429, { 'retry-after': '7' }) : sse(good)));
-const two = makeRecogniser({ cerebras: 'c'.repeat(30), groq: 'g'.repeat(30) });
-r = await two.recognise(yard());
-check('a 429 cools the lane for as long as the provider says and the NEXT lane serves',
-  r.source === 'routed' && r.lane === 'groq' && two.router.cooldownSeconds('cerebras') === 7,
-  `${calls.map((c) => c.lane).join(' → ')}, cool ${two.router.cooldownSeconds('cerebras')}s`);
-const limited = calls.filter((c) => c.lane === 'cerebras').length;
-check('a 429 is not retried inside the scan', limited === 1, `${limited} request to the limited lane`);
+r = await makeRecogniser({ gemini: key('k') }).recognise(w, IMG);
+check('one key, one yard, exactly ONE request, and it carries the photograph', r.source === 'routed' && calls.length === 1 && calls[0].image === IMG, `${calls.length} call via ${r.lane}`);
+check('ids sent back as text are still matched', r.labels.length === 2 && r.labels[1].id === 1);
+stub((lane) => (lane === 'gemini' ? refuse(429, { 'retry-after': '7' }) : sse(good)));
+const two = makeRecogniser({ gemini: key('k'), mistral: key('m') });
+r = await two.recognise(w, IMG);
+check('a 429 cools the lane for as long as the provider says and the NEXT lane serves', r.lane === 'mistral' && two.router.cooldownSeconds('gemini') === 7, calls.map((c) => c.lane).join(' → '));
 calls.length = 0;
-r = await two.recognise(yard());
-check('the next scan waits the cooldown out: the cooled lane is not asked',
-  r.lane === 'groq' && calls.length === 1 && calls[0].lane === 'groq', calls.map((c) => c.lane).join(','));
-
-stub((lane, sent) => (sent > 16 ? refuse(413) : sse(good)));
-r = await makeRecogniser({ groq: 'g'.repeat(30) }).recognise(yard());
-check('a 413 is SPLIT, not retried at the same size',
-  r.source === 'routed' && calls.length === 2 && calls[1].sent < calls[0].sent, calls.map((c) => c.sent).join(' → ') + ' objects');
-
+r = await two.recognise(w, IMG);
+check('the next yard waits the cooldown out: the cooled lane is not asked', calls.length === 1 && calls[0].lane === 'mistral');
+stub((lane, sent) => (sent > 4 ? refuse(413) : sse(good)));
+r = await makeRecogniser({ gemini: key('k') }).recognise(w, IMG);
+check('a 413 is SPLIT, not retried at the same size', calls.length >= 2 && calls.every((c, i) => i === 0 || c.sent < calls[i - 1].sent), calls.map((c) => c.sent).join(' → ') + ' boxes');
 stub((lane) => (lane === 'gemini' ? refuse(401) : sse(good)));
-const auth = makeRecogniser({ gemini: 'bad'.repeat(10), mistral: 'm'.repeat(30) });
-r = await auth.recognise(yard());
-check('a rejected key is not a rate limit: no cooldown, the next lane serves',
-  r.lane === 'mistral' && auth.router.cooldownSeconds('gemini') === 0, `gemini cool ${auth.router.cooldownSeconds('gemini')}s`);
-
+const auth = makeRecogniser({ gemini: key('x'), mistral: key('m') });
+r = await auth.recognise(w, IMG);
+check('a rejected key is not a rate limit: no cooldown, the next lane serves', r.lane === 'mistral' && auth.router.cooldownSeconds('gemini') === 0);
 stub(() => { throw new TypeError('network down'); });
-rw = yard();
-r = await makeRecogniser({ gemini: 'k'.repeat(30), groq: 'g'.repeat(30) }).recognise(rw);
-const offline = makeScan(rw); startScan(offline, 0); stepScan(offline, SCAN_MS + 1, () => {});
-check('with the network down the scan is local and the yard is still fully recognised',
-  r.source === 'local' && calls.length === 2 && rw.objects.every((o) => o.scanned) && offline.source === 'local',
-  `${calls.length} lanes tried, ${rw.scanned} recognised`);
+r = await makeRecogniser({ gemini: key('k'), mistral: key('m') }).recognise(w, IMG);
+check('with the network down nothing is named and the yard is exactly as playable', r.source === 'local' && w.regions.every((o) => !o.gone) && pick(w, w.regions[0].cx, w.regions[0].cy));
+const dirty = JSON.stringify({ items: [{ id: 99, label: 'сосед' }, { id: 0, label: 'x'.repeat(60) }, { id: 0, label: 'бак' }, { id: 0, label: 'ещё бак' },
+  ...w.regions.map((o) => ({ id: o.id, label: 'вещь' })), ...w.regions.map((o) => ({ id: o.id, label: 'вещь' }))] });
+const clean = parseLabels(dirty, w.regions);
+check('the answer is bounded and checked: known ids only, one name each, short, at most eight',
+  clean.length <= MAX_ITEMS && clean.length >= Math.min(MAX_ITEMS, w.regions.length) - 1 && clean.every((l) => l.id !== 99 && l.label.length <= 28) && new Set(clean.map((l) => l.id)).size === clean.length, `${clean.length} kept`);
+check('an answer that is not JSON names nothing', parseLabels('двор как двор', w.regions).length === 0);
 
-const many = Array.from({ length: 12 }, (_, i) => ({ id: yard().objects[i].id, label: 'вещь' }));
-const dirty = JSON.stringify({ items: [{ id: 'сосед-1', label: 'сосед' }, { id: 'bin-1', label: 'x'.repeat(60) },
-  { id: 'bin-1', label: 'бак' }, { id: 'bin-1', label: 'ещё бак' }, ...many] });
-const clean = parseLabels(dirty, yard().objects);
-check('the answer is bounded and checked: known ids only, one label each, short, at most eight',
-  clean.length === MAX_ITEMS && clean.every((l) => l.id !== 'сосед-1' && l.label.length <= 28)
-  && new Set(clean.map((l) => l.id)).size === clean.length, `${clean.length} kept of 16`);
-check('an answer that is not JSON names nothing', parseLabels('двор как двор', yard().objects).length === 0);
-
-// ---- filters: a state of the viewer, expressed as a palette ---------------------------------------
-const { FILTERS, setFilter, tint, saturationOf, lightnessOf } = await import('./src/palette.js');
-const { viewEffect, viewToWorld, SWAY_MAX, makeCamera: mkCam } = await import('./src/render.js');
-const SWATCH = ['#7aa8c9', '#a8783a', '#5a7a5a', '#3a8a3a', '#7a5a9a', '#8a5a3a'];
-const DEPTHS = LAYERS.map((l) => l.id);
-const mean = (xs) => xs.reduce((n, x) => n + x, 0) / xs.length;
-const look = (id, t = 0) => { setFilter(id, t); const out = SWATCH.map(tint); setFilter('sober'); return out; };
-const ladder = (id, t = 0) => {
-  setFilter(id, t);
-  const out = DEPTHS.flatMap((d) => SWATCH.map((c) => forLayer(c, d)));
-  setFilter('sober');
-  return out;
-};
-const soberLook = look('sober');
-check('sober is the identity: the unfiltered yard is unchanged', soberLook.join() === SWATCH.join(), 'no remap');
-check('under every filter every colour is still on the 8-step ladder',
-  Object.keys(FILTERS).every((id) => ladder(id, 1.7).every((hex) => [1, 3, 5].every((i) => onLadder(parseInt(hex.slice(i, i + 2), 16))))),
-  Object.keys(FILTERS).length + ' filters x 30 colours');
-const sat = (id) => mean(look(id).map(saturationOf));
-const lum = (id) => mean(look(id).map(lightnessOf));
-const warmth = (id) => mean(look(id).map((h) => parseInt(h.slice(1, 3), 16) - parseInt(h.slice(5, 7), 16)));
-check('depression: the yard is nearly colourless, and darker', sat('depression') < sat('sober') * 0.35 && lum('depression') < lum('sober'),
-  `sat ${sat('sober').toFixed(2)} → ${sat('depression').toFixed(2)}`);
-check('depression: what colour is left is cold', warmth('depression') < 0, `red-blue ${warmth('depression').toFixed(0)}`);
-check('alcohol: warmer and less saturated than sober', warmth('alcohol') > warmth('sober') && sat('alcohol') < sat('sober'),
-  `red-blue ${warmth('sober').toFixed(0)} → ${warmth('alcohol').toFixed(0)}`);
-check('weed: more saturated than sober', sat('weed') > sat('sober'), `sat ${sat('sober').toFixed(2)} → ${sat('weed').toFixed(2)}`);
-check('weed: the hue drifts with time, and comes back', look('weed', 0).join() !== look('weed', 2.6).join()
-  && look('weed', 0).join() === look('weed', Math.PI / 0.6).join(), 'colour cycling');
-check('only weed moves the palette over time', ['sober', 'alcohol', 'depression'].every((id) => look(id, 0).join() === look(id, 9).join()));
-const depthSat = (id) => { setFilter(id); const out = DEPTHS.map((d) => saturationOf(forLayer('#5a7a5a', d))); setFilter('sober'); return out; };
-const keepsDepth = Object.keys(FILTERS).filter((id) => depthSat(id).every((v, i, a) => i === 0 || v >= a[i - 1] - 1e-9));
-check('atmospheric perspective survives the filters that keep colour', ['sober', 'weed', 'alcohol'].every((id) => keepsDepth.includes(id)),
-  'holds for: ' + keepsDepth.join(' '));
-
-const still = ['sober', 'depression'].every((id) => { const e = viewEffect(id, 3.3); return e.swayX === 0 && e.swayY === 0 && !e.ghost; });
-check('sober and depression leave the view still', still);
-let worst = 0; let ghosts = true;
-for (let t = 0; t < 60; t += 0.05) { const e = viewEffect('alcohol', t); worst = Math.max(worst, Math.abs(e.swayX), Math.abs(e.swayY)); ghosts = ghosts && Boolean(e.ghost); }
-check('alcohol sways, never by more than the stated maximum, and always sees double', worst > 0 && worst <= SWAY_MAX && ghosts, `max ${worst}px of ${SWAY_MAX}`);
-
-// A filter is a look, never a rule: the same throw at the same thing ends the same way under each.
-const outcome = (id) => {
-  const w = buildYard('двор-1'); w.filter = id;
-  const target = w.objects.find((o) => o.kind === 'bin');
-  const cam = mkCam(WORLD_W); const fx = viewEffect(id, 7.1);
-  // where the bin is DRAWN under this filter, then back through the one conversion
-  const at = viewToWorld(target.x + target.w / 2 - cam.x + fx.swayX, target.y + target.h / 2 + fx.swayY, cam, fx);
-  const e = makeEffect(); throwAt(e, w, at.x, at.y);
-  let hit = null; for (let i = 0; i < 400 && !hit; i += 1) { const hs = stepEffect(e, w, 0.016, () => {}); if (hs.length) hit = hs[0]; }
-  return `${hit?.target?.id}:${w.inventory.rocks}:${w.objects.find((o) => o.id === target.id).hits}`;
-};
-const outcomes = Object.keys(FILTERS).map(outcome);
-check('a throw at what the player SEES hits it under every filter, sway included',
-  outcomes.every((o) => o === outcomes[0]) && outcomes[0].startsWith('bin-'), outcomes[0]);
-
-// ---- report -------------------------------------------------------------------------------------
+// ---- report -----------------------------------------------------------------------------------------
 const pad = (s, n) => String(s).padEnd(n);
 console.log('DVOR-8 — the tests');
-console.log('='.repeat(94));
-console.log();
-for (const r of rows) console.log(`  ${pad(r.ok ? 'PASS' : 'FAIL', 5)} ${pad(r.what.slice(0, 62), 64)} ${r.detail.slice(0, 22)}`);
-console.log();
-console.log('='.repeat(94));
-console.log(`PASS ${pass}   FAIL ${fail}   of ${pass + fail} checks`);
+for (const r of rows) {
+  if (r.name) { console.log(`\n  ${r.name}`); continue; }
+  console.log(`    ${pad(r.ok ? 'PASS' : 'FAIL', 5)} ${pad(r.what.slice(0, 86), 88)} ${r.detail.slice(0, 30)}`);
+}
+console.log(`\nPASS ${pass}   FAIL ${fail}   of ${pass + fail} checks`);
 process.exit(fail === 0 ? 0 : 1);

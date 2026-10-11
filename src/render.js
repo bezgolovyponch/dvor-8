@@ -1,110 +1,86 @@
-// Drawing the yard, with the parallax and the atmospheric gradient the standard requires.
-//
-// Five layers, each scrolling at its own fraction of the camera. The numbers come from the standard and are
-// read from state.js rather than retyped here, so a layer cannot scroll at one speed on screen and another
-// in a test.
-//
-// The scan is a state, not a transition: an object is either still real or already replaced by its 8-bit
-// copy, and the renderer draws whichever is true. There is no animation to get out of step with the data.
+// Drawing. The picture is rebuilt from indices through the current palette on every frame, which is what
+// lets a filter change everything at once and a broken thing simply be gone.
 
-import { LAYERS, layerById, KINDS } from './state.js';
-import { forLayer, shade, setFilter, INK, SKY } from './palette.js';
-import { drawReal, drawPixel, drawRock } from './sprites.js';
-import { RAIL_H } from './yard.js';
+import { paletteFor, css, OUTLINE, COOL, WARM } from './palette.js';
+import { ROCK_TIME } from './fx.js';
 
-export const VIEW_W = 320;   // the 8-bit canvas, then scaled up by CSS. One unit here is one on-screen pixel
-export const VIEW_H = 180;
-
-// The camera. Clamped to the world so the player cannot scroll past the edges into nothing.
-export function makeCamera(worldW) {
-  return { x: 0, worldW, speed: 140 };   // world units per second: the yard is crossed in about two
-}
-export function stepCamera(cam, input, dt) {
-  const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
-  cam.x = Math.max(0, Math.min(cam.worldW - VIEW_W, cam.x + dir * cam.speed * dt));
+export function makeBuffer(w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  return { canvas, ctx: canvas.getContext('2d'), image: new ImageData(w, h) };
 }
 
-// What a filter does to the VIEW, as distinct from the palette. Pure, so it can be tested and so the
-// pointer can be mapped back through exactly the same numbers the picture was drawn with.
-//
-//   alcohol   sway from two layered sines, and a second, offset copy of the picture (double vision)
-//   weed      a slow vertical breathing of one pixel
-//   others    nothing: the view is still
-export const SWAY_MAX = 4;   // view pixels; small enough that an aimed throw is still an aimed throw
-export function viewEffect(filterId, seconds = 0) {
-  if (filterId === 'alcohol') {
-    return {
-      swayX: Math.round(2.6 * Math.sin(seconds * 0.9) + 1.4 * Math.sin(seconds * 2.3)),
-      swayY: Math.round(1.2 * Math.sin(seconds * 1.4)),
-      ghost: { dx: Math.round(4 + 2 * Math.sin(seconds * 0.7)), alpha: 0.28 },
-    };
-  }
-  if (filterId === 'weed') return { swayX: 0, swayY: Math.round(Math.sin(seconds * 0.5)), ghost: null };
-  return { swayX: 0, swayY: 0, ghost: null };
-}
-
-// The one conversion from a point in the view to a point in the world. The sway is taken back out, so a
-// click lands on the thing the player SAW under the pointer, whatever the filter is doing to the picture.
-export function viewToWorld(vx, vy, cam, fx = { swayX: 0, swayY: 0 }) {
-  return { x: vx - fx.swayX + cam.x, y: vy - fx.swayY };
-}
-
-export function render(ctx, world, cam, effect) {
-  const t = world.time;
-  const seconds = effect.clock || 0;
-  setFilter(world.filter, seconds);
-  const fx = viewEffect(world.filter, seconds);
-  ctx.fillStyle = forLayer(SKY[t] || SKY.day, 'sky');
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);   // under the sway, so a shifted picture never shows a bare edge
-  ctx.save();
-  ctx.translate(fx.swayX, fx.swayY);
-  // The sky, in its own band. It is the least saturated thing on screen, by the standard.
-  ctx.fillStyle = forLayer(SKY[t] || SKY.day, 'sky');
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-
-  // A sun or a moon, one block, so the time of day is readable without a clock.
-  ctx.fillStyle = forLayer(t === 'night' ? '#e8e8f0' : '#f0d060', 'far');
-  ctx.fillRect(t === 'night' ? 250 : 60, 24, 10, 10);
-
-  // One pass per layer, in the standard's order, each at its own parallax fraction.
-  for (const layer of LAYERS) {
-    const offset = Math.round(cam.x * layer.speed);
-    for (const obj of world.objects) {
-      if (obj.layer !== layer.id || obj.gone) continue;
-      const sx = obj.x - offset;
-      if (sx + obj.w < -8 || sx > VIEW_W + 8) continue;   // off screen: not drawn
-      const sy = obj.y;
-      // The scan decides which drawing. An object the scan has not reached is still the real thing.
-      if (obj.scanned) drawPixel(ctx, obj, sx, sy, layer.id);
-      else drawReal(ctx, obj, sx, sy);
+// scanY: null once the scan is over; before that, everything below it is still the photograph.
+export function draw(ctx, buf, world, fx, { filter, seconds, scanY, motion, shake }) {
+  const pal = paletteFor(filter, seconds);
+  const { w, h, idx, rubble, photo } = world;
+  const d = buf.image.data;
+  for (let y = 0, i = 0; y < h; y += 1) {
+    const real = scanY !== null && y > scanY;
+    for (let x = 0; x < w; x += 1, i += 1) {
+      const o = i * 4;
+      if (real) { d[o] = photo[o]; d[o + 1] = photo[o + 1]; d[o + 2] = photo[o + 2]; }
+      else { const c = pal[rubble[i] !== 255 ? rubble[i] : idx[i]]; d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; }
+      d[o + 3] = 255;
     }
   }
+  buf.ctx.putImageData(buf.image, 0, 0);
 
-  // The rocks in flight, and the throwing hand, on top of everything.
-  for (const r of effect.rocks) drawRock(ctx, r.x - cam.x, r.y, 3);
-
-  // A scan line, while a scan is running: a moving band, drawn over the yard.
-  if (effect.scanY !== null) {
-    ctx.fillStyle = 'rgba(120, 240, 255, 0.20)';
-    ctx.fillRect(0, effect.scanY, VIEW_W, 3);
-    ctx.fillStyle = 'rgba(120, 240, 255, 0.45)';
-    ctx.fillRect(0, effect.scanY, VIEW_W, 1);
-  }
-
-  ctx.restore();
-  // Double vision: the picture drawn once more over itself, offset and faint. One extra blit, no second
-  // pass over the world.
-  if (fx.ghost) {
-    ctx.globalAlpha = fx.ghost.alpha;
-    ctx.drawImage(ctx.canvas, fx.ghost.dx, 0);
+  const ox = motion.x + shake.x, oy = motion.y + shake.y;
+  ctx.fillStyle = css(pal[OUTLINE]);
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(buf.canvas, ox, oy);
+  if (motion.ghost) {
+    ctx.globalAlpha = motion.ghost.alpha;
+    ctx.drawImage(buf.canvas, ox + motion.ghost.dx, oy);
     ctx.globalAlpha = 1;
   }
 
-  // The balcony rail: the player's own vantage point, in the foreground layer, scrolling FASTER than the
-  // camera. The standard is explicit that this is what creates the "I am passing this" feeling.
-  ctx.fillStyle = forLayer('#4a3a2a', 'near');
-  const railY = VIEW_H - RAIL_H;
-  ctx.fillRect(-Math.round(cam.x * 1.25) % 40, railY, VIEW_W + 40, RAIL_H);
-  ctx.fillStyle = INK;
-  ctx.fillRect(0, railY, VIEW_W, 1);
+  ctx.save();
+  ctx.translate(ox, oy);
+  // Corner brackets on everything still standing: what can be hit is never a guess.
+  for (const r of world.regions) {
+    if (!r.seen || r.gone) continue;
+    if ((seconds * 2 + r.id * 0.37) % 1 > 0.8) continue;   // a blink, out of step with its neighbours
+    const colour = r.hits ? '#fff' : css(pal[r.id % 2 ? WARM + 5 : COOL + 5]);
+    const x0 = r.x - 2, y0 = r.y - 2, x1 = r.x + r.w + 1, y1 = r.y + r.h + 1, k = 5;
+    // Drawn twice: a dark copy one pixel down and right, then the colour, so a bracket reads on any yard.
+    for (const [dx, dy, fill] of [[1, 1, css(pal[OUTLINE])], [0, 0, colour]]) {
+      ctx.fillStyle = fill;
+      for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
+        ctx.fillRect((sx > 0 ? cx : cx - k + 1) + dx, cy + dy, k, 1);
+        ctx.fillRect(cx + dx, (sy > 0 ? cy : cy - k + 1) + dy, 1, k);
+      }
+    }
+  }
+  for (const p of fx.particles) {
+    ctx.fillStyle = css(pal[p.c]);
+    const s = p.life > 2.6 ? 2 : 1;
+    ctx.fillRect(p.x | 0, p.y | 0, s, s);
+  }
+  for (const r of fx.rocks) {
+    const t = Math.min(1, r.t / ROCK_TIME);
+    const x = r.x0 + (r.tx - r.x0) * t, y = r.y0 + (r.ty - r.y0) * t;
+    ctx.fillStyle = css(pal[WARM + 3]);
+    ctx.fillRect(Math.round(x - (r.tx - r.x0) * 0.08) - 1, Math.round(y - (r.ty - r.y0) * 0.08) - 1, 2, 2);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
+  }
+  for (const ring of fx.rings) {
+    const rad = Math.round(2 + ring.t * 44);
+    ctx.strokeStyle = css(pal[COOL + 5]);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(Math.round(ring.x) - rad + 0.5, Math.round(ring.y) - rad + 0.5, rad * 2, rad * 2);
+  }
+  if (scanY !== null) {
+    ctx.fillStyle = css(pal[COOL + 5]);
+    ctx.fillRect(-8, Math.round(scanY), w + 16, 2);
+    ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.fillRect(-8, Math.round(scanY) + 2, w + 16, 1);
+  }
+  ctx.restore();
+  if (fx.flash > 0) {
+    ctx.fillStyle = `rgba(255,255,255,${(fx.flash * 0.55).toFixed(3)})`;
+    ctx.fillRect(0, 0, w, h);
+  }
 }

@@ -2,52 +2,64 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ДВОР-8 — смотри со своего балкона</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#12052e">
+<title>ДВОР-8</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-filter="sober">
 <header>
   <h1>ДВОР-8</h1>
-  <p class="sub">вид с балкона · <span id="hudHint"></span></p>
+  <div class="hud">
+    <div class="score"><b id="score">0</b><span>очки</span></div>
+    <div class="combo"><b id="combo">—</b><i><u id="comboBar"></u></i></div>
+    <div class="left"><b id="left">0</b><span>осталось</span></div>
+  </div>
 </header>
 
 <main>
-  <div class="frame">
-    <canvas id="yard" aria-label="Двор, вид с балкона"></canvas>
+  <div id="frame" class="frame">
+    <div id="tilt" class="tilt">
+      <canvas id="yard" aria-label="Двор"></canvas>
+      <div id="pops" class="pops" aria-hidden="true"></div>
+      <div id="banner" class="banner" aria-live="polite"></div>
+    </div>
+
+    <section id="title" class="card">
+      <h2>СНИМИ СВОЙ ДВОР</h2>
+      <p>Сфотографируй двор с балкона. Он станет игрой: всё, что в нём найдётся, можно разнести.</p>
+      <label class="btn">СНЯТЬ ДВОР
+        <input id="shot" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <button id="demoBtn" type="button" class="btn alt">ДЕМО-ДВОР</button>
+      <p id="privacy" class="fine"></p>
+    </section>
+
+    <section id="end" class="card" hidden>
+      <h2>ДВОР РАЗНЕСЁН</h2>
+      <p class="big"><b id="endScore">0</b></p>
+      <p id="endLine"></p>
+      <button id="againBtn" type="button" class="btn">ЕЩЁ РАЗ</button>
+      <button id="newBtn" type="button" class="btn alt">НОВЫЙ ДВОР</button>
+    </section>
   </div>
 
-  <div class="panel">
-    <div class="hud">
-      <div><b id="hudScanned">0 / 0</b><span>распознано</span></div>
-      <div><b id="hudBroken">0</b><span>разбито</span></div>
-      <div><b id="hudRocks">6</b><span>камней</span></div>
-    </div>
-    <div class="buttons">
-      <button id="lookLeft" type="button" class="ghost look" aria-label="смотреть влево">◀</button>
-      <button id="lookRight" type="button" class="ghost look" aria-label="смотреть вправо">▶</button>
-    </div>
-    <div id="filters" class="buttons wrap" aria-label="взгляд"></div>
-    <div class="buttons">
-      <button id="scanBtn" type="button">СКАНИРОВАТЬ ДВОР</button>
-      <button id="resetBtn" type="button" class="ghost">ЗАНОВО</button>
-    </div>
-    <div id="log" class="log" aria-live="polite"></div>
-    <p id="hudSource" class="source"></p>
-    <details class="keys">
-      <summary>КЛЮЧИ МОДЕЛЕЙ (необязательно)</summary>
-      <p class="note">
-        С бесплатным ключом модель даёт предметам имена: один короткий запрос на скан. Без ключа двор
-        играется так же. Ключ хранится только в этом браузере и уходит только своему сервису.
-      </p>
-      <div id="keyForm"></div>
-    </details>
-    <p class="note">
-      Взгляд меняет только цвета и картинку: правила двора остаются теми же.
-      Бросок — не насилие: предмет просто падает. Здесь нет людей, которым можно навредить,
-      и нет задачи что-то испортить.
-    </p>
+  <div id="filters" class="row" aria-label="взгляд"></div>
+  <div class="row">
+    <button id="restartBtn" type="button" class="btn small alt">ЗАНОВО</button>
+    <button id="homeBtn" type="button" class="btn small alt">НОВЫЙ ДВОР</button>
+    <button id="soundBtn" type="button" class="btn small alt" aria-pressed="true">ЗВУК</button>
   </div>
+
+  <p id="hudSource" class="source"></p>
+  <details class="keys">
+    <summary>КЛЮЧИ МОДЕЛЕЙ (необязательно)</summary>
+    <p class="fine">
+      С ключом модель называет найденное: один запрос на двор. <b>Тогда снимок уходит этому сервису.</b>
+      Без ключа снимок не покидает телефон, а цели остаются под номерами. Ключ хранится только в этом браузере.
+    </p>
+    <div id="keyForm"></div>
+  </details>
 </main>
 
 <script type="module" src="src/main.js"></script>

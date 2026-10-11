@@ -1,19 +1,16 @@
 # ДВОР-8 / DVOR-8
 
-You are on a balcony. The yard below is ordinary. You scan it, and everything the scan recognises is
-replaced by its 8-bit copy — then you can knock things over with a rock. There are no people to hurt and
-nothing is scored by how much you break.
+Photograph your yard from the balcony. The scan turns it into a neon pixel level, finds the things in it,
+and you take them apart — fast, with a combo, and again.
 
-**Web first.** No build step, no dependencies, no key needed. With a free model key the scan also asks a
-model to name what it found — one small request per scan, routed across free tiers.
+**Web first.** No build step, no dependencies, no account. The photograph stays on the phone unless you
+enter a model key.
 
 ## Run it
 
-    python3 -m http.server 4310 --bind 127.0.0.1
+    python3 -m http.server 4310 --bind 127.0.0.1        # this computer: http://127.0.0.1:4310/
 
-Open `http://127.0.0.1:4310/`.
-
-**On a phone, same Wi-Fi:** bind to every interface instead and open the computer's address:
+**On a phone, same Wi-Fi:**
 
     python3 -m http.server 4310 --bind 0.0.0.0
     ipconfig getifaddr en0        # e.g. 192.168.88.237 → http://192.168.88.237:4310/
@@ -22,64 +19,54 @@ This serves the whole folder to everyone on that network for as long as it runs.
 
 ## Play
 
-| Action | Control |
+| | |
 |---|---|
-| look along the yard | `←` / `→`, `A` / `D`, or hold **◀ ▶** |
-| change how you see it | **ТРЕЗВЫЙ · ТРАВА · АЛКОГОЛЬ · ДЕПРЕССИЯ** |
-| scan the yard | **СКАНИРОВАТЬ ДВОР** |
-| throw a rock | click or tap the yard |
-| start over | **ЗАНОВО** |
-
-The scan is the opening move: it recognises all 32 objects and swaps each one for its pixel form. Six rocks.
-A bin takes two hits, a bench two, a tree three.
+| **СНЯТЬ ДВОР** | opens the phone's camera; on a computer, a file picker |
+| **ДЕМО-ДВОР** | a drawn stand-in, for a desk without a yard |
+| tap a bracketed thing | throw a rock at it; big things take up to three |
+| hit again within 2.5 s | the combo climbs and multiplies the points |
+| **ТРЕЗВЫЙ · ТРАВА · АЛКОГОЛЬ · ДЕПРЕССИЯ** | how you see it: colours and motion, never the rules |
+| **ЗАНОВО** / **ЕЩЁ РАЗ** | the same yard, clean, at once |
 
 ## Test
 
     node test.mjs
 
-52 checks: the yard is deterministic and inside its bounds, the scan recognises everything and cannot
-double-count, a throw costs a rock and hits what was aimed at, destruction is counted, rocks run out, and
-the look obeys the pinned 2D art standard — five parallax layers at increasing speeds, atmospheric
-perspective from 20% to 100% saturation, every colour on the 8-step ladder. Eleven of them cover the
-routed scan against a stubbed network: one request per scan, a `429` cools the lane and the next one serves,
-a `413` is split, a rejected key is not a cooldown, and with the network down the yard is still recognised.
+63 checks, in eight groups: the look, the filters, photograph → picture, finding things, hitting, feel,
+the view, and naming through the model cascade (network stubbed). They assert behaviour — any photograph
+becomes a playable yard, a tap hits what was under it, every interaction is answered. **They do not and
+cannot assert that it is fun**; see the last section of `docs/concept.md`.
 
 ## Structure
 
-    index.html          the page: a frame, a HUD, three buttons
-    style.css           plain, so nothing competes with the yard
-    src/state.js        the world: layers, object kinds, what a hit does
-    src/yard.js         the yard, generated from a seed — deterministic, testable
-    src/palette.js      the 8-bit palette, with the saturation band enforced per depth
-    src/sprites.js      each object drawn twice: real, and its 8-bit copy
-    src/render.js       five parallax layers, the camera, the balcony rail
-    src/scan.js         the scan; `source` says whether a model's names were applied
-    src/recognise.js    one bounded model call per scan, down the free-tier cascade
-    src/llm.js          providers, limits and the router, carried over from partner-sim
-    src/throw.js        one rock, one arc, one hit
-    src/main.js         the loop and the controls
-    standards/          the pinned 2D art standards this look obeys
-    docs/filters.md     the four looks: every decision, its source and its test
-    docs/routing.md     the routing sequence, the request and its measured cost
-    brief.md            the intake: twelve answered questions, Gate G0 met
-    game-skeleton/      the seven files of the game-creation skeleton
+    index.html, style.css   the page; the look is as much here as in the canvas
+    src/palette.js          18 colours, and the same 18 under each filter
+    src/stylise.js          photograph → picture of palette indices
+    src/segment.js          picture → the things in it, found on the device
+    src/demo.js             the stand-in photograph
+    src/world.js            what a hit does: cracks, breaks, combo, score
+    src/fx.js               what a hit feels like: pause, shake, flash, pieces, rubble
+    src/view.js             tilt and sway, and the way back from a finger to a pixel
+    src/render.js           drawing
+    src/audio.js            sound from oscillators; no files
+    src/recognise.js        one bounded model call per yard, to name things
+    src/llm.js              providers, limits and the router, carried over from partner-sim
+    src/main.js             the flow and the wiring
+    docs/concept.md         the concept on the skeleton's twelve slots — read this first
+    docs/style.md           every look-and-feel decision, its source, its test
+    docs/routing.md         the model call: request, cost, routing sequence
+    brief.md, game-skeleton/  the intake and the skeleton files
 
-## Where this came from
-
-Built from `Game Skeleton Master Prompt.md` at `/Users/m/Documents/`. The intake is complete: all twelve
-Phase 0 questions answered, **Gate G0 met**, so the research phases may begin. The seven skeleton files
-exist with their run states recorded rather than filled with placeholders.
-
-The look is checked against the 2D art standards in `standards/`, which are pinned: five parallax layers at
-0.05 / 0.15 / 0.40 / 0.75 / 1.00, and saturation rising from 20% in the sky to 100% in the gameplay layer.
-**8-bit is a look, not a limit set** — the brief's Q3 settled that, so there is no resolution, palette-size
-or input restriction except the 8-step colour ladder the era implies.
+`standards/` holds the 2D art standards the first build followed. The rebuilt look does not use parallax
+layers and does not follow them; they are kept for the record.
 
 ## What this is not yet
 
-- **No camera scan.** `src/yard.js` generates the yard from a seed; a real scan that reads a photograph
-  replaces that one module and nothing else.
-- **No live model call yet.** The routed scan is written and tested against a stubbed network only; no
-  provider has been called. The first scan with a real key is the first real evidence. See `docs/routing.md`.
-- **No residents.** The concept names a courier and angry drunks; neither exists yet. The scan's interface
-  deliberately returns object kinds only, so adding people is a product decision rather than a plumbing one.
+- **Not played by anyone.** Driven in headless Chrome with three real photographs; never on a phone.
+- **Shapes, not objects.** Without a model the device finds patches of tone, not bins and benches.
+- **No live model call.** The naming path is tested against a stubbed network only, and which providers
+  accept an image is unverified.
+- **No live viewfinder.** The camera opens through the phone's own camera app. A viewfinder in the page
+  needs HTTPS.
+- **No reason to come back.** No best score, no memory of yards, no story, no residents.
+- **The skeleton's research is not done.** Runs B–F of the master prompt have not run.
