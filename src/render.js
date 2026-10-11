@@ -18,25 +18,62 @@ const THINGS = {
   depression: (c, x, y) => { c.fillStyle = '#3a1410'; c.fillRect(x - 3, y - 1, 7, 4); c.fillStyle = '#b5482f'; c.fillRect(x - 3, y - 2, 6, 3); c.fillStyle = '#7a2c1c'; c.fillRect(x - 3, y - 1, 6, 1); },
 };
 
+// Whoever walks the yard: a dozen pixels, drawn the way an 8-bit console would. The shadow stays on the
+// ground when the body leaves it, which is what makes a jump read as a jump on a flat picture.
+function person(c, me, seconds) {
+  const x = Math.round(me.x), y = Math.round(me.y), by = Math.round(me.y - me.z), air = me.z > 0;
+  const shade = Math.max(3, 7 - Math.round(me.z / 5));
+  c.fillStyle = 'rgba(11,0,24,.6)';
+  c.fillRect(x - (shade >> 1), y, shade, 2);
+  c.fillStyle = '#0b0018'; c.fillRect(x - 3, by - 13, 7, 13);
+  c.fillStyle = '#2a2233'; c.fillRect(x - 2, by - 12, 5, 1);
+  c.fillStyle = '#ffd9a8'; c.fillRect(x - 2, by - 11, 5, 3);
+  c.fillStyle = '#0b0018'; c.fillRect(x + me.face, by - 10, 1, 1);
+  c.fillStyle = '#f0286e'; c.fillRect(x - 2, by - 8, 5, 4);
+  c.fillStyle = '#3fe0f0';
+  const stride = air ? 1 : Math.floor(me.step) % 2;
+  c.fillRect(x - 2, by - 4, 2, air ? 2 : stride ? 3 : 4);
+  c.fillRect(x + 1, by - 4, 2, air ? 2 : stride ? 4 : 3);
+  if (air && Math.floor(seconds * 16) % 2) { c.fillStyle = '#ffd23f'; c.fillRect(x - 3, by - 9, 1, 2); c.fillRect(x + 3, by - 9, 1, 2); }   // arms up
+}
+
+// The bottle in the hand, in the corner of the view, as full as it is. At the mouth it is lifted and
+// tipped, and the level falls while you watch.
+function bottle(c, w, h, full, busy) {
+  const tip = busy > 0 ? Math.min(1, (1 - busy) * 4, busy * 5) : 0;   // 0 held, 1 at the mouth; busy runs 1 → 0
+  c.save();
+  c.translate(Math.round(w - 13 - tip * (w / 2 - 13)), Math.round(h - 4 - tip * 10));
+  c.rotate(-tip * 2.0);
+  c.fillStyle = '#0b0018'; c.fillRect(-5, -21, 10, 22); c.fillRect(-3, -29, 6, 9);
+  c.fillStyle = '#1f7a4c'; c.fillRect(-4, -20, 8, 20); c.fillRect(-2, -28, 4, 8);
+  const fill = Math.round(18 * Math.max(0, Math.min(1, full)));
+  c.fillStyle = '#ffb347'; c.fillRect(-3, -1 - fill, 6, fill);
+  c.fillStyle = '#d7ffe9'; c.fillRect(-3, -19, 1, 12);
+  c.fillStyle = '#ffd23f'; c.fillRect(-2, -30, 4, 2);
+  c.restore();
+}
+
 // scanY: null once the scan is over; before that, everything below it is still the photograph.
-export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake }) {
+// cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
+export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null }) {
   const pal = lookThrough(world.palette, filter, seconds);
-  const { w, h, idx, rubble, photo } = world;
+  const { idx, rubble, photo, sw } = world, W = world.w, H = world.h;
+  const w = cam.w, h = cam.h, cx = cam.x, cy = cam.y;
   const d = buf.image.data;
   const focus = scanY === null ? mode.focus : null;
-  const r2 = focus ? (focus.radius * Math.min(w, h)) ** 2 : 0;
+  const r2 = focus ? (focus.radius * Math.min(sw, H)) ** 2 : 0;
   const fxx = fx.focus.x, fyy = fx.focus.y;
-  for (let y = 0, i = 0; y < h; y += 1) {
-    const real = scanY !== null && y > scanY;
-    for (let x = 0; x < w; x += 1, i += 1) {
-      const o = i * 4;
-      if (real) { d[o] = photo[o]; d[o + 1] = photo[o + 1]; d[o + 2] = photo[o + 2]; d[o + 3] = 255; continue; }
-      let src = i, dim = 1;
+  for (let vy = 0, o = 0; vy < h; vy += 1) {
+    const y = vy + cy, real = scanY !== null && y > scanY;
+    for (let vx = 0; vx < w; vx += 1, o += 4) {
+      const x = vx + cx;
+      if (real && x < sw) { const q = (y * sw + x) * 4; d[o] = photo[q]; d[o + 1] = photo[q + 1]; d[o + 2] = photo[q + 2]; d[o + 3] = 255; continue; }
+      let src = y * W + x, dim = 1;
       if (focus) {
         const dist = (x - fxx) ** 2 + (y - fyy) ** 2;
         if (dist > r2) {
           // out of focus: the yard is read in blocks of three, so detail is lost but shapes are not
-          src = Math.min(h - 1, y - (y % 3) + 1) * w + Math.min(w - 1, x - (x % 3) + 1);
+          src = Math.min(H - 1, y - (y % 3) + 1) * W + Math.min(W - 1, x - (x % 3) + 1);
           if (focus.out === 'dark') dim = dist > r2 * 2.2 ? 0.2 : 0.42;
         }
       }
@@ -57,10 +94,10 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   }
 
   ctx.save();
-  ctx.translate(ox, oy);
+  ctx.translate(ox - cx, oy - cy);
   // Corner brackets on everything still standing and in view: what can be hit is never a guess.
   for (const r of world.regions) {
-    if (!r.seen || r.gone) continue;
+    if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;
     if (scanY === null && !inFocus(mode, world, r, fxx, fyy)) continue;
     if ((seconds * 2 + r.id * 0.37) % 1 > 0.82) continue;   // a blink, out of step with its neighbours
     const colour = r.hits ? '#ffffff' : r.id % 2 ? '#ffd23f' : '#3fe0f0';
@@ -75,6 +112,7 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     // how much it can still take, as pips under it
     for (let n = 0; n < r.hp - r.hits; n += 1) { ctx.fillStyle = '#0b0018'; ctx.fillRect(x0 + n * 4, y1 + 2, 4, 3); ctx.fillStyle = '#f0286e'; ctx.fillRect(x0 + n * 4, y1 + 2, 3, 2); }
   }
+  if (me?.down) person(ctx, me, seconds);
   for (const p of fx.particles) {
     ctx.fillStyle = p.rgb || css(pal[p.c]);
     const s = p.life > 2.2 ? 2 : 1;
@@ -94,13 +132,40 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   }
   if (scanY !== null) {
     ctx.fillStyle = '#3fe0f0';
-    ctx.fillRect(-8, Math.round(scanY), w + 16, 2);
+    ctx.fillRect(cx - 8, Math.round(scanY), w + 16, 2);
     ctx.fillStyle = 'rgba(255,255,255,.55)';
-    ctx.fillRect(-8, Math.round(scanY) + 2, w + 16, 1);
+    ctx.fillRect(cx - 8, Math.round(scanY) + 2, w + 16, 1);
   }
   ctx.restore();
+  if (drink && scanY === null) bottle(ctx, w, h, drink.full, drink.busy);
   if (fx.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${(fx.flash * 0.5).toFixed(3)})`;
     ctx.fillRect(0, 0, w, h);
   }
+}
+
+// The first yard as it now stands, enlarged, with the result written under it: a picture to keep or send.
+// It is the game's picture, not the photograph — 192 pixels across, so a number plate is two pixels and a
+// face is four.
+export function postcard(world, title, line) {
+  const { sw, h, idx, rubble, palette } = world, k = 3, foot = 104;
+  const small = makeBuffer(sw, h), d = small.image.data;
+  for (let y = 0, o = 0; y < h; y += 1) for (let x = 0; x < sw; x += 1, o += 4) {
+    const p = y * world.w + x, c = palette[rubble[p] !== 255 ? rubble[p] : idx[p]];
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  }
+  small.ctx.putImageData(small.image, 0, 0);
+  const card = document.createElement('canvas');
+  card.width = sw * k; card.height = h * k + foot;
+  const c = card.getContext('2d');
+  c.fillStyle = '#12052e'; c.fillRect(0, 0, card.width, card.height);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(small.canvas, 0, 0, sw * k, h * k);
+  c.textBaseline = 'top';
+  c.font = 'italic 900 40px "Arial Black", Impact, sans-serif';
+  c.fillStyle = '#f0286e'; c.fillText(title, 19, h * k + 17);
+  c.fillStyle = '#ffffff'; c.fillText(title, 16, h * k + 14);
+  c.font = '700 19px ui-monospace, Menlo, Consolas, monospace';
+  c.fillStyle = '#fff6c2'; c.fillText(line, 16, h * k + 68, card.width - 32);
+  return card;
 }

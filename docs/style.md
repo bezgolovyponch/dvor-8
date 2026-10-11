@@ -28,6 +28,11 @@ external source; numbers set by eye.
 | F15 | In a study of four versions of one action RPG — no, medium, high and extreme juiciness — "both Medium Juiciness and High Juiciness outperform No Juiciness and Extreme Juiciness across all measures" (Kao, *Entertainment Computing* 34, 2020). | SNIPPET (search result; the paper was not opened) |
 | F16 | MediaPipe's ObjectDetector runs in the browser from a `.tflite` model; `detect()` calls "run synchronously and block the user interface thread". | SOURCED[12] |
 
+| F17 | Texture synthesis by patches works by "copying and stitching together textures at various offsets"; plain tiling "is rarely satisfactory … there will be the seams in between the tiles and the image will be highly repetitive." | SOURCED[13] |
+| F18 | The belt-scroll format gives "both vertical and horizontal movement along a side-scrolling environment"; it was introduced by *Nekketsu Kōha Kunio-kun* (1986). | SOURCED[14] |
+| F19 | Wordle's emoji result was made by players first and then built in; after the share function was added the game "became a viral phenomenon"; one puzzle a day "creates a sense of scarcity, leaving players wanting more". | SOURCED[15] |
+| F20 | People feel "an urge to complete tasks previously initiated". The stronger claim, that unfinished tasks are remembered better, "lacks universal validity" (2025 meta-analysis). | SOURCED[16] |
+
 **Not found:** a source for how games show cannabis, or depression as distinct from grief. The weed mode is
 built from F4 and is a `CHOICE`; the depression mode leans on F5, which is about grief.
 
@@ -59,6 +64,15 @@ Rewritten 2026-10-11 for the third build. What changed from the second, and why,
 | D20 | A tap is carried back through the same tilt, sway and shake the picture was drawn with. Alcohol's scatter is applied after that, on purpose. | CHOICE | *a tap lands on the pixel that was DRAWN under the finger* |
 | D21 | With reduced motion requested by the device, nothing tilts and nothing shakes. | CHOICE | *with reduced motion asked for* |
 
+| D22 | **Going down.** The same picture, 1.6× closer, following a walker who moves in two directions over it; a jump is a height off the picture with the shadow left on the ground. Standing things are solid at their own pixels. | SOURCED[F18]; zoom, speed and jump height CHOICE | *the stick moves the walker* · *a standing thing is solid* · *a jump leaves the ground in the same frame* · *the view is closer and follows* |
+| D23 | **Landing on a thing is a hit**, by the same rules as a throw, and throws the walker up again. | CHOICE | *to land ON a thing is to stomp it* · *a stomp is a hit like any other* |
+| D24 | **The street beyond the photograph is made only from the photograph**: 16-pixel strips of the picture with its things taken out, each chosen among the five that best continue the last column; things are copies of ones the detector really found. | SOURCED[F17]; strip width and the five CHOICE | *a made yard invents no ground* · *invents no things* · *chosen to continue the edge it joins* |
+| D25 | A photograph the player adds becomes the exact next yard and **keeps its own 28 colours**: the table grows by a block per photograph, to nine. | DERIVED[D1, D2] | *an added photograph keeps its OWN colours* · *a street has an end* |
+| D26 | **The bottle can be drunk.** Four swigs, 0.7 s each with the hand busy; each adds a quarter to «градус», which scales the burst (13–31 px), the stray (4–16 px), the lean and the double image, and wears off in about 20 s a swig. An empty bottle gives nothing until thrown. | look DERIVED[F6, F7]; numbers CHOICE | the whole *bottle* section |
+| D27 | **What is kept only grows**: kinds wrecked, days visited, best score, furthest walked. No streak, because a streak that resets is a loss. | SOURCED[F20] for the pull of the unfinished; no-loss from brief Q8 | *a worse run takes nothing away* · *days are never lost* |
+| D28 | **The made street is built from the date.** | SOURCED[F19], with the difference that players do not share a yard | *tomorrow's street is not today's* · *the same day's number makes the same street* |
+| D29 | **The line to show someone** is a row of what the yard held, thing by thing, wrecked or standing; it carries no picture and no place. The picture, when asked for, is the game's 192-pixel picture, never the photograph. | SOURCED[F19]; privacy from `feasibility.md` §4.4 | *the line … says nothing about where it is* |
+
 ## Sources — pages opened on 2026-10-11
 
 1. NESdev Wiki, "PPU palettes" — https://www.nesdev.org/wiki/PPU_palettes
@@ -75,5 +89,10 @@ Rewritten 2026-10-11 for the third build. What changed from the second, and why,
 11. Akyon, Altinuc, Temizel, "Slicing Aided Hyper Inference and Fine-tuning for Small Object Detection" — https://arxiv.org/abs/2202.06934
 12. Google, "Object detection guide for Web", MediaPipe — https://developers.google.com/edge/mediapipe/solutions/vision/object_detector/web_js
 
-All twelve were read through a summarising fetch. The quotations are as it returned them and have not been
+13. Wikipedia, "Texture synthesis" — https://en.wikipedia.org/wiki/Texture_synthesis
+14. Wikipedia, "Beat 'em up" — https://en.wikipedia.org/wiki/Beat_%27em_up
+15. Wikipedia, "Wordle" — https://en.wikipedia.org/wiki/Wordle
+16. Wikipedia, "Zeigarnik effect" — https://en.wikipedia.org/wiki/Zeigarnik_effect
+
+All sixteen were read through a summarising fetch. The quotations are as it returned them and have not been
 checked against the pages by a second reading.

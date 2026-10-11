@@ -43,6 +43,10 @@ export const sfx = {
   hit: (combo) => { noise(0.06, 0.12); tone(150 + combo * 28, 0.08, 'square', 0.09, -60); },
   break: (combo) => { noise(0.22, 0.2); tone(95, 0.25, 'sawtooth', 0.12, -55); tone(440 + combo * 60, 0.12, 'square', 0.06, 300); },
   glass: () => { noise(0.14, 0.16); tone(1900, 0.09, 'square', 0.04, -700); },
+  jump: () => tone(300, 0.12, 'square', 0.05, 380),
+  land: () => tone(90, 0.05, 'triangle', 0.06, -30),
+  gulp: () => [0, 170, 340, 510].forEach((ms, i) => setTimeout(() => tone(190 - i * 14, 0.09, 'sine', 0.13, -70), ms)),
+  empty: () => tone(700, 0.04, 'square', 0.03, -200),
   miss: () => tone(110, 0.05, 'triangle', 0.04),
   done: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'square', 0.07), i * 90)),
 };

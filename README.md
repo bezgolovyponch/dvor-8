@@ -27,6 +27,14 @@ The first load fetches about 20 MB (the detector and its model) from your comput
 | tap a bracketed thing | throw at it; the pips under it are the hits it can still take |
 | hit again quickly | the combo climbs and multiplies the points |
 | **ЗАНОВО** / **ЕЩЁ РАЗ** | the same yard, clean, at once |
+| **ВО ДВОР** / **НА БАЛКОН** | go down into the yard and come back up (V on a keyboard) |
+| stick, **ПРЫЖОК** | walk round things, jump them, or land on one: that is a hit, and you bounce (arrows or WASD, space) |
+| walk right | the street goes on past the photograph, made from it; today's street is not tomorrow's |
+| **+ СНИМОК** | add a photograph: it becomes the exact next yard on the street, up to nine |
+| **ГЛОТОК** (alcohol only) | drink from the bottle: a wider burst, a worse hand, and it wears off (E) |
+| **ХВАТИТ** | end the walk and see the card |
+| **ПОКАЗАТЬ СТРОКОЙ** / **КАРТИНКОЙ** | a line of what the yard held and what became of it, or the game's picture of it |
+| **АЛЬБОМ** | every kind of thing you have ever wrecked, and what is still out there |
 
 Each filter is a way to play:
 
@@ -42,8 +50,9 @@ other everyday things. It does not know bins, swings or trees. People and animal
 
 ## Test
 
-    node test.mjs                                              # 70 checks, no browser
-    node --experimental-websocket tools/check.mjs out/ a.jpg   # plays the real page in headless Chrome
+    node test.mjs                                                  # 109 checks, no browser
+    node --experimental-websocket tools/check.mjs out/ a.jpg       # plays the real page in headless Chrome
+    node --experimental-websocket tools/walk-check.mjs out/ a.jpg  # the same for walking, the street, the bottle, the album
 
 The first asserts behaviour: a red car stays red, people are never targets, a tap hits what was under it,
 every mode plays differently and says why, every part has a written reason. The second runs the detector
@@ -62,22 +71,31 @@ is fun.**
     src/fx.js               what a hit feels like
     src/view.js             lean, sway, and the way back from a finger to a pixel
     src/render.js           drawing
+    src/street.js           more yard beyond the photograph, made only from photographs
+    src/walk.js             whoever goes down into the yard
+    src/drink.js            the bottle
+    src/album.js            what is kept between visits, and the line to show someone
     src/audio.js, demo.js, rng.js, main.js
     vendor/mediapipe/       the detector runtime and model (Apache 2.0), pinned
     tools/                  a dependency-free headless-Chrome driver and the play-through check
     docs/concept.md         the concept, the "nothing in vain" rule, what went wrong before — read first
     docs/style.md           every look-and-feel decision, its source, its test
     docs/feasibility.md     similar games, what the evidence says, and whether to go on
+    docs/structure.md       the game taken apart: atoms, loops, hooks, and what the research does and does not support
+    docs/pyramid.html       what stands on what
     brief.md, game-skeleton/, standards/   the intake and earlier material, kept for the record
 
-**This build is `v0.2.0`** (also tagged `mvp-2-real-objects`). The earlier build is `mvp-1-miami` (neon
+**This build is `v0.3.0`**: walking, the street, the bottle, the album. Before it, `v0.2.0` (also tagged `mvp-2-real-objects`). The earlier build is `mvp-1-miami` (neon
 heat-map, tone patches, model-naming cascade).
 
 ## What this is not yet
 
-- **Not played by anyone in this form.**
+- **Not played by anyone in this form.** The stick and the buttons have only been driven by a script.
 - **Untimed on a phone.** The search takes 1.6–1.8 s on a Mac; a phone will be slower.
 - **Tried on street-level photographs only.** From a high balcony cars are small; slicing is there for
   that and is untested on such a view.
-- **No reason to come back** beyond a best score. No story, no residents.
+- **Reasons to come back are built and unproven**: an album, days, a daily street. Nobody has come back yet.
+- **Sharing works fully only over https.** On a plain `http://` address the line is copied and the picture
+  is saved as a file, because the phone's share sheet is not offered there.
+- **Scores are still not comparable between players**: every yard is different. No story, no residents.
 - **The skeleton's research runs B–F are not done.**

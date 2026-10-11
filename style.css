@@ -83,4 +83,26 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .hand u { display: block; height: 100%; width: 100%; background: var(--cyan); }
 .hand em { grid-column: 1 / -1; font-style: normal; font-size: 11px; line-height: 1.4; min-height: 15px; }
 
+.news { color: var(--gold); font-weight: 700; }
+.card { overflow-y: auto; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; text-align: left; font-size: 11px; line-height: 1.5; opacity: .95; }
+.grid span { opacity: .45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.grid span.got { opacity: 1; color: var(--gold); }
+#shared { white-space: pre-line; min-height: 14px; }
+
+/* Down in the yard the picture gives up some height to the stick and the jump, so a thumb never has to scroll to walk. */
+body[data-view="walk"] .frame { width: min(100%, calc(46vh * var(--aspect))); }
+.pad { width: 100%; display: grid; grid-template-columns: 116px 1fr; gap: 14px; align-items: center; }
+.pad[hidden], .sip[hidden] { display: none; }
+.stick { width: 116px; height: 116px; background: var(--deep); border: 3px solid var(--cyan); box-shadow: 5px 5px 0 var(--pink);
+  display: grid; place-items: center; touch-action: none; user-select: none; -webkit-user-select: none; }
+.stick i { display: block; width: 44px; height: 44px; background: var(--gold); box-shadow: 4px 4px 0 var(--ink); pointer-events: none; }
+.acts { display: grid; gap: 12px; }
+.acts .btn { touch-action: none; }
+.acts #jumpBtn { padding: 26px 12px; font-size: 22px; }
+.sip { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+.sip span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
+.sip i { display: block; height: 8px; background: rgba(11, 0, 24, .6); margin-top: 4px; }
+.sip u { display: block; height: 100%; width: 0; background: #ffb347; }
+
 @media (prefers-reduced-motion: reduce) { body { animation: none; } .pop, .banner.show, .bump { animation-duration: .01s; } }

@@ -33,6 +33,15 @@
       </label>
       <button id="demoBtn" type="button" class="btn alt">ДЕМО-ДВОР</button>
       <p class="fine">Снимок не покидает телефон: вещи на нём ищет сам телефон.</p>
+      <p id="keep" class="best"></p>
+      <button id="albumBtn" type="button" class="btn small alt" hidden>АЛЬБОМ</button>
+    </section>
+
+    <section id="album" class="card" hidden>
+      <h2>АЛЬБОМ</h2>
+      <p id="albumCount"></p>
+      <div id="albumGrid" class="grid"></div>
+      <button id="albumBack" type="button" class="btn small">НАЗАД</button>
     </section>
 
     <section id="empty" class="card" hidden>
@@ -46,16 +55,39 @@
     </section>
 
     <section id="end" class="card" hidden>
-      <h2>ДВОР РАЗНЕСЁН</h2>
+      <h2 id="endTitle">ДВОР РАЗНЕСЁН</h2>
       <p class="big"><b id="endScore">0</b></p>
       <p id="endBest" class="best"></p>
       <p id="endLine"></p>
+      <p id="endNews" class="news"></p>
       <button id="againBtn" type="button" class="btn">ЕЩЁ РАЗ</button>
       <button id="newBtn" type="button" class="btn alt">НОВЫЙ ДВОР</button>
+      <div class="row">
+        <button id="shareBtn" type="button" class="btn small alt">ПОКАЗАТЬ СТРОКОЙ</button>
+        <button id="cardBtn" type="button" class="btn small alt">КАРТИНКОЙ</button>
+      </div>
+      <p id="shared" class="fine"></p>
     </section>
   </div>
 
+  <div id="pad" class="pad" hidden>
+    <div id="stick" class="stick" aria-label="идти"><i id="knob"></i></div>
+    <div class="acts">
+      <button id="jumpBtn" type="button" class="btn">ПРЫЖОК</button>
+      <button id="stopBtn" type="button" class="btn small alt">ХВАТИТ</button>
+    </div>
+  </div>
+  <div class="row">
+    <button id="viewBtn" type="button" class="btn small">ВО ДВОР</button>
+    <label class="btn small alt">+ СНИМОК
+      <input id="more" type="file" accept="image/*" capture="environment" hidden>
+    </label>
+  </div>
   <div class="hand"><span>в руке</span><b id="hand"></b><i><u id="coolBar"></u></i><em id="hint"></em></div>
+  <div id="sip" class="sip" hidden>
+    <button id="sipBtn" type="button" class="btn small">ГЛОТОК</button>
+    <div><span>градус</span><i><u id="drunkBar"></u></i></div>
+  </div>
   <div id="filters" class="row" aria-label="взгляд"></div>
   <div class="row">
     <button id="restartBtn" type="button" class="btn small alt">ЗАНОВО</button>

@@ -10,6 +10,12 @@ export const COLOURS = 28;
 export const OUTLINE = COLOURS;       // the dark line round a thing
 export const VOID = COLOURS + 1;      // what is left where something was
 export const SIZE = COLOURS + 2;
+// A street of several photographs keeps every photograph's own colours: the table grows by one block of
+// COLOURS per photograph, after the first block and the two shared entries. An index is one byte, and 255
+// means "nothing fallen here", so nine photographs is the most a street can hold.
+export const MAX_YARDS = 9;
+export const baseOf = (yard) => (yard === 0 ? 0 : SIZE + (yard - 1) * COLOURS);
+const blockOf = (i) => (i < SIZE ? 0 : SIZE + Math.floor((i - SIZE) / COLOURS) * COLOURS);
 const OUTLINE_RGB = [11, 0, 24], VOID_RGB = [4, 0, 10];
 
 export function toHsl([r, g, b]) {
@@ -84,21 +90,22 @@ export function buildPalette(pixels, count = COLOURS) {
   return [...table, OUTLINE_RGB, VOID_RGB];
 }
 
-export function nearest(table, r, g, b, upto = COLOURS) {
-  let best = 0, bestD = 1e12;
-  for (let i = 0; i < upto; i += 1) {
+export function nearest(table, r, g, b, upto = COLOURS, from = 0) {
+  let best = from, bestD = 1e12;
+  for (let i = from; i < upto; i += 1) {
     const c = table[i], d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
     if (d < bestD) { bestD = d; best = i; }
   }
   return best;
 }
 
-// For each colour, the colour its wreck has: the nearest entry to a dark, greyed version of it.
+// For each colour, the colour its wreck has: the nearest entry, among its own photograph's colours, to a
+// dark, greyed version of it.
 export function scorchMap(table) {
-  return Uint8Array.from({ length: SIZE }, (_, i) => {
-    if (i >= COLOURS) return i;
-    const [r, g, b] = table[i], grey = luma(table[i]) * 255;
-    return nearest(table, (r * 0.4 + grey * 0.6) * 0.34, (g * 0.4 + grey * 0.6) * 0.34, (b * 0.4 + grey * 0.6) * 0.34);
+  return Uint8Array.from({ length: table.length }, (_, i) => {
+    if (i === OUTLINE || i === VOID) return i;
+    const [r, g, b] = table[i], grey = luma(table[i]) * 255, from = blockOf(i);
+    return nearest(table, (r * 0.4 + grey * 0.6) * 0.34, (g * 0.4 + grey * 0.6) * 0.34, (b * 0.4 + grey * 0.6) * 0.34, from + COLOURS, from);
   });
 }
 

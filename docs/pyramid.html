@@ -1,0 +1,109 @@
+<title>DVOR-8 Dependency Pyramid</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;800&family=JetBrains+Mono:wght@400;700&display=swap">
+<style>
+/* Layout: one stepped pyramid, read from the ground up; each course is as wide as what rests on it needs. */
+:root {
+  color-scheme: dark;
+  --ink: #0b0018; --deep: #170a38; --course: #221050; --pink: #f0286e; --cyan: #3fe0f0; --gold: #ffd23f; --pale: #fff6c2; --dim: #b9a9d6;
+  --display: "Unbounded", "Arial Black", Impact, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+body { background: var(--ink); color: var(--pale); font: 14px/1.55 var(--mono); padding-inline: 16px; padding-block: 28px 56px; }
+main { max-width: 860px; margin-inline: auto; display: flex; flex-direction: column; gap: 30px; }
+h1 { margin: 0; font: 800 clamp(26px, 6vw, 44px)/1.05 var(--display); color: #fff; text-shadow: 3px 3px 0 var(--pink), -2px -2px 0 var(--cyan); text-wrap: balance; }
+h2 { margin: 0 0 10px; font: 500 17px/1.2 var(--display); color: var(--cyan); letter-spacing: .02em; }
+p { margin: 0; max-width: 68ch; }
+.lede { color: var(--dim); }
+.pyramid { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.course { box-sizing: border-box; width: var(--w); max-width: 100%; background: var(--course); border: 2px solid var(--edge, var(--cyan)); box-shadow: 5px 5px 0 var(--pink); padding: 10px 14px 12px; min-width: 0; }
+.course b { display: block; font: 800 14px/1.25 var(--display); color: #fff; }
+.course .n { color: var(--gold); margin-right: 6px; }
+.course code { color: var(--gold); font: 700 12px/1.6 var(--mono); overflow-wrap: anywhere; }
+.course span { display: block; font-size: 12.5px; }
+.course .fails { color: var(--dim); margin-top: 4px; }
+.course.apex { --edge: var(--gold); background: var(--pink); text-align: center; box-shadow: 5px 5px 0 var(--cyan); }
+.course.apex b { font-size: 15px; }
+.course.ground { --edge: var(--dim); background: var(--deep); box-shadow: none; }
+.arrow { color: var(--dim); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; }
+.wide { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+th, td { text-align: left; vertical-align: top; padding: 6px 10px 6px 0; border-bottom: 1px solid #3a2670; }
+th { color: var(--cyan); font-weight: 700; white-space: nowrap; }
+td code { color: var(--gold); }
+.note { color: var(--dim); font-size: 12.5px; }
+@media (max-width: 560px) { .course { width: max(var(--w), 86%); } }
+</style>
+<main>
+  <header>
+    <h1>ДВОР-8: what stands on what</h1>
+  </header>
+  <p class="lede">Read from the bottom. Each course works only if every course under it does. The top is the one sentence the game exists for; take away any course and count how much above it falls.</p>
+
+  <section class="pyramid" aria-label="Dependency pyramid, apex first">
+    <div class="course apex" style="--w: 44%"><b>«Это МОЙ двор. Я его разнёс. Смотри.»</b><span>the player's sentence: the hook, and the thing shared</span></div>
+    <div class="arrow">rests on</div>
+    <div class="course" style="--w: 54%"><b><span class="n">6</span>Coming back, showing someone</b><code>album.js</code>
+      <span>album of kinds wrecked · days · records · a street remade by the date · the line and the picture</span>
+      <span class="fails">Fails alone: the game still plays, and is over in a minute.</span></div>
+    <div class="course" style="--w: 64%"><b><span class="n">5</span>A body in the yard</b><code>walk.js · drink.js · street.js</code>
+      <span>walk, jump, stomp · the bottle and how drunk · more street from the photographs, and added photographs</span>
+      <span class="fails">Fails alone: back to one yard seen from the balcony. Course 6 loses the walk and the daily street.</span></div>
+    <div class="course" style="--w: 74%"><b><span class="n">4</span>Feel</b><code>fx.js · audio.js · view.js · render.js</code>
+      <span>pause, kick, flash, pieces, wrecks that stay · sound · lean and camera · everything drawn</span>
+      <span class="fails">Fails: a wreck is a pixel swap. Nothing above is worth returning to.</span></div>
+    <div class="course" style="--w: 84%"><b><span class="n">3</span>Rules</b><code>world.js · modes.js · rng.js</code>
+      <span>what a hit does · combo and score · four ways to play · randomness that can be replayed</span>
+      <span class="fails">Fails: nothing to do with the things that were found.</span></div>
+    <div class="course" style="--w: 92%"><b><span class="n">2</span>The picture</b><code>stylise.js · palette.js</code>
+      <span>the photograph as an 8-bit picture of the same yard · one table of colours per photograph, a filter is another table</span>
+      <span class="fails">Fails: the yard is not recognised as the player's. The apex has no «мой».</span></div>
+    <div class="course" style="--w: 100%"><b><span class="n">1</span>The promise: real things from the photograph</b><code>detect.js · objects.js · vendor/mediapipe</code>
+      <span>an object detector on the phone finds the cars, benches, bicycles · which are fair targets · which pixels are the thing</span>
+      <span class="fails">Fails: there is no game. Two earlier builds were styled and tested without this course.</span></div>
+    <div class="arrow">stands on</div>
+    <div class="course ground" style="--w: 100%"><b><span class="n">0</span>Ground: not code</b>
+      <span>a phone browser with a camera · a yard with something in it the detector knows · no server, no account · the creator's line: no punishing loss, no paid randomness, adults</span>
+      <span class="fails">Not verified: the detector on the creator's own balcony view; any of it with a second person.</span></div>
+  </section>
+
+  <section>
+    <h2>The same thing, as the code imports it</h2>
+    <div class="wide">
+      <table>
+        <tr><th>Module</th><th>Course</th><th>Imports</th><th>Imported by</th></tr>
+        <tr><td><code>objects.js</code></td><td>1</td><td>—</td><td>detect, album, main</td></tr>
+        <tr><td><code>detect.js</code></td><td>1</td><td>objects, vendor/mediapipe</td><td>main</td></tr>
+        <tr><td><code>palette.js</code></td><td>2</td><td>—</td><td>stylise, world, render, street, main</td></tr>
+        <tr><td><code>stylise.js</code></td><td>2</td><td>palette</td><td>main</td></tr>
+        <tr><td><code>rng.js</code></td><td>3</td><td>—</td><td>world, demo, main</td></tr>
+        <tr><td><code>world.js</code></td><td>3</td><td>palette, rng</td><td>street, main</td></tr>
+        <tr><td><code>modes.js</code></td><td>3</td><td>—</td><td>render, main</td></tr>
+        <tr><td><code>fx.js</code> <code>audio.js</code> <code>view.js</code></td><td>4</td><td>—</td><td>main</td></tr>
+        <tr><td><code>render.js</code></td><td>4</td><td>palette, modes</td><td>main</td></tr>
+        <tr><td><code>street.js</code></td><td>5</td><td>palette, world</td><td>main</td></tr>
+        <tr><td><code>walk.js</code> <code>drink.js</code></td><td>5</td><td>—</td><td>main</td></tr>
+        <tr><td><code>album.js</code></td><td>6</td><td>objects</td><td>main</td></tr>
+        <tr><td><code>main.js</code></td><td>all</td><td>every module above</td><td>the page</td></tr>
+      </table>
+    </div>
+    <p class="note" style="margin-top:10px">No module imports from a course above its own. <code>walk.js</code> and <code>drink.js</code> import nothing: they are pure rules and sit on course 5 because of what they need to exist at run time (a world, a mode), which <code>main.js</code> hands them.</p>
+  </section>
+
+  <section>
+    <h2>Which loop rides on which course</h2>
+    <div class="wide">
+      <table>
+        <tr><th>Loop</th><th>Length</th><th>Needs courses</th><th>Hook it carries</th></tr>
+        <tr><td>tap → hit → combo</td><td>0.1–0.35 s</td><td>1–4</td><td>a second hit inside the window</td></tr>
+        <tr><td>jump → stomp → bounce</td><td>~0.5 s</td><td>1–5</td><td>coming down on the car, going up again</td></tr>
+        <tr><td>swig → throw</td><td>0.7 s + a throw</td><td>3–5</td><td>how drunk is the player's own choice</td></tr>
+        <tr><td>photograph → clear → card</td><td>20–60 s</td><td>1–4</td><td>the scan names the neighbour's car</td></tr>
+        <tr><td>go down → walk the street → «хватит»</td><td>open</td><td>1–5</td><td>the yard goes on past the photograph</td></tr>
+        <tr><td>album · days · the day's street</td><td>days</td><td>1–6</td><td>empty places; a different street tomorrow</td></tr>
+        <tr><td>the line, the picture</td><td>—</td><td>1–6</td><td>someone asks what that yard is</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <p class="note">Build <code>walk-and-drink</code>, 11 October 2026. 109 checks pass and a headless play-through runs clean; whether any course above the fourth earns a second visit is not known until a person plays it. Detail and sources: <code>docs/structure.md</code>.</p>
+</main>

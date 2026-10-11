@@ -28,6 +28,10 @@ it is there is removed, not kept "for later". This is checked, not hoped for:
 | `audio.js` | A run of hits is *heard* as a run: pitch rises with the combo. |
 | `demo.js` | A yard for a desk with no balcony, and a fixed one for the tests. |
 | `rng.js` | Everything that looks random can be replayed exactly, so a test can assert it. |
+| `street.js` | One yard is one level. This makes more of the same place out of the photographs already given — re-ordered strips of the picture, copies of the real things — and puts a photograph the player adds in as the exact next yard. It invents nothing. |
+| `walk.js` | Going down into your own yard: walking round the things, jumping, and coming down on your neighbour's car. A jump is a hit made with the feet. |
+| `drink.js` | Under alcohol the bottle can be drunk before it is thrown: each swig widens the burst and loosens the hand, so how drunk the mode plays is the player's own doing. |
+| `album.js` | A reason to come back that cannot be lost: every kind of thing ever wrecked, the days visited, the records — and the line a player sends to someone else. |
 | `main.js` | Wires the parts to the page and the finger. |
 | the score, combo and best score | A reason to throw faster, and a number to beat on «ЕЩЁ РАЗ». |
 | brackets and pips on targets | What can be hit, and how much it can take, is never a guess. |
@@ -68,12 +72,14 @@ method's output. `CREATOR` is the creator's word. `BUILT` exists and is tested.
   closure open until the last thing is wrecked.
 - **3 Atoms** — `BUILT`: tap → throw → hit → combo → score; brackets and pips as information; pause,
   kick, flash, pieces, sound as feedback; no penalty, no chance except alcohol's stated scatter.
-- **4 Loops** — micro (tap to wreck, ~0.3 s) and core (photograph to score, ~20–60 s) `BUILT`. Meta: a best
-  score only; nothing else brings a player back.
+- **4 Loops** — micro (tap to wreck; jump, stomp, bounce; swig, throw), core (photograph to score; down
+  into the yard and along the street) and meta (album, days, records, a street remade by the date, a line
+  to show someone) `BUILT`. Whether the meta loops bring anyone back is untested. `docs/structure.md`.
 - **5 Scenario** — one beat: search, scan, clear. No story, no residents.
 - **6 Feedback** — `BUILT`; `docs/style.md`.
 - **7 First minute** — open → «СНЯТЬ ДВОР» → camera → a few seconds of search → 1.4 s scan → tap.
-- **8 Progression** — none.
+- **8 Progression** — nothing is unlocked and nothing is lost. What grows is the album, the days and the
+  street the player has photographed.
 - **9 Ethics** — people and animals are never targets; the photograph never leaves the phone; nothing is
   taken from the player. The modes are named for weed, alcohol and depression at the creator's request,
   for adults. Depression is a mode the player chooses and leaves; it is not something the game does to them.
@@ -83,10 +89,14 @@ method's output. `CREATOR` is the creator's word. `BUILT` exists and is tested.
 
 ## What is verified, and what is not
 
-**Verified.** `node test.mjs`: 70 checks. `tools/check.mjs` in headless Chrome: the demo yard played to the
+**Verified.** `node test.mjs`: 109 checks. `tools/walk-check.mjs` in headless Chrome: down into the demo
+yard, things stomped, the street walked past the picture's edge, a real photograph added and walked into,
+a bottle drunk dry and thrown, the card, the line, the album; no page errors. And, from the build before: `tools/check.mjs` in headless Chrome: the demo yard played to the
 end in each of the four modes; three real street photographs searched in 1.6–1.8 s on a Mac, with cars, a
 bench and a motorcycle found, named and wrecked; no page errors.
 
-**Not verified.** That it is fun — nobody has played this build. How long the search takes on a phone.
+**Not verified.** That it is fun — nobody has played this build, and nobody has walked, jumped or drunk in
+it with a thumb: the stick and the buttons have only been driven by a script. Whether a made yard reads as
+more of the player's street. Whether anything here brings a player back. How long the search takes on a phone.
 Whether the detector loads on an older phone. What it finds in *your* yard: from a high balcony, cars are
 small, and the slicing is there for that, but it has only been tried on street-level photographs.

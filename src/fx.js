@@ -16,13 +16,14 @@ export const HOP_TIME = 0.14;      // seconds for a skipping throw to reach its 
 
 export function makeFx(world) {
   const cx = world ? world.w / 2 : 0, cy = world ? world.h / 2 : 0;
-  return { particles: [], rocks: [], rings: [], shake: 0, freeze: 0, flash: 0, clock: 0, cool: 0, focus: { x: cx, y: cy, tx: cx, ty: cy } };
+  return { particles: [], rocks: [], rings: [], shake: 0, freeze: 0, flash: 0, clock: 0, cool: 0, focus: { x: cx, y: cy, tx: cx, ty: cy },
+    hand: { x: cx, y: world ? world.h + 4 : 0 } };   // where a throw leaves from: the balcony, or the walker
 }
 
 // A throw. `from` is given for a skip from one thing to the next; otherwise it leaves the balcony.
 export function throwThing(fx, world, mode, id, tx, ty, region, from = null) {
   fx.rocks.push({
-    x0: from ? from.x : world.w / 2, y0: from ? from.y : world.h + 4, tx, ty, t: 0, dur: from ? HOP_TIME : mode.flight,
+    x0: from ? from.x : fx.hand.x, y0: from ? from.y : fx.hand.y, tx, ty, t: 0, dur: from ? HOP_TIME : mode.flight,
     kind: id, region, damage: mode.damage, splash: mode.splash, hops: from ? from.hops : mode.chain, touched: from ? from.touched : new Set(),
   });
   if (!from) { fx.rings.push({ x: tx, y: ty, t: 0 }); fx.cool = mode.cooldown; }   // the tap is answered in the same frame

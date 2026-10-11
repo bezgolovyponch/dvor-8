@@ -20,6 +20,7 @@ export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1 
   }
   return {
     w, h, photo, seed, palette, scorch: scorchMap(palette),
+    sw: w, yards: [{ x: 0, w, base: 0, made: false, palette }],   // one yard wide until street.js adds more
     idx: picture, owner,
     regions: regions.map((r) => ({ ...r, hits: 0, gone: false, seen: false })),
     rubble: new Uint8Array(w * h).fill(255),   // what has fallen and stayed, as palette indices

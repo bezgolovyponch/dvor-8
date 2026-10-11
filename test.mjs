@@ -16,6 +16,12 @@ import { makeFx, throwThing, impact, burst, stepFx, shakeOffset, HIT_PAUSE, BREA
 import { MODES, aimWith, splashTargets, chainNext, inFocus } from './src/modes.js';
 import { viewMotion, clientToWorld, worldToClient, LONG, SHORT, SCAN_TIME } from './src/view.js';
 import { mulberry32 } from './src/rng.js';
+import { yardFrom, cleared, grow, extend, edgeOf, room, bandTop, MAX_STREET } from './src/street.js';
+import { makeWalker, stepWalker, standing, walked, JUMP, FALL, CLEAR } from './src/walk.js';
+import { makeDrink, swig, fresh, stepDrink, level, drunkMode, stagger, SWIGS, SWIG_TIME, PER_SWIG, START } from './src/drink.js';
+import { makeAlbum, visit, record, progress, shareText, dayKey, daySeed, KINDS, SIGN, SHARE_MAX } from './src/album.js';
+import { baseOf, MAX_YARDS } from './src/palette.js';
+import { cameraFor, ZOOM } from './src/view.js';
 import { readFileSync, readdirSync } from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -181,6 +187,131 @@ for (const id of ids) for (let t = 0; t < 20; t += 0.37) {
 check('a tap lands on the pixel that was DRAWN under the finger, whatever the tilt, sway and shake', worst < 1e-6, `worst error ${worst.toExponential(1)} px`);
 check('the frame always leans a little; depression holds it still', viewMotion('sober', 1).angle !== 0 && viewMotion('depression', 1).angle === 0);
 check('alcohol leans furthest and sees double', Math.abs(viewMotion('alcohol', 1.7).angle) > Math.abs(viewMotion('sober', 1.7).angle) && viewMotion('alcohol', 1.7).ghost);
+
+// ---- the street beyond the photograph ------------------------------------------------------------------
+section('the street: more yard, made only from what the photographs gave');
+const homeSeg = toRegions(DEMO.dets, DEMO.rgba, W, H);
+const HOME = yardFrom({ w: W, h: H, idx: st.idx, palette: st.palette, ...homeSeg });
+const clean = cleared(HOME);
+const ownColours = (r) => new Set([...r.pixels].map((p) => st.idx[p]));
+check('with its things taken out, the picture has no thing left in it and nothing else changed', (() => {
+  let outside = 0, same = 0;
+  for (let p = 0; p < N; p += 1) if (homeSeg.owner[p] < 0) { outside += 1; if (clean[p] === st.idx[p]) same += 1; }
+  const carNow = [...homeSeg.regions.find((r) => r.kind === 'car').pixels].filter((p) => { const c = st.palette[clean[p]]; return c[0] > c[1] * 1.6 && c[0] > c[2] * 1.3; }).length;
+  return outside === same && carNow < homeSeg.regions.find((r) => r.kind === 'car').area * 0.05;
+})());
+const made = grow(HOME, mulberry32(5), null);
+const srcCols = new Set(); for (let x = 0; x < W; x += 1) { let k = ''; for (let y = 0; y < H; y += 8) k += String.fromCharCode(clean[y * W + x]); srcCols.add(k); }
+const madeGround = (() => { let ok = 0, all = 0; for (let x = 0; x < W; x += 1) { let k = '', thing = false; for (let y = 0; y < H; y += 8) { k += String.fromCharCode(made.idx[y * W + x]); if (made.owner[y * W + x] >= 0) thing = true; } if (!thing) { all += 1; if (srcCols.has(k)) ok += 1; } } return { ok, all }; })();
+check('a made yard invents no ground: every column of it is a column of the photograph', made.made && madeGround.all > 20 && madeGround.ok === madeGround.all, `${madeGround.ok} of ${madeGround.all} columns`);
+check('a made yard invents no things: each is a real one found in the photograph, with its name and toughness', made.regions.length >= 2 && made.regions.every((r) => HOME.regions.some((m) => m.kind === r.kind && m.hp === r.hp && m.area === r.area && m.y === r.y)),
+  made.regions.map((r) => r.label).join(', '));
+check('its things do not overlap, and each owns its pixels', made.regions.every((r) => r.pixels.every((p) => made.owner[p] === r.id))
+  && made.regions.every((a) => made.regions.every((b) => a === b || a.x + a.w <= b.x || b.x + b.w <= a.x || a.y + a.h <= b.y || b.y + b.h <= a.y)));
+check('the same day\'s number makes the same street, another number another', grow(HOME, mulberry32(5), null).idx.join() === made.idx.join() && grow(HOME, mulberry32(6), null).idx.join() !== made.idx.join());
+w = makeWorld({ w: W, h: H, photo: DEMO.rgba, idx: st.idx, palette: st.palette, ...toRegions(DEMO.dets, DEMO.rgba, W, H), seed: 8 });   // the same table as HOME, as in the game
+const c0 = byKind(w, 'car');
+strike(w, c0, c0.cx, c0.cy);
+const scoreBefore = w.score, firstRow = w.idx.slice(0, W).join(), edge = edgeOf(w, 0);
+const joined = grow(HOME, mulberry32(5), edge);
+const seamCost = (g) => { let n = 0; for (let y = 0; y < H; y += 1) if (edge[y] < COLOURS && g.idx[y * W] !== edge[y]) n += 1; return n; };
+check('a made yard is chosen to continue the edge it joins: the join shows less than an unmatched one', seamCost(joined) < seamCost(made), `${seamCost(joined)} rows differ, ${seamCost(made)} unmatched`);
+check('the street grows by a yard and what was there stays: score, dents, things', extend(w, joined) && w.w === W * 2 && w.yards.length === 2 && w.score === scoreBefore && w.idx.slice(0, W).join() === firstRow
+  && w.regions[c0.id].hits === 1 && w.regions.every((r) => r.pixels.every((p) => w.owner[p] === r.id)), `${w.regions.length} things on ${w.w} px`);
+check('a thing on the new stretch can be picked and wrecked like any other', (() => { const r = w.regions[w.regions.length - 1]; if (pick(w, r.cx, r.cy) === null && pick(w, r.pixels[0] % w.w, (r.pixels[0] / w.w) | 0) !== r) return false; let res2; while (!r.gone) res2 = strike(w, r, r.cx, r.cy); return res2.kind === 'break' && r.x >= W; })());
+for (const r of w.regions) while (!r.gone) strike(w, r, r.cx, r.cy);
+check('more street means the yard is not finished', w.done && extend(w, grow(HOME, mulberry32(9), edgeOf(w, 0))) && !w.done);
+const other = stylise(DEMO.rgba.map((v, i) => (i % 4 === 0 ? 255 - v : v)), W, H);
+const second = yardFrom({ w: W, h: H, idx: other.idx, palette: other.palette, ...toRegions(DEMO.dets, DEMO.rgba, W, H) });
+const before2 = w.palette.length;
+check('an added photograph keeps its OWN colours: the table grows by one block and its pixels point into it', extend(w, second) && w.palette.length === before2 + COLOURS
+  && (() => { const x0 = w.w - W; let ok = true; for (let y = 0; y < H; y += 7) for (let x = 0; x < W; x += 5) { const v = w.idx[y * w.w + x0 + x]; if (!(v === OUTLINE || v === VOID || (v >= baseOf(1) && v < baseOf(1) + COLOURS))) ok = false; } return ok; })()
+  && [...w.scorch].every((v, i) => i === OUTLINE || i === VOID || (v >= (i < SIZE ? 0 : baseOf(1)) && v < (i < SIZE ? COLOURS : baseOf(1) + COLOURS))), `${w.palette.length} colours`);
+check('a street has an end: nine photographs, and no more yards than a phone can carry', (() => {
+  const s = yard(); let n = 0;
+  for (let i = 0; i < 12; i += 1) { const o = stylise(DEMO.rgba.map((v) => (v + i * 9) % 256), W, H); if (extend(s, yardFrom({ w: W, h: H, idx: o.idx, palette: o.palette, regions: [], owner: new Int16Array(N).fill(-1) }))) n += 1; }
+  return n === MAX_YARDS - 1 && s.palette.length <= 255 && !room({ yards: Array.from({ length: MAX_STREET }, () => ({ palette: st.palette })) }, HOME);
+})(), `${MAX_YARDS} photographs, ${MAX_STREET} yards`);
+
+// ---- walking -----------------------------------------------------------------------------------------
+section('down in the yard: walking, jumping, stomping');
+w = yard();
+const TOP = bandTop(w);
+check('a walker may go as high as the highest thing and no higher: all that can be hit can be reached', TOP <= Math.min(...w.regions.map((r) => r.y)) && TOP >= 14, `from row ${TOP}`);
+let me = makeWalker(w, byKind(w, 'car').cx, byKind(w, 'car').cy, TOP);
+check('nobody starts inside a car', !standing(w, me.x, me.y));
+me = makeWalker(w, 96, H - 8, TOP);
+const still = { x: 0, y: 0, jump: false }, go = (x, y, jump = false) => ({ x, y, jump });
+const x0 = me.x;
+for (let i = 0; i < 30; i += 1) stepWalker(w, me, go(1, 0), 1 / 60, { top: TOP });
+check('the stick moves the walker, and letting go stops them', me.x > x0 + 15 && (() => { const x = me.x; stepWalker(w, me, still, 1 / 60, { top: TOP }); return me.x === x; })(), `${(me.x - x0).toFixed(0)} px in half a second`);
+const benchW = byKind(w, 'bench');
+me = makeWalker(w, benchW.x - 6, benchW.cy, TOP);
+let bumped = false;
+for (let i = 0; i < 90; i += 1) bumped = stepWalker(w, me, go(1, 0), 1 / 60, { top: TOP }).blocked || bumped;
+check('a standing thing is solid: it cannot be walked through, and the game says so', bumped && me.x < benchW.x + 2 && !standing(w, me.x, me.y), `stopped at ${me.x.toFixed(0)}, bench from ${benchW.x}`);
+me = makeWalker(w, 20, H - 6, TOP);
+let peak = 0, airFrames = 0, ev = stepWalker(w, me, go(0, 0, true), 1 / 60, { top: TOP });
+const jumpedAtOnce = ev.jumped;
+while ((me.z > 0 || me.vz !== 0) && airFrames < 200) { ev = stepWalker(w, me, still, 1 / 60, { top: TOP }); peak = Math.max(peak, me.z); airFrames += 1; }
+check('a jump leaves the ground in the same frame, clears a thing, and is over in under a second', jumpedAtOnce && peak > CLEAR * 3 && Math.abs(peak - (JUMP * JUMP) / (2 * FALL)) < 3 && airFrames < 60 && ev.landed, `${peak.toFixed(0)} px high, ${(airFrames / 60).toFixed(2)} s`);
+me = makeWalker(w, benchW.x - 6, benchW.cy, TOP);
+let stomped = null;
+stepWalker(w, me, go(1, 0, true), 1 / 60, { top: TOP });
+for (let i = 0; i < 80 && !stomped; i += 1) stomped = stepWalker(w, me, go(1, 0), 1 / 60, { top: TOP }).stomped;
+check('to land ON a thing is to stomp it, and the walker is thrown up again', stomped === benchW && me.vz > 0, stomped ? stomped.label : 'landed on nothing');
+check('a stomp is a hit like any other: the same rules, the same score', strike(w, stomped, me.x, me.y).points > 0 && w.score > 0 && w.combo === 1);
+me = makeWalker(w, 40, TOP + 30, TOP);
+for (let i = 0; i < 400; i += 1) stepWalker(w, me, go(-1, -1), 1 / 60, { top: TOP });
+check('the walker cannot leave the street or climb into the sky', me.x >= 2 && me.y >= TOP);
+const straight = makeWalker(w, 30, H - 4, TOP), drunkWalk = makeWalker(w, 30, H - 4, TOP);
+for (let i = 0; i < 60; i += 1) { stepWalker(w, straight, go(1, 0), 1 / 60, { top: TOP }); stepWalker(w, drunkWalk, go(1, 0), 1 / 60, { top: TOP, stagger: stagger(1) }); }
+check('drunk legs wander; sober legs go where they are sent', straight.y === H - 4 && Math.abs(drunkWalk.y - straight.y) > 1 && stagger(0) === 0, `${Math.abs(drunkWalk.y - straight.y).toFixed(1)} px off line`);
+me = makeWalker(w, 30, H - 4, TOP);
+const camDown = cameraFor(w, me), camUp = cameraFor(w, { ...me, down: false });
+check('down in the yard the view is closer and follows; from the balcony it is the whole yard', camDown.w === Math.round(W / ZOOM) && camDown.h === Math.round(H / ZOOM) && camDown.x >= 0 && camDown.x + camDown.w <= w.w && camDown.y + camDown.h <= H
+  && camUp.w === W && camUp.h === H && cameraFor(w, null).x === 0, `${camDown.w}x${camDown.h} of ${W}x${H}`);
+check('how far was walked is counted from where the walker started', walked({ far: 180, start: 20 }) === 20);
+
+// ---- the bottle --------------------------------------------------------------------------------------
+section('the bottle: how drunk is the player\'s own doing');
+let dr = makeDrink();
+check('a bottle holds a stated number of swigs and starts one swig in', dr.left === SWIGS && dr.drunk === START && level(dr) === 1);
+check('a swig takes time, and the hand is busy for all of it', swig(dr) && dr.busy === SWIG_TIME && !swig(dr) && dr.left === SWIGS - 1);
+const lv = level(dr);
+stepDrink(dr, SWIG_TIME / 2);
+check('the level falls while the bottle is at the mouth, not in a jump', level(dr) < lv && level(dr) > (SWIGS - 1) / SWIGS && dr.drunk > START && dr.drunk < START + PER_SWIG);
+stepDrink(dr, SWIG_TIME);
+check('one swig adds exactly its share', Math.abs(dr.drunk - (START + PER_SWIG)) < 1e-9 && dr.busy === 0, `${START} → ${dr.drunk.toFixed(2)}`);
+for (let i = 0; i < 10; i += 1) { swig(dr); stepDrink(dr, SWIG_TIME); }
+check('an empty bottle gives nothing more, and nobody gets past full', dr.left === 0 && dr.drunk <= 1 && dr.drunk > 0.9 && !swig(dr));
+fresh(dr);
+check('throwing it puts a full one in the hand', dr.left === SWIGS && swig(dr));
+dr = makeDrink(); const d0 = dr.drunk; stepDrink(dr, 10);
+check('it wears off on its own, slowly, and never below dry', dr.drunk < d0 && dr.drunk > 0 && (() => { stepDrink(dr, 1000); return dr.drunk === 0; })());
+const half = drunkMode(MODES.alcohol, 0.5), dry = drunkMode(MODES.alcohol, 0), full = drunkMode(MODES.alcohol, 1);
+check('half-drunk is the mode exactly as stated; drier is truer and smaller, drunker is wider and wilder', Math.abs(half.scatter - MODES.alcohol.scatter) < 1e-9 && Math.abs(half.splash - MODES.alcohol.splash) < 1e-9
+  && dry.scatter < half.scatter && dry.splash < half.splash && full.scatter > half.scatter && full.splash > half.splash && dry.splash > 0,
+  `burst ${dry.splash.toFixed(0)} / ${half.splash.toFixed(0)} / ${full.splash.toFixed(0)} px, stray ${dry.scatter.toFixed(0)} / ${half.scatter.toFixed(0)} / ${full.scatter.toFixed(0)} px`);
+check('the view leans and doubles more the more is drunk, and stays on the screen', Math.abs(viewMotion('alcohol', 1.7, false, 1).angle) > Math.abs(viewMotion('alcohol', 1.7, false, 0).angle)
+  && viewMotion('alcohol', 1.7, false, 0.5).angle === viewMotion('alcohol', 1.7).angle && [0, 1, 2, 3, 4, 5, 6].every((t) => Math.abs(viewMotion('alcohol', t, false, 1).angle) < 0.1));
+
+// ---- coming back, and showing someone ----------------------------------------------------------------
+section('coming back: what is kept can only grow');
+let al = makeAlbum();
+check('an album starts empty and lists every kind of thing the game can find', progress(al).have === 0 && progress(al).of === KINDS.length && KINDS.every((k) => TARGETS[k] && SIGN[k]));
+let news = record(al, { wrecked: ['car', 'car', 'bench'], score: 900, metres: 12 });
+check('a run adds what was wrecked, and says what was wrecked for the first time', al.kinds.car === 2 && al.kinds.bench === 1 && news.kinds.join() === 'car,bench' && news.best && news.far && progress(al).have === 2);
+news = record(al, { wrecked: ['car'], score: 100, metres: 3 });
+check('a worse run takes nothing away', al.best === 900 && al.far === 12 && al.kinds.car === 3 && !news.best && !news.far && news.kinds.length === 0 && al.runs === 2);
+check('a day is counted once however often the game is opened, and days are never lost', visit(al, '2026-10-11') && !visit(al, '2026-10-11') && visit(al, '2026-10-14') && al.days.length === 2);
+check('what is kept survives being stored and read back, and rubbish in storage is survived too', JSON.stringify(makeAlbum(JSON.parse(JSON.stringify(al)))) === JSON.stringify(al)
+  && progress(makeAlbum('nonsense')).have === 0 && makeAlbum({ kinds: { dragon: 4, car: -1 }, days: ['x'] }).days.length === 0 && progress(makeAlbum({ kinds: { dragon: 4 } })).have === 0);
+check('tomorrow\'s street is not today\'s', daySeed('2026-10-11') !== daySeed('2026-10-12') && daySeed('2026-10-11') === daySeed('2026-10-11') && dayKey(new Date(2026, 9, 11)) === '2026-10-11');
+const line = shareText({ things: [{ kind: 'car', gone: true }, { kind: 'bench', gone: false }, { kind: 'car', gone: true }], score: 2450, combo: 5, metres: 37, day: '2026-10-11', url: 'https://example.org/' });
+check('the line to show someone says what the yard held and what became of it, and nothing about where it is', line.split('\n').length === 4 && line.includes('🚗⬜🚗') && line.includes('2/3') && line.includes('2450') && line.includes('37 м') && line.includes('11.10'), line.split('\n')[1]);
+check('it is never longer than a yard, and leaves out a walk that was not taken', [...shareText({ things: Array.from({ length: 30 }, () => ({ kind: 'car', gone: true })), score: 1, combo: 1, metres: 0, day: '2026-10-11', url: '' }).split('\n')[1]].length === SHARE_MAX
+  && !shareText({ things: [], score: 1, combo: 1, metres: 0, day: '2026-10-11', url: '' }).includes(' м'));
 
 // ---- nothing in vain ---------------------------------------------------------------------------------
 section('nothing in vain');

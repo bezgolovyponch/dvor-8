@@ -24,7 +24,7 @@ export const MODES = {
     why: 'Slow and generous: one lazy throw can touch three things, and a combo forgives a long pause. For lining things up.',
   },
   alcohol: {
-    label: 'алкоголь', thing: 'бутылка', hint: 'бьёт всё вокруг, но рука гуляет',
+    label: 'алкоголь', thing: 'бутылка', hint: 'бьёт всё вокруг, но рука гуляет · глоток — шире взрыв, хуже рука · пустую бросай',
     flight: 0.16, damage: 1, scatter: 10, splash: 22, chain: 0, cooldown: 0, combo: 2.5, focus: { radius: 0, out: 'soft' },
     why: 'Power for accuracy: the bottle bursts over everything near where it lands, and it does not land where you pointed.',
   },
@@ -64,5 +64,5 @@ export function chainNext(world, from, touched, range = CHAIN_RANGE) {
 // Whether a thing can be seen clearly through this mode's focus, with the eye at (fx, fy).
 export function inFocus(mode, world, region, fx, fy) {
   if (!mode.focus) return true;
-  return Math.hypot(region.cx - fx, region.cy - fy) <= mode.focus.radius * Math.min(world.w, world.h) * 1.15;
+  return Math.hypot(region.cx - fx, region.cy - fy) <= mode.focus.radius * Math.min(world.sw ?? world.w, world.h) * 1.15;
 }
