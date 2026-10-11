@@ -30,10 +30,16 @@ function hashSeed(text) {
   return h >>> 0;
 }
 
-// The world is 640 units wide and 360 tall, one screen at 8-bit scale. Positions are in world units, not
-// pixels, so the same data renders at any canvas size.
+// The world is 640 units wide — two screens, which is why the camera scrolls — and exactly one view tall.
+// One world unit is one canvas pixel, and `y` is an object's TOP edge.
+//
+// It was 360 tall while the canvas was 180 and nothing converted between them, so the whole gameplay layer
+// was placed below the bottom of the picture: scanned, counted, and never seen or hittable. A test now
+// asserts that every object is inside the view and above the rail.
 export const WORLD_W = 640;
-export const WORLD_H = 360;
+export const WORLD_H = 180;
+export const RAIL_H = 14;                 // the balcony rail covers the bottom of the view
+export const GROUND = WORLD_H - RAIL_H;   // nothing may reach below this
 
 // How many of each thing a yard holds. The counts are part of the seed's behaviour, not taste: a test can
 // assert that a yard of this size has at least this many breakable objects, which is what makes it playable.
@@ -62,16 +68,16 @@ export function buildYard(seed = 'двор-1') {
       const kind = KINDS[row.kind];
       // Mid and near things sit higher on the screen, because they are further away: the yard occupies the
       // bottom half, roofs the middle band, and the windows above them.
-      const band = row.layer === 'yard' ? [WORLD_H * 0.55, WORLD_H * 0.92]
-        : row.layer === 'mid' ? [WORLD_H * 0.34, WORLD_H * 0.58]
-          : [WORLD_H * 0.2, WORLD_H * 0.5];
+      const band = row.layer === 'yard' ? [WORLD_H * 0.52, GROUND]
+        : row.layer === 'mid' ? [WORLD_H * 0.30, WORLD_H * 0.58]
+          : [WORLD_H * 0.2, WORLD_H * 0.62];
       n += 1;
       world.objects.push({
         id: `${row.kind}-${i + 1}`,
         kind: row.kind,
         layer: row.layer,
         x: Math.round(band[0] * 0 + rnd() * (WORLD_W - kind.w - 20) + 10),
-        y: Math.round(band[0] + rnd() * (band[1] - band[0])),
+        y: Math.round(band[0] + rnd() * Math.max(0, band[1] - kind.h - band[0])),   // the whole height stays in its band
         w: kind.w,
         h: kind.h,
         hits: 0,

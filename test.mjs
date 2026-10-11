@@ -3,7 +3,8 @@
 //
 // Usage:  node test.mjs
 
-import { buildYard, yardSummary, WORLD_W, WORLD_H } from './src/yard.js';
+import { buildYard, yardSummary, WORLD_W, WORLD_H, GROUND } from './src/yard.js';
+import { VIEW_H } from './src/render.js';
 import { makeScan, startScan, stepScan, SCAN_MS } from './src/scan.js';
 import { makeEffect, throwAt, stepEffect } from './src/throw.js';
 import { KINDS, LAYERS, hitObject, spendRock } from './src/state.js';
@@ -29,6 +30,9 @@ check('a different seed gives a different yard',
 check('every object is inside the world',
   a.objects.every((o) => o.x >= 0 && o.x + o.w <= WORLD_W && o.y >= 0 && o.y + o.h <= WORLD_H),
   `${WORLD_W}x${WORLD_H}`);
+check('the world is as tall as the picture, and every object is VISIBLE: in the view, above the rail',
+  WORLD_H === VIEW_H && a.objects.every((o) => o.y >= 0 && o.y + o.h <= GROUND),
+  `lowest edge ${Math.max(...a.objects.map((o) => o.y + o.h))} of ${GROUND}`);
 check('every object has a kind the renderer knows',
   a.objects.every((o) => KINDS[o.kind]), [...new Set(a.objects.map((o) => o.kind))].join(', '));
 check('every kind states a silhouette class and a break count',
@@ -192,6 +196,62 @@ check('the answer is bounded and checked: known ids only, one label each, short,
   clean.length === MAX_ITEMS && clean.every((l) => l.id !== 'сосед-1' && l.label.length <= 28)
   && new Set(clean.map((l) => l.id)).size === clean.length, `${clean.length} kept of 16`);
 check('an answer that is not JSON names nothing', parseLabels('двор как двор', yard().objects).length === 0);
+
+// ---- filters: a state of the viewer, expressed as a palette ---------------------------------------
+const { FILTERS, setFilter, tint, saturationOf, lightnessOf } = await import('./src/palette.js');
+const { viewEffect, viewToWorld, SWAY_MAX, makeCamera: mkCam } = await import('./src/render.js');
+const SWATCH = ['#7aa8c9', '#a8783a', '#5a7a5a', '#3a8a3a', '#7a5a9a', '#8a5a3a'];
+const DEPTHS = LAYERS.map((l) => l.id);
+const mean = (xs) => xs.reduce((n, x) => n + x, 0) / xs.length;
+const look = (id, t = 0) => { setFilter(id, t); const out = SWATCH.map(tint); setFilter('sober'); return out; };
+const ladder = (id, t = 0) => {
+  setFilter(id, t);
+  const out = DEPTHS.flatMap((d) => SWATCH.map((c) => forLayer(c, d)));
+  setFilter('sober');
+  return out;
+};
+const soberLook = look('sober');
+check('sober is the identity: the unfiltered yard is unchanged', soberLook.join() === SWATCH.join(), 'no remap');
+check('under every filter every colour is still on the 8-step ladder',
+  Object.keys(FILTERS).every((id) => ladder(id, 1.7).every((hex) => [1, 3, 5].every((i) => onLadder(parseInt(hex.slice(i, i + 2), 16))))),
+  Object.keys(FILTERS).length + ' filters x 30 colours');
+const sat = (id) => mean(look(id).map(saturationOf));
+const lum = (id) => mean(look(id).map(lightnessOf));
+const warmth = (id) => mean(look(id).map((h) => parseInt(h.slice(1, 3), 16) - parseInt(h.slice(5, 7), 16)));
+check('depression: the yard is nearly colourless, and darker', sat('depression') < sat('sober') * 0.35 && lum('depression') < lum('sober'),
+  `sat ${sat('sober').toFixed(2)} → ${sat('depression').toFixed(2)}`);
+check('depression: what colour is left is cold', warmth('depression') < 0, `red-blue ${warmth('depression').toFixed(0)}`);
+check('alcohol: warmer and less saturated than sober', warmth('alcohol') > warmth('sober') && sat('alcohol') < sat('sober'),
+  `red-blue ${warmth('sober').toFixed(0)} → ${warmth('alcohol').toFixed(0)}`);
+check('weed: more saturated than sober', sat('weed') > sat('sober'), `sat ${sat('sober').toFixed(2)} → ${sat('weed').toFixed(2)}`);
+check('weed: the hue drifts with time, and comes back', look('weed', 0).join() !== look('weed', 2.6).join()
+  && look('weed', 0).join() === look('weed', Math.PI / 0.6).join(), 'colour cycling');
+check('only weed moves the palette over time', ['sober', 'alcohol', 'depression'].every((id) => look(id, 0).join() === look(id, 9).join()));
+const depthSat = (id) => { setFilter(id); const out = DEPTHS.map((d) => saturationOf(forLayer('#5a7a5a', d))); setFilter('sober'); return out; };
+const keepsDepth = Object.keys(FILTERS).filter((id) => depthSat(id).every((v, i, a) => i === 0 || v >= a[i - 1] - 1e-9));
+check('atmospheric perspective survives the filters that keep colour', ['sober', 'weed', 'alcohol'].every((id) => keepsDepth.includes(id)),
+  'holds for: ' + keepsDepth.join(' '));
+
+const still = ['sober', 'depression'].every((id) => { const e = viewEffect(id, 3.3); return e.swayX === 0 && e.swayY === 0 && !e.ghost; });
+check('sober and depression leave the view still', still);
+let worst = 0; let ghosts = true;
+for (let t = 0; t < 60; t += 0.05) { const e = viewEffect('alcohol', t); worst = Math.max(worst, Math.abs(e.swayX), Math.abs(e.swayY)); ghosts = ghosts && Boolean(e.ghost); }
+check('alcohol sways, never by more than the stated maximum, and always sees double', worst > 0 && worst <= SWAY_MAX && ghosts, `max ${worst}px of ${SWAY_MAX}`);
+
+// A filter is a look, never a rule: the same throw at the same thing ends the same way under each.
+const outcome = (id) => {
+  const w = buildYard('двор-1'); w.filter = id;
+  const target = w.objects.find((o) => o.kind === 'bin');
+  const cam = mkCam(WORLD_W); const fx = viewEffect(id, 7.1);
+  // where the bin is DRAWN under this filter, then back through the one conversion
+  const at = viewToWorld(target.x + target.w / 2 - cam.x + fx.swayX, target.y + target.h / 2 + fx.swayY, cam, fx);
+  const e = makeEffect(); throwAt(e, w, at.x, at.y);
+  let hit = null; for (let i = 0; i < 400 && !hit; i += 1) { const hs = stepEffect(e, w, 0.016, () => {}); if (hs.length) hit = hs[0]; }
+  return `${hit?.target?.id}:${w.inventory.rocks}:${w.objects.find((o) => o.id === target.id).hits}`;
+};
+const outcomes = Object.keys(FILTERS).map(outcome);
+check('a throw at what the player SEES hits it under every filter, sway included',
+  outcomes.every((o) => o === outcomes[0]) && outcomes[0].startsWith('bin-'), outcomes[0]);
 
 // ---- report -------------------------------------------------------------------------------------
 const pad = (s, n) => String(s).padEnd(n);

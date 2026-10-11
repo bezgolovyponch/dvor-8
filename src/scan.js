@@ -16,9 +16,10 @@
 // residents, and a system that "recognises" people would be a different and worse game.
 
 import { scanObject } from './state.js';
+import { WORLD_H } from './yard.js';
 
 export const SCAN_MS = 900;          // how long one full pass takes
-export const SCAN_BAND = 26;         // how tall the band is, in world units
+export const SCAN_BAND = 13;         // how tall the band is, in world units
 
 // The local recogniser. It recognises what is in front of it, in the order the band moves. A real camera
 // scan will replace `recognise` and leave everything else alone.
@@ -56,7 +57,7 @@ export function startScan(scan, now) {
 export function stepScan(scan, now, onRecognised) {
   if (!scan.running) return null;
   const progress = Math.min(1, (now - scan.startedAt) / scan.ms);
-  scan.y = progress * 360;
+  scan.y = progress * WORLD_H;
   const reached = scan.world.objects.filter((o) => !o.scanned && o.y <= scan.y + SCAN_BAND);
   for (const obj of reached) {
     if (scanObject(scan.world, obj.id)) onRecognised?.(obj);

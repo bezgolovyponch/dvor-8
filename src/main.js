@@ -7,7 +7,8 @@ import { buildYard, yardSummary } from './yard.js';
 import { makeScan, startScan, stepScan, applyLabels } from './scan.js';
 import { makeRecogniser } from './recognise.js';
 import { PROVIDERS } from './llm.js';
-import { makeCamera, stepCamera, render, VIEW_W, VIEW_H } from './render.js';
+import { makeCamera, stepCamera, render, viewEffect, viewToWorld, VIEW_W, VIEW_H } from './render.js';
+import { FILTERS } from './palette.js';
 import { makeEffect, throwAt, stepEffect } from './throw.js';
 import { KINDS } from './state.js';
 
@@ -47,6 +48,8 @@ let camera = makeCamera(640);
 let input = { left: false, right: false };
 let last = performance.now();
 let scanFlash = null;
+let filter = 'sober';
+let clock = 0;
 
 function say(text) {
   const line = document.createElement('div');
@@ -108,6 +111,9 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   stepCamera(camera, input, dt);
+  clock += dt;
+  effect.clock = clock;
+  world.filter = filter;
 
   effect.scanY = scan.running ? scan.y : null;
 
@@ -136,10 +142,10 @@ canvas.addEventListener('pointerdown', (e) => {
   const rect = canvas.getBoundingClientRect();
   const vx = ((e.clientX - rect.left) / rect.width) * VIEW_W;
   const vy = ((e.clientY - rect.top) / rect.height) * VIEW_H;
-  // The click names a place in the VIEW. Throwing resolves against world objects, so the camera offset is
-  // added back here — the one place the view and the world are converted.
-  const wx = vx + camera.x;
-  const t = throwAt(effect, world, wx, vy);
+  // The click names a place in the VIEW. Throwing resolves against world objects, so the camera offset
+  // and the filter's sway are taken back out by the one function that knows both.
+  const at = viewToWorld(vx, vy, camera, viewEffect(filter, clock));
+  const t = throwAt(effect, world, at.x, at.y, camera.x);
   if (!t.thrown) say(t.reason);
   else say('бросок');
   paintHud();
@@ -158,6 +164,29 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   paintHud();
   paintSource();
 });
+
+// Looking along the yard without a keyboard: two buttons that act while they are held.
+for (const [id, side] of [['lookLeft', 'left'], ['lookRight', 'right']]) {
+  const button = document.getElementById(id);
+  const hold = (on) => (e) => { e.preventDefault(); input[side] = on; };
+  button.addEventListener('pointerdown', hold(true));
+  for (const end of ['pointerup', 'pointerleave', 'pointercancel']) button.addEventListener(end, hold(false));
+}
+
+// The filters, built from the palette's own table.
+const filterRow = document.getElementById('filters');
+for (const [id, f] of Object.entries(FILTERS)) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = f.label.toUpperCase();
+  button.className = id === filter ? '' : 'ghost';
+  button.addEventListener('click', () => {
+    filter = id;
+    for (const other of filterRow.children) other.className = other === button ? '' : 'ghost';
+    say(`взгляд: ${f.label}`);
+  });
+  filterRow.append(button);
+}
 
 // The key form: one field per provider, built from the routing table so the two cannot disagree.
 const keyForm = document.getElementById('keyForm');

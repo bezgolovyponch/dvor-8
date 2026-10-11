@@ -13,13 +13,21 @@ model to name what it found — one small request per scan, routed across free t
 
 Open `http://127.0.0.1:4310/`.
 
+**On a phone, same Wi-Fi:** bind to every interface instead and open the computer's address:
+
+    python3 -m http.server 4310 --bind 0.0.0.0
+    ipconfig getifaddr en0        # e.g. 192.168.88.237 → http://192.168.88.237:4310/
+
+This serves the whole folder to everyone on that network for as long as it runs. Stop it with Ctrl-C.
+
 ## Play
 
 | Action | Control |
 |---|---|
-| look along the yard | `←` / `→` or `A` / `D` |
+| look along the yard | `←` / `→`, `A` / `D`, or hold **◀ ▶** |
+| change how you see it | **ТРЕЗВЫЙ · ТРАВА · АЛКОГОЛЬ · ДЕПРЕССИЯ** |
 | scan the yard | **СКАНИРОВАТЬ ДВОР** |
-| throw a rock | click the yard |
+| throw a rock | click or tap the yard |
 | start over | **ЗАНОВО** |
 
 The scan is the opening move: it recognises all 32 objects and swaps each one for its pixel form. Six rocks.
@@ -29,7 +37,7 @@ A bin takes two hits, a bench two, a tree three.
 
     node test.mjs
 
-39 checks: the yard is deterministic and inside its bounds, the scan recognises everything and cannot
+52 checks: the yard is deterministic and inside its bounds, the scan recognises everything and cannot
 double-count, a throw costs a rock and hits what was aimed at, destruction is counted, rocks run out, and
 the look obeys the pinned 2D art standard — five parallax layers at increasing speeds, atmospheric
 perspective from 20% to 100% saturation, every colour on the 8-step ladder. Eleven of them cover the
@@ -51,6 +59,7 @@ a `413` is split, a rejected key is not a cooldown, and with the network down th
     src/throw.js        one rock, one arc, one hit
     src/main.js         the loop and the controls
     standards/          the pinned 2D art standards this look obeys
+    docs/filters.md     the four looks: every decision, its source and its test
     docs/routing.md     the routing sequence, the request and its measured cost
     brief.md            the intake: twelve answered questions, Gate G0 met
     game-skeleton/      the seven files of the game-creation skeleton

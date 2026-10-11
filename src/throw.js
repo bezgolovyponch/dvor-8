@@ -13,9 +13,12 @@ export function makeEffect() {
 }
 
 // A throw starts at the balcony (bottom left of the view) and travels toward a target.
-export function throwAt(effect, world, targetX, targetY) {
+// `fromX` is where the balcony is in the WORLD: the camera's left edge, so the rock leaves the player's hand
+// wherever along the yard they are looking, not from the far end of it.
+export function throwAt(effect, world, targetX, targetY, fromX = 0) {
   if (!spendRock(world)) return { thrown: false, reason: 'камни кончились' };
-  effect.rocks.push({ x: 14, y: 150, vx: (targetX - 14) * 1.6, vy: (targetY - 150) * 1.6, life: 1.2, tx: targetX, ty: targetY });
+  const x0 = fromX + 14;
+  effect.rocks.push({ x: x0, y: 150, vx: (targetX - x0) * 1.6, vy: (targetY - 150) * 1.6, life: 1.2, tx: targetX, ty: targetY });
   return { thrown: true };
 }
 

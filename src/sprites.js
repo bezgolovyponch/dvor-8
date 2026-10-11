@@ -9,16 +9,17 @@
 // first and coloured after, so each KINDS entry states its silhouette class in data and the tests check it.
 
 import { KINDS } from './state.js';
-import { forLayer, shade, INK } from './palette.js';
+import { forLayer, shade, tint, INK } from './palette.js';
 
 // Realistic form: soft gradients, no outline, drawn with the canvas primitives.
 export function drawReal(ctx, obj, x, y) {
   const k = KINDS[obj.kind];
-  const base = { bench: '#7a5a3a', bin: '#4a5a4a', crate: '#8a6a3a', bush: '#3a6a3a', puddle: '#6a8a9a',
+  const raw = { bench: '#7a5a3a', bin: '#4a5a4a', crate: '#8a6a3a', bush: '#3a6a3a', puddle: '#6a8a9a',
     pram: '#5a4a6a', scooter: '#4a4a5a', sign: '#6a6a6a', window: '#2a3a4a', roof: '#6a4a3a', tree: '#4a6a3a', pipe: '#5a5a5a' }[obj.kind] || '#555';
+  const real = tint(raw);
   const g = ctx.createLinearGradient(x, y, x, y + k.h);
-  g.addColorStop(0, base);
-  g.addColorStop(1, shade(base, -0.18));
+  g.addColorStop(0, real);
+  g.addColorStop(1, tint(shade(raw, -0.18)));
   ctx.fillStyle = g;
   ctx.beginPath();
   if (obj.kind === 'bush' || obj.kind === 'tree') {

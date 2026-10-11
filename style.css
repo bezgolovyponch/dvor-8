@@ -42,3 +42,8 @@ button.ghost { background: transparent; color: var(--accent); border: 1px solid 
 .keys label { display: grid; grid-template-columns: 84px 1fr; align-items: center; gap: 8px; margin-top: 6px; color: #7d93a8; }
 .keys input { font-family: var(--pixel); font-size: 11px; padding: 6px; background: #0b1018; color: var(--pale);
   border: 1px solid #2c3a4d; min-width: 0; }
+
+canvas { touch-action: none; }
+.buttons.wrap { flex-wrap: wrap; }
+.buttons.wrap button { flex: 1 1 40%; }
+button.look { flex: 1; font-size: 16px; padding: 12px; touch-action: none; user-select: none; -webkit-user-select: none; }

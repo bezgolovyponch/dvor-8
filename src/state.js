@@ -45,6 +45,7 @@ export function makeWorld(seed = 'двор-1') {
   return {
     seed,
     time: 'day',
+    filter: 'sober',   // how the viewer sees the yard; a look, never a rule (docs/filters.md)
     objects: [],
     inventory: { rocks: 6 },
     scanned: 0,

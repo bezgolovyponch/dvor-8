@@ -58,13 +58,60 @@ function fromHsl([h, s, l]) {
   return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
 }
 
+// ---- filters: a state of the viewer, expressed as a palette ---------------------------------------
+//
+// A filter changes how the yard LOOKS and nothing else. It is done the way the era did whole-screen
+// effects: the picture is not redrawn, the palette it is looked up through is remapped. Every decision
+// below is recorded with its source in docs/filters.md.
+//
+//   sat     multiplies saturation          light   multiplies lightness
+//   toward  a colour the result is mixed toward, and by how much
+//   drift   how far the hue wanders over time (colour cycling), and how fast
+export const FILTERS = {
+  sober:      { label: 'трезвый' },
+  weed:       { label: 'трава',     sat: 1.30, light: 1.04, drift: 0.035, driftRate: 0.6 },
+  alcohol:    { label: 'алкоголь',  sat: 0.75, toward: '#c8843a', mix: 0.18 },
+  depression: { label: 'депрессия', sat: 0.15, light: 0.82, toward: '#3a4a6a', mix: 0.15 },
+};
+
+let current = FILTERS.sober;
+let clock = 0;
+export function setFilter(id, seconds = 0) {
+  current = FILTERS[id] || FILTERS.sober;
+  clock = seconds;
+}
+
+// The filter applied to one colour, as [r, g, b], NOT yet quantised.
+function filtered(rgb) {
+  const f = current;
+  if (f === FILTERS.sober) return rgb;
+  let [h, s, l] = toHsl(rgb);
+  if (f.drift) h = (h + f.drift * Math.sin(clock * f.driftRate) + 1) % 1;
+  s = Math.max(0, Math.min(1, s * (f.sat ?? 1)));
+  l = Math.max(0, Math.min(1, l * (f.light ?? 1)));
+  let out = fromHsl([h, s, l]);
+  if (f.toward) {
+    const to = hexToRgb(f.toward);
+    out = out.map((v, i) => v + (to[i] - v) * f.mix);
+  }
+  return out;
+}
+
+// For the things that are still REAL — not yet scanned, so not on the 8-bit ladder — the filter applies
+// without quantising. A filter is the viewer's state; it does not wait for the scan.
+export const tint = (hex) => rgbToHex(filtered(hexToRgb(hex)));
+export const saturationOf = (hex) => toHsl(hexToRgb(hex))[1];
+export const lightnessOf = (hex) => toHsl(hexToRgb(hex))[2];
+
 // Pull a colour into its layer's saturation band and quantise it. This is the one function every draw call
 // goes through, so the atmospheric perspective cannot be forgotten at a call site.
 export function forLayer(hex, layerId) {
   const band = layerById(layerId).sat;
   let [h, s, l] = toHsl(hexToRgb(hex));
   s = Math.max(band[0], Math.min(band[1], s));
-  const rgb = fromHsl([h, s, l]).map(quantise);
+  // The band first, the filter second, the ladder last: a filter may leave the band — that is what it is
+  // for — but nothing may leave the ladder.
+  const rgb = filtered(fromHsl([h, s, l])).map(quantise);
   return rgbToHex(rgb);
 }
 
