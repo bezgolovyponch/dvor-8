@@ -67,9 +67,11 @@ is fun.**
     tools/                  a dependency-free headless-Chrome driver and the play-through check
     docs/concept.md         the concept, the "nothing in vain" rule, what went wrong before — read first
     docs/style.md           every look-and-feel decision, its source, its test
+    docs/feasibility.md     similar games, what the evidence says, and whether to go on
     brief.md, game-skeleton/, standards/   the intake and earlier material, kept for the record
 
-Earlier builds are tags: `mvp-1-miami` (neon heat-map, tone patches, model-naming cascade).
+**This build is `v0.2.0`** (also tagged `mvp-2-real-objects`). The earlier build is `mvp-1-miami` (neon
+heat-map, tone patches, model-naming cascade).
 
 ## What this is not yet
 
