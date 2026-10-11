@@ -6,10 +6,11 @@
 // Two implementations, chosen by what is available:
 //
 //   local    the scan recognises everything on its own, in order, a band at a time. No network.
-//   routed   an LLM is asked what it recognises, using the routing and request-analysis code carried over
-//            from the previous project (see docs/routing.md). If no key is present, or the model fails,
-//            the scan falls back to local WITHOUT SAYING IT FAILED, because the game must be playable
-//            offline — but `source` records which one ran, so the interface can be honest about it.
+//   routed   one bounded model call names what the local pass found (src/recognise.js, docs/routing.md).
+//            It runs BESIDE the local pass, never instead of it: with no key, or when every lane fails, the
+//            yard is still fully recognised and the game is playable offline. `source` starts as 'local'
+//            and becomes 'routed' only when a model's labels have actually been applied — it records what
+//            happened, not what was attempted.
 //
 // The scan never decides anything about a person. It names objects. That line is deliberate: DVOR-8 has
 // residents, and a system that "recognises" people would be a different and worse game.
@@ -29,15 +30,27 @@ export function makeScan(world, options = {}) {
     startedAt: 0,
     ms: options.ms || SCAN_MS,
     source: null,
-    recognise: options.recognise || null,   // async (obj) => boolean; null means recognise everything
   };
+}
+
+// The model's names for things, applied to the world. Returns the objects that were renamed.
+export function applyLabels(scan, labels) {
+  const renamed = [];
+  for (const { id, label } of labels || []) {
+    const obj = scan.world.objects.find((o) => o.id === id);
+    if (!obj || obj.gone) continue;
+    obj.label = label;
+    renamed.push(obj);
+  }
+  if (renamed.length) scan.source = 'routed';
+  return renamed;
 }
 
 export function startScan(scan, now) {
   scan.running = true;
   scan.y = 0;
   scan.startedAt = now;
-  scan.source = scan.recognise ? 'routed' : 'local';
+  scan.source = 'local';
 }
 
 export function stepScan(scan, now, onRecognised) {

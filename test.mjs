@@ -8,6 +8,9 @@ import { makeScan, startScan, stepScan, SCAN_MS } from './src/scan.js';
 import { makeEffect, throwAt, stepEffect } from './src/throw.js';
 import { KINDS, LAYERS, hitObject, spendRock } from './src/state.js';
 import { forLayer, onLadder, shade } from './src/palette.js';
+import { applyLabels } from './src/scan.js';
+import { makeRecogniser, buildMessages, scanCost, laneAffords, parseLabels, MAX_ITEMS } from './src/recognise.js';
+import { PROVIDERS } from './src/llm.js';
 
 let pass = 0, fail = 0;
 const rows = [];
@@ -111,6 +114,84 @@ check('every colour is on the 8-step ladder', (() => {
 check('a shade step stays on the ladder too',
   [shade('#3a7a5a', 0.2), shade('#3a7a5a', -0.2)].every((h) => h.replace('#', '').match(/../g).map((v) => parseInt(v, 16)).every(onLadder)),
   'shading cannot escape the palette');
+
+// ---- the routed recogniser: one bounded call, down the free-tier cascade ---------------------------
+// The network is stubbed with the refusals the providers actually send. No provider is called from here.
+const calls = [];
+const sse = (text) => new Response(
+  `data: ${JSON.stringify({ model: 'stub-model', choices: [{ delta: { content: text }, finish_reason: 'stop' }] })}\n\ndata: [DONE]\n\n`,
+  { status: 200 });
+const refuse = (status, headers = {}) => new Response(JSON.stringify({ error: { message: `stub ${status}` } }), { status, headers });
+const laneOf = (url) => Object.keys(PROVIDERS).find((id) => PROVIDERS[id].url === url);
+const stub = (answer) => {
+  calls.length = 0;
+  globalThis.fetch = async (url, init) => {
+    const lane = laneOf(url);
+    const sent = JSON.parse(JSON.parse(init.body).messages[1].content).length;
+    calls.push({ lane, sent });
+    return answer(lane, sent, calls.length);
+  };
+};
+const good = JSON.stringify({ items: [{ id: 'bin-1', label: 'ржавый бак' }, { id: 'bench-1', label: 'лавка у подъезда' }] });
+
+const yard = () => buildYard('двор-1');
+const full = buildMessages(yard().objects);
+const cost = scanCost(full);
+check('one scan request fits a third of EVERY lane\'s minute, the smallest included',
+  Object.values(PROVIDERS).every((c) => laneAffords(c, cost)), `${cost} tok, groq ${PROVIDERS.groq.tokensPerMinute}/3`);
+
+stub(() => { throw new Error('must not be called'); });
+check('with no key there is no recogniser and no request', makeRecogniser({}) === null && calls.length === 0);
+
+stub(() => sse(good));
+let rw = yard();
+let r = await makeRecogniser({ gemini: 'k'.repeat(30) }).recognise(rw);
+check('one key, one scan, exactly ONE request', r.source === 'routed' && calls.length === 1, `${calls.length} call via ${r.lane}`);
+const rs = makeScan(rw); startScan(rs, 0);
+check('the source is local until labels are applied, then routed',
+  rs.source === 'local' && applyLabels(rs, r.labels).length === 2 && rs.source === 'routed'
+  && rw.objects.find((o) => o.id === 'bin-1').label === 'ржавый бак', rs.source);
+
+stub((lane) => (lane === 'cerebras' ? refuse(429, { 'retry-after': '7' }) : sse(good)));
+const two = makeRecogniser({ cerebras: 'c'.repeat(30), groq: 'g'.repeat(30) });
+r = await two.recognise(yard());
+check('a 429 cools the lane for as long as the provider says and the NEXT lane serves',
+  r.source === 'routed' && r.lane === 'groq' && two.router.cooldownSeconds('cerebras') === 7,
+  `${calls.map((c) => c.lane).join(' → ')}, cool ${two.router.cooldownSeconds('cerebras')}s`);
+const limited = calls.filter((c) => c.lane === 'cerebras').length;
+check('a 429 is not retried inside the scan', limited === 1, `${limited} request to the limited lane`);
+calls.length = 0;
+r = await two.recognise(yard());
+check('the next scan waits the cooldown out: the cooled lane is not asked',
+  r.lane === 'groq' && calls.length === 1 && calls[0].lane === 'groq', calls.map((c) => c.lane).join(','));
+
+stub((lane, sent) => (sent > 16 ? refuse(413) : sse(good)));
+r = await makeRecogniser({ groq: 'g'.repeat(30) }).recognise(yard());
+check('a 413 is SPLIT, not retried at the same size',
+  r.source === 'routed' && calls.length === 2 && calls[1].sent < calls[0].sent, calls.map((c) => c.sent).join(' → ') + ' objects');
+
+stub((lane) => (lane === 'gemini' ? refuse(401) : sse(good)));
+const auth = makeRecogniser({ gemini: 'bad'.repeat(10), mistral: 'm'.repeat(30) });
+r = await auth.recognise(yard());
+check('a rejected key is not a rate limit: no cooldown, the next lane serves',
+  r.lane === 'mistral' && auth.router.cooldownSeconds('gemini') === 0, `gemini cool ${auth.router.cooldownSeconds('gemini')}s`);
+
+stub(() => { throw new TypeError('network down'); });
+rw = yard();
+r = await makeRecogniser({ gemini: 'k'.repeat(30), groq: 'g'.repeat(30) }).recognise(rw);
+const offline = makeScan(rw); startScan(offline, 0); stepScan(offline, SCAN_MS + 1, () => {});
+check('with the network down the scan is local and the yard is still fully recognised',
+  r.source === 'local' && calls.length === 2 && rw.objects.every((o) => o.scanned) && offline.source === 'local',
+  `${calls.length} lanes tried, ${rw.scanned} recognised`);
+
+const many = Array.from({ length: 12 }, (_, i) => ({ id: yard().objects[i].id, label: 'вещь' }));
+const dirty = JSON.stringify({ items: [{ id: 'сосед-1', label: 'сосед' }, { id: 'bin-1', label: 'x'.repeat(60) },
+  { id: 'bin-1', label: 'бак' }, { id: 'bin-1', label: 'ещё бак' }, ...many] });
+const clean = parseLabels(dirty, yard().objects);
+check('the answer is bounded and checked: known ids only, one label each, short, at most eight',
+  clean.length === MAX_ITEMS && clean.every((l) => l.id !== 'сосед-1' && l.label.length <= 28)
+  && new Set(clean.map((l) => l.id)).size === clean.length, `${clean.length} kept of 16`);
+check('an answer that is not JSON names nothing', parseLabels('двор как двор', yard().objects).length === 0);
 
 // ---- report -------------------------------------------------------------------------------------
 const pad = (s, n) => String(s).padEnd(n);

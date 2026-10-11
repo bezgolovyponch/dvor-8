@@ -31,24 +31,41 @@ different and worse product, and the `scan.js` interface only ever returns objec
 One call per scan, not one per object:
 
 ```
-system:  You name the objects visible in a low-resolution frame of a courtyard, seen from above.
-         Answer with a JSON array of at most 8 items. Each item is {"kind": "<one of the known kinds>",
-         "label": "<what a person would call it>", "x": <0-100>, "y": <0-100>}.
-         If you cannot tell what something is, leave it out. Do not guess a person's identity.
-user:    <the local recogniser's list, plus the frame's dominant colours>
+system:  You look at an ordinary yard from a balcony. You are given a list of objects: id, kind, position.
+         Choose at most 8 and name each the way a resident would, two or three words.
+         Answer only JSON: {"items":[{"id":"<an id from the list>","label":"<name>"}]}.
+         Use only ids from the list. Do not name or describe people.
+user:    <the local pass's list: id, kind, x, y>
 ```
 
-Bounded by construction: at most eight items, each with a short label, so the answer fits any free tier's
-per-minute allowance and the request is small enough to be one call. The numbers come from the previous
-project's `logBudget`, which subtracts the instructions, the answer and a margin from the lane's allowance.
+The answer is addressed by `id` rather than by position, so it can be checked: an id that is not in the
+list is dropped, as is a second label for the same id, a label over 28 characters, and anything past the
+eighth item. Measured for the 32-object yard: **1,527 tokens** per scan (input at 2 characters per token,
+plus 400 for the answer and a 200 margin). That is inside a third of every lane's minute, Groq's 8,000
+included, and a test asserts it.
 
-## What is NOT carried over
+## The routing sequence — `src/recognise.js`
 
-The previous project's five-provider cascade, its per-minute spend tracking and its chunking are **not
-included in this MVP**. `src/scan.js` has the seam where the routed recogniser plugs in — `makeScan` takes
-an async `recognise` function and records `source` as `'routed'` or `'local'` — and that is deliberate: the
-seam exists, the implementation does not, because shipping a routing layer before the game has a
-recogniser to route would be building the second floor first.
+| Step | Rule | Where it came from |
+|---|---|---|
+| size | cost the request in tokens before sending; skip a lane that cannot afford it in a third of its minute | per-minute ≠ per-request ceiling |
+| cascade | lanes in the carried-over order, first ready lane serves | `createRouter` |
+| `413` | halve the object list, gameplay layer kept first, ask the same lane again | split, do not retry |
+| `429` | cooldown for the provider's `Retry-After` (30 s when absent), try the next lane; the cooled lane is not asked until it clears, across scans | wait, do not rotate back |
+| `401` / `403` | no cooldown, next lane; retired after two | a rejected key is not a rate limit |
+| deadline | 12 s for the whole scan, then the scan is `local` | a game does not wait a minute for a label |
 
-**If you port it:** take `llm.js` and the fourteen mirror tests from
-`github.com/bezgolovyponch/partner-sim`, which are the checked version. Do not rewrite them from this file.
+## What is carried over, and what is not
+
+`src/llm.js` is the previous project's `llm.js`, copied, with one marked change: `createRouter` accepts a
+`costOf`, because a scan request is far smaller than the analysis that router was sized for and the
+default cost declares Groq unable to carry anything. The provider table, the per-minute spend tracking,
+`Retry-After` parsing, cooldown rules and key cleaning are unchanged.
+
+**Not carried over:** chunking with a sliding window (the scan's split is a plain halving), model
+discovery through `/models` (the configured default name is used, with the built-in 404 walk), and the
+previous project's own tests, which are not in its repository as a runnable file. The eleven routing
+checks in `test.mjs` are written for this request and stub the network with the refusals the providers send.
+
+**Not verified:** no provider has been called from this project. Every routing check runs against a
+stubbed `fetch`. The first live scan with a real key is the first real evidence.

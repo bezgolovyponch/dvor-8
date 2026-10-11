@@ -4,7 +4,8 @@ You are on a balcony. The yard below is ordinary. You scan it, and everything th
 replaced by its 8-bit copy — then you can knock things over with a rock. There are no people to hurt and
 nothing is scored by how much you break.
 
-**Web first.** No build step, no dependencies, no key needed.
+**Web first.** No build step, no dependencies, no key needed. With a free model key the scan also asks a
+model to name what it found — one small request per scan, routed across free tiers.
 
 ## Run it
 
@@ -28,10 +29,12 @@ A bin takes two hits, a bench two, a tree three.
 
     node test.mjs
 
-27 checks: the yard is deterministic and inside its bounds, the scan recognises everything and cannot
+39 checks: the yard is deterministic and inside its bounds, the scan recognises everything and cannot
 double-count, a throw costs a rock and hits what was aimed at, destruction is counted, rocks run out, and
 the look obeys the pinned 2D art standard — five parallax layers at increasing speeds, atmospheric
-perspective from 20% to 100% saturation, every colour on the 8-step ladder.
+perspective from 20% to 100% saturation, every colour on the 8-step ladder. Eleven of them cover the
+routed scan against a stubbed network: one request per scan, a `429` cools the lane and the next one serves,
+a `413` is split, a rejected key is not a cooldown, and with the network down the yard is still recognised.
 
 ## Structure
 
@@ -42,11 +45,13 @@ perspective from 20% to 100% saturation, every colour on the 8-step ladder.
     src/palette.js      the 8-bit palette, with the saturation band enforced per depth
     src/sprites.js      each object drawn twice: real, and its 8-bit copy
     src/render.js       five parallax layers, the camera, the balcony rail
-    src/scan.js         the scan, and the seam where an LLM recogniser plugs in
+    src/scan.js         the scan; `source` says whether a model's names were applied
+    src/recognise.js    one bounded model call per scan, down the free-tier cascade
+    src/llm.js          providers, limits and the router, carried over from partner-sim
     src/throw.js        one rock, one arc, one hit
     src/main.js         the loop and the controls
     standards/          the pinned 2D art standards this look obeys
-    docs/routing.md     what the previous project learned about free-tier LLM routing
+    docs/routing.md     the routing sequence, the request and its measured cost
     brief.md            the intake: twelve answered questions, Gate G0 met
     game-skeleton/      the seven files of the game-creation skeleton
 

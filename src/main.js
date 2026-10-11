@@ -4,7 +4,9 @@
 // render.js decides what it looks like. This file wires them and reads the keyboard.
 
 import { buildYard, yardSummary } from './yard.js';
-import { makeScan, startScan, stepScan } from './scan.js';
+import { makeScan, startScan, stepScan, applyLabels } from './scan.js';
+import { makeRecogniser } from './recognise.js';
+import { PROVIDERS } from './llm.js';
 import { makeCamera, stepCamera, render, VIEW_W, VIEW_H } from './render.js';
 import { makeEffect, throwAt, stepEffect } from './throw.js';
 import { KINDS } from './state.js';
@@ -20,7 +22,23 @@ const hud = {
   rocks: document.getElementById('hudRocks'),
   hint: document.getElementById('hudHint'),
   log: document.getElementById('log'),
+  source: document.getElementById('hudSource'),
 };
+
+// Keys live in this browser only and are sent to nobody but the provider they belong to.
+const KEYS_AT = 'dvor8.keys';
+function readKeys() {
+  try { return JSON.parse(localStorage.getItem(KEYS_AT) || '{}') || {}; } catch { return {}; }
+}
+let keys = readKeys();
+let recogniser = makeRecogniser(keys);
+const nameOf = (obj) => obj.label || KINDS[obj.kind]?.label || obj.kind;
+
+function paintSource(text) {
+  hud.source.textContent = text || (recogniser
+    ? `ключи: ${recogniser.router.providers.join(', ')} · один запрос на скан`
+    : 'без ключа: распознаёт сам двор, сеть не нужна');
+}
 
 let world = buildYard('двор-1');
 let scan = makeScan(world);
@@ -58,8 +76,24 @@ function runScan() {
   startScan(scan, performance.now());
   scanFlash = 1;
   say('сканирую…');
+  // One model call per scan, beside the local pass. The world it was asked about is remembered, so an
+  // answer that arrives after «ЗАНОВО» is dropped instead of naming things in a different yard.
+  if (recogniser) {
+    const asked = scan;
+    paintSource('спрашиваю модель…');
+    recogniser.recognise(world).then((r) => {
+      if (asked !== scan) return;
+      if (r.source === 'routed') {
+        for (const obj of applyLabels(scan, r.labels)) say(`уточнено: ${KINDS[obj.kind]?.label} → «${obj.label}»`);
+        paintSource(`распознавание: ${r.lane} · ${r.model} · ≈${r.tokens} токенов`);
+      } else {
+        const trail = r.tried.map((t) => `${t.lane} ${t.status || 'нет связи'}`).join(', ');
+        paintSource(`распознавание: локальное (${trail || 'все сервисы на паузе'})`);
+      }
+    });
+  }
   scanTimer = setInterval(() => {
-    const r = stepScan(scan, performance.now(), (obj) => say(`распознано: ${KINDS[obj.kind]?.label || obj.kind}`));
+    const r = stepScan(scan, performance.now(), (obj) => say(`распознано: ${nameOf(obj)}`));
     if (r && r.done) {
       clearInterval(scanTimer);
       scanTimer = null;
@@ -79,8 +113,8 @@ function frame(now) {
 
   const hits = stepEffect(effect, world, dt, () => {});
   for (const h of hits) {
-    if (h.hit && h.broke) { say(`разбито: ${KINDS[h.target.kind]?.label || h.target.kind}`); paintHud(); }
-    else if (h.hit) say(`попадание: ${KINDS[h.target.kind]?.label || h.target.kind}`);
+    if (h.hit && h.broke) { say(`разбито: ${nameOf(h.target)}`); paintHud(); }
+    else if (h.hit) say(`попадание: ${nameOf(h.target)}`);
   }
 
   if (scanFlash) { scanFlash -= dt; if (scanFlash <= 0) scanFlash = null; }
@@ -122,7 +156,29 @@ document.getElementById('resetBtn').addEventListener('click', () => {
   hud.log.replaceChildren();
   say('двор заново');
   paintHud();
+  paintSource();
 });
+
+// The key form: one field per provider, built from the routing table so the two cannot disagree.
+const keyForm = document.getElementById('keyForm');
+for (const [id, config] of Object.entries(PROVIDERS)) {
+  const row = document.createElement('label');
+  row.textContent = id;
+  const field = document.createElement('input');
+  field.type = 'password';
+  field.autocomplete = 'off';
+  field.placeholder = config.hint.split('.')[0];
+  field.value = keys[id] || '';
+  field.addEventListener('change', () => {
+    keys = { ...keys, [id]: field.value.trim() };
+    try { localStorage.setItem(KEYS_AT, JSON.stringify(keys)); } catch { /* private window: the key lasts for this page */ }
+    recogniser = makeRecogniser(keys);
+    paintSource();
+  });
+  row.append(field);
+  keyForm.append(row);
+}
+paintSource();
 
 paintHud();
 requestAnimationFrame(frame);
