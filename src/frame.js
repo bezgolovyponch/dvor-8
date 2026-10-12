@@ -46,7 +46,7 @@
 // the note under the yard. It misses windows in shadow and behind branches; it can take a dark doorway or a
 // sign for a window. Both are stated, not hidden.
 
-import { MATERIALS } from './materials.js';
+import { SKY } from './surfaces.js';
 import { GLASS_HP } from './glass.js';
 
 export const WINDOW = 'window';
@@ -60,7 +60,6 @@ export const LOWEST = 0.72;        // of the picture's height: under this a dark
 
 // Only the sky is trusted from the material map. Its `earth` is everything under the horizon, walls included
 // (measured on the drawn yard: 38 208 of 49 152 pixels), so it cannot say that a patch lies on the ground.
-const SKY = MATERIALS.indexOf('sky');
 
 /**
  * Find the windows.

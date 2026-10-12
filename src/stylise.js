@@ -23,10 +23,8 @@
 // that size from the image, so a tall phone photograph makes a tall level.
 
 import { render as renderFlat, RAMPS, STEPS, outlineOf, voidOf } from './flat.js';
-import { MATERIALS } from './materials.js';
+import { SKY, OTHER } from './surfaces.js';
 
-const SKY = MATERIALS.indexOf('sky');
-const OTHER = MATERIALS.length - 1;
 
 /**
  * The scene, from the photograph.
@@ -65,7 +63,7 @@ export function styliseFlat(rgba, w, h, opts = {}) {
     // `smooth` is what the window finder reads for its colour checks. The flat route has no smoothed
     // photographic layer and does not need one: its colours are already flat.
     smooth: rgba,
-    surfaces: { what, horizon: 0, skyShare: 0, classes: MATERIALS },
+    surfaces: { what, horizon: 0, skyShare: 0 },
     regions: st.regions,
     outlinePixels: st.outlinePixels,
     style: 'flat',

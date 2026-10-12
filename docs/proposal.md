@@ -54,8 +54,14 @@ user study with expert pixel artists. The bricks above are the verified replacem
 
 ## 3. I built it, and here is what actually happened
 
-`tools/brick-test.py` assembles the bricks and runs on the real photographs. The results are mixed and the
-failures are as informative as the successes.
+> **Outcome, recorded later.** Option 1 was built and did not fulfil the request: it finds structure lines but
+> cannot name a surface, so it cannot say "window" or "wall". The route that SHIPPED is in src/flat.js — flat
+> regions from a fixed palette with drawn outlines — and it takes the opposite approach, giving up on naming
+> surfaces and instead making each region one flat colour. See docs/style.md D2/D3 and src/flat.js.
+
+`tools/brick-test.py` assembled the bricks and ran them on the real photographs. **That tool has since been
+deleted**, because the geometric labelling this section reports on was rejected: it is kept here as the record
+of why. The results were mixed and the failures were the informative part.
 
 **Photo b (the courtyard — stone building, cars, bench, trees, sky):**
 

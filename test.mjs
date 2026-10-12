@@ -32,7 +32,7 @@ import { findWindows, addWindows, takesPaint, WINDOW, WINDOWS_MAX, SMALLEST } fr
 import { makeWindow, hitWindow, shards, GLASS_HP, STAGES } from './src/glass.js';
 import { makeDecals, stamp, pixelsOf, lay, clear as clearDecals, PAINTS, DECAL_MAX, COVER } from './src/decal.js';
 import { spawn, fling, PRESETS, MAX_LIVE } from './src/parts.js';
-import { MATERIALS } from './src/materials.js';
+import { SKY as SKY_SURFACE, SURFACES } from './src/surfaces.js';
 import { solid } from './src/walk.js';
 import { readFileSync, readdirSync } from 'node:fs';
 
@@ -882,7 +882,7 @@ section('windows and paint: glass breaks, colour stays');
   // a window is a dark opening in a brighter wall — contrast the flat route deliberately paints away. On the
   // painted yard the wall and its panes both come out at the same flat tone and only 1 of 15 was found.
   const found = findWindows({ rgba: DEMO.rgba, w: W, h: H, what: st.surfaces.what, owner: seg.owner });
-  const SKY = MATERIALS.indexOf('sky');
+  const SKY = SKY_SURFACE;
   check('the drawn yard has dark windows in a bright wall, and they are found', found.length >= 3 && found.length <= WINDOWS_MAX, `${found.length} found`);
   check('a window is big enough for a finger and none overlaps another', found.every((f) => f.w >= SMALLEST && f.h >= SMALLEST)
     && found.every((a, i) => found.every((b, j) => i === j || a.x >= b.x + b.w || b.x >= a.x + a.w || a.y >= b.y + b.h || b.y >= a.y + a.h)));
