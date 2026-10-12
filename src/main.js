@@ -586,6 +586,15 @@ const shoot = (e) => {
 };
 $('shot').addEventListener('change', shoot);
 $('shot2').addEventListener('change', shoot);
+// The gallery pickers. These inputs deliberately carry NO `capture` attribute: with it, a phone opens the
+// camera directly and the photo library is unreachable, which is why there was no way to add an existing
+// picture. Same handler — the game does not care where the bytes came from.
+for (const id of ['pic', 'pic2']) $(id).addEventListener('change', shoot);
+$('picIn').addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (file) addPhoto(file).catch((error) => note(`снимок не добавился: ${error.message}`));
+});
 for (const id of ['demoBtn', 'demoBtn2']) $(id).addEventListener('click', () => { unlock(); fromDemo(); });
 $('againBtn').addEventListener('click', begin);
 $('restartBtn').addEventListener('click', () => { if (yard && (stage === 'play' || stage === 'done' || stage === 'scan')) begin(); });

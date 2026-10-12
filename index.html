@@ -31,6 +31,9 @@
       <label class="btn">СНЯТЬ ДВОР
         <input id="shot" type="file" accept="image/*" capture="environment" hidden>
       </label>
+      <label class="btn alt">ИЗ ГАЛЕРЕИ
+        <input id="pic" type="file" accept="image/*" hidden>
+      </label>
       <button id="demoBtn" type="button" class="btn alt">ДЕМО-ДВОР</button>
       <p class="fine">Снимок не покидает телефон: вещи на нём ищет сам телефон. Над двором летают заголовки дня из Википедии — за ними игра раз в день ходит в сеть; кнопка НОВОСТИ это выключает.</p>
       <p id="keep" class="best"></p>
@@ -50,6 +53,9 @@
       <p class="fine">Узнаю машины, грузовики, автобусы, мотоциклы, велосипеды, скамейки, стулья, цветы в горшках. Людей и животных со снимка не трогаю никогда. Сними так, чтобы что-то из этого было видно целиком.</p>
       <label class="btn">СНЯТЬ ЕЩЁ РАЗ
         <input id="shot2" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn alt">ИЗ ГАЛЕРЕИ
+        <input id="pic2" type="file" accept="image/*" hidden>
       </label>
       <button id="demoBtn2" type="button" class="btn alt">ДЕМО-ДВОР</button>
     </section>
@@ -79,8 +85,11 @@
   </div>
   <div class="row">
     <button id="viewBtn" type="button" class="btn small">ВО ДВОР</button>
-    <label class="btn small alt">+ СНИМОК
+    <label class="btn small alt">СНЯТЬ
       <input id="more" type="file" accept="image/*" capture="environment" hidden>
+    </label>
+    <label class="btn small alt">ГАЛЕРЕЯ
+      <input id="picIn" type="file" accept="image/*" hidden>
     </label>
     <button id="newsBtn" type="button" class="btn small on" aria-pressed="true">НОВОСТИ</button>
   </div>

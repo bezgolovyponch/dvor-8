@@ -286,6 +286,31 @@ section('down in the yard: walking, jumping, stomping');
 w = yard();
 const TOP = bandTop(w);
 
+// ---- there must be a way to use a photo you ALREADY have ------------------------------------------------
+// `capture="environment"` makes a phone open the camera immediately and hides the photo library. Every
+// photo input carried it, so the only way into the game was to take a new picture on the spot — there was
+// no gallery route at all. The camera and the gallery are now separate inputs, and the pairing is what
+// keeps it that way: an input WITH capture is the camera, an input WITHOUT it is the library.
+{
+  const page = readFileSync(new URL('./index.html', import.meta.url), 'utf8');
+  const inputs = [...page.matchAll(/<input id="([a-zA-Z0-9]+)"[^>]*type="file"[^>]*>/g)]
+    .map((m) => ({ id: m[1], capture: /capture=/.test(m[0]) }));
+  const cam = inputs.filter((i) => i.capture).map((i) => i.id);
+  const gal = inputs.filter((i) => !i.capture).map((i) => i.id);
+  check('every file input is either a camera input or a gallery input, never both', inputs.length >= 6,
+    `${inputs.length} inputs: camera ${cam.join(',')} · gallery ${gal.join(',')}`);
+  check('there is a gallery input for the title, the empty card AND the play controls',
+    gal.length >= 3 && cam.length >= 3, `${gal.length} gallery, ${cam.length} camera`);
+  check('each gallery input is reachable by its OWN labelled button', (() => {
+    const labels = [...page.matchAll(/<label class="btn[^"]*">([^<]*?)\s*<input id="([a-zA-Z0-9]+)"/g)];
+    const forGallery = labels.filter((m) => gal.includes(m[2]));
+    return forGallery.length === gal.length && forGallery.every((m) => /ГАЛЕРЕИ|ГАЛЕРЕЯ/.test(m[1]));
+  })());
+  const js = readFileSync(new URL('./src/main.js', import.meta.url), 'utf8');
+  check('every gallery input is wired to the same handler as the camera ones',
+    gal.every((id) => js.includes(`'${id}'`)), gal.join(', '));
+}
+
 // ---- a floating word must stay on screen ---------------------------------------------------------------
 // The clamp in main.js depends on the pop animation's maximum scale, and the two live in different files.
 // This holds them together: if style.css ever opens wider, the clamp is wrong and this fails rather than the
