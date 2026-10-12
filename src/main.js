@@ -190,7 +190,10 @@ function setSize(w, h) {
 // picture-pixels to one of the game's, where a window still has a shape; a drawn yard has none and is
 // searched at its own size.
 function withWindows(seg, st, w, h, big) {
-  const where = { what: st.surfaces.what, owner: seg.owner, gw: w, gh: h };
+  // `st.surfaces` may be null — the flat route does not classify materials — so this reads it defensively.
+  // It did not, and `build()` threw on `st.surfaces.what`, which meant the demo yard never built at all and
+  // the picture never appeared. A null-safe read plus the regression test below is the fix.
+  const where = { what: st.surfaces ? st.surfaces.what : null, owner: seg.owner, gw: w, gh: h };
   const found = big ? findWindows({ rgba: big.data, w: big.w, h: big.h, unit: big.w / w, ...where }) : findWindows({ rgba: st.smooth, w, h, ...where });
   addWindows(found, seg.regions, seg.owner, w);
   return seg;
@@ -461,7 +464,7 @@ function glassAnswers(t, pane, hx, hy) {
   const W = world.w;
   for (const p of t.pixels) {
     const x = p % W, y = (p / W) | 0;
-    if (x > t.x && x < t.x + t.w - 1 && y > t.y && y < t.y + t.h - 1) world.idx[p] = VOID;
+    if (x > t.x && x < t.x + t.w - 1 && y > t.y && y < t.y + t.h - 1) world.idx[p] = world.palette.length - 1;
   }
   for (const cell of pane.cells) {
     const dx = cell.seed.x - hx, dy = cell.seed.y - hy, far = Math.hypot(dx, dy) || 1, v = 38 + rnd() * 46;

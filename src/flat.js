@@ -45,6 +45,9 @@ export const RAMPS = [
 ];
 export const STEPS = 4;
 export const OUTLINE = [11, 0, 24];
+// The structural entries are always the LAST TWO in a palette, whichever route built it.
+export const outlineOf = (palette) => palette[palette.length - 2];
+export const voidOf = (palette) => palette[palette.length - 1];
 
 const hsl2rgb = (h, s, l) => {
   const hh = (((h % 360) + 360) % 360) / 360;
@@ -258,7 +261,12 @@ export function render(rgba, w, h, { target = 200, k = 300, tone = 110 } = {}) {
   const table = tones();
   const palette = [];
   for (const ramp of table) for (const c of ramp) palette.push(c);
-  palette.push(OUTLINE, [4, 0, 10]);          // the outline and the void, at fixed indices
+  // THE OUTLINE AND THE VOID ARE APPENDED EXACTLY ONCE, here, and their positions are the LAST TWO entries.
+  // They are deliberately not at the imported OUTLINE/VOID constants: those are COLOURS and COLOURS+1, which
+  // are the positions for the median-cut route's 28-colour table. A flat palette has 24 colours, so its
+  // structural entries are 24 and 25, and any code that looks them up by the constant indexes past the end.
+  // Everything that needs them asks the palette instead — `outlineOf` and `voidOf` below.
+  palette.push(OUTLINE, [4, 0, 10]);
 
   const { lab, count } = segment(rgba, w, h, k);
   const merged = merge(rgba, lab, count, w, h, target, null, tone);

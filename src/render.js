@@ -369,7 +369,8 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   buf.ctx.putImageData(buf.image, 0, 0);
 
   const ox = motion.x + shake.x, oy = motion.y + shake.y;
-  ctx.fillStyle = css(pal[OUTLINE]);
+  // the outline colour is the palette's second-to-last entry, not a constant: a flat palette is shorter
+  ctx.fillStyle = css(pal[pal.length - 2]);
   ctx.fillRect(0, 0, w, h);
   ctx.drawImage(buf.canvas, ox, oy);
   if (motion.ghost && scanY === null) {

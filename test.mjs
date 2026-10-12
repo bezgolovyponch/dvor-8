@@ -301,9 +301,26 @@ check('more street means the yard is not finished', w.done && extend(w, grow(HOM
 const other = stylise(DEMO.rgba.map((v, i) => (i % 4 === 0 ? 255 - v : v)), W, H);
 const second = yardFrom({ w: W, h: H, idx: other.idx, palette: other.palette, ...toRegions(DEMO.dets, DEMO.rgba, W, H) });
 const before2 = w.palette.length;
-check('an added photograph keeps its OWN colours: the table grows by one block and its pixels point into it', extend(w, second) && w.palette.length === before2 + COLOURS
-  && (() => { const x0 = w.w - W; let ok = true; for (let y = 0; y < H; y += 7) for (let x = 0; x < W; x += 5) { const v = w.idx[y * w.w + x0 + x]; if (!(v === OUTLINE || v === VOID || (v >= baseOf(1) && v < baseOf(1) + COLOURS))) ok = false; } return ok; })()
-  && [...w.scorch].every((v, i) => i === OUTLINE || i === VOID || (v >= (i < SIZE ? 0 : baseOf(1)) && v < (i < SIZE ? COLOURS : baseOf(1) + COLOURS))), `${w.palette.length} colours`);
+// The property: an added photograph's pixels show ITS OWN colours. This used to be tested with the constant
+// COLOURS as the block width, which is how many colours the median-cut route cuts from a photograph and not a
+// property of a palette at all — the flat route's table is a different size, and a test that assumes the
+// constant cannot tell a correct palette from a misaligned one.
+check('an added photograph keeps its OWN colours: the table grows by its own block and its pixels point into it',
+  extend(w, second) && w.palette.length === before2 + (second.palette.length - 2) && (() => {
+    const x0 = w.w - W;
+    const key = (c) => c.join();
+    const mine = new Set(second.palette.slice(0, second.palette.length - 2).map(key));
+    const were = new Set(st.palette.slice(0, st.palette.length - 2).map(key));
+    // every pixel of the added stretch is either a structural entry or a colour the second photograph brought
+    let allFromIt = true;
+    for (let y = 0; y < H; y += 5) for (let x = 0; x < W; x += 3) {
+      const v = w.idx[y * w.w + x0 + x];
+      if (v >= before2 && !mine.has(key(w.palette[v]))) allFromIt = false;
+    }
+    // and the two photographs really are different, or "keeps its own colours" means nothing
+    const differ = [...mine].some((k) => !were.has(k));
+    return allFromIt && differ;
+  })(), `${w.palette.length} colours, ${before2} before`);
 check('a street has an end: nine photographs, and no more yards than a phone can carry', (() => {
   const s = yard(); let n = 0;
   for (let i = 0; i < 12; i += 1) { const o = stylise(DEMO.rgba.map((v) => (v + i * 9) % 256), W, H); if (extend(s, yardFrom({ w: W, h: H, idx: o.idx, palette: o.palette, regions: [], owner: new Int16Array(N).fill(-1) }))) n += 1; }
@@ -314,6 +331,66 @@ check('a street has an end: nine photographs, and no more yards than a phone can
 section('down in the yard: walking, jumping, stomping');
 w = yard();
 const TOP = bandTop(w);
+
+// ---- THE REGRESSIONS THAT GOT THROUGH, each one a bug that a passing suite did not see ----------------
+// Every check here corresponds to something that was actually broken while 232 checks passed. They are
+// written as the smallest thing that would have failed, and they are the reason to distrust "tests pass".
+{
+  const flatMod = await import('./src/flat.js');
+  const { styliseFlat } = await import('./src/stylise.js');
+  const { scorchMap, buildPalette } = await import('./src/palette.js');
+  const { makeWorld } = await import('./src/world.js');
+  const { toRegions } = await import('./src/objects.js');
+  const W4 = 96, H4 = 96, N4 = W4 * H4;
+  // a picture with a bright sky band, a mid wall and a dark ground, so flat has all three to find
+  const img = new Uint8ClampedArray(N4 * 4);
+  for (let y = 0; y < H4; y += 1) for (let x = 0; x < W4; x += 1) {
+    const i = (y * W4 + x) * 4;
+    const c = y < H4 * 0.4 ? [120, 170, 225] : y < H4 * 0.72 ? [200, 175, 140] : [80, 62, 45];
+    img[i] = c[0]; img[i + 1] = c[1]; img[i + 2] = c[2]; img[i + 3] = 255;
+  }
+  const stf = styliseFlat(img, W4, H4);
+
+  // (1) A WORLD COULD NOT BE BUILT FROM A FLAT PALETTE AT ALL. scorchMap searched past the end of a palette
+  // shorter than the median-cut constant, `table[i]` was undefined, and nearest() threw. The demo yard never
+  // appeared on screen while every check passed, because none of them built a world.
+  check('a world can be built from a flat palette, whatever length that palette is', (() => {
+    try {
+      const w4 = makeWorld({ w: W4, h: H4, photo: img, idx: stf.idx, palette: stf.palette, ...toRegions([], img, W4, H4), seed: 4 });
+      return w4.palette.length === stf.palette.length && w4.scorch.length === stf.palette.length;
+    } catch { return false; }
+  })(), `${stf.palette.length} colours`);
+  check('the scorch table works for a short palette AND for the 28-colour one',
+    scorchMap(stf.palette).length === stf.palette.length
+    && scorchMap(buildPalette([[10, 20, 30], [200, 210, 220], [90, 90, 90]], 28)).length === 30,
+    `flat ${stf.palette.length}, median-cut 30`);
+
+  // (2) THE STRUCTURAL ENTRIES ARE THE LAST TWO, NOT THE CONSTANTS. The outline and the void are at COLOURS
+  // and COLOURS+1 for the median-cut route, and at different indices for a shorter palette; looking them up
+  // by the constant wrote past the end and drew things in an undefined colour.
+  check('the outline and the void are the palette\'s last two entries, whatever its length',
+    stf.palette.length !== 30 && flatMod.outlineOf(stf.palette) === stf.palette[stf.palette.length - 2]
+    && flatMod.voidOf(stf.palette) === stf.palette[stf.palette.length - 1],
+    `outline at ${stf.palette.length - 2}, not at COLOURS = ${COLOURS}`);
+
+  // (3) PAINT LANDED ON THE SKY. takesPaint reads `!what || what[i] !== SKY`, so a null material map means
+  // every pixel takes paint. The map is now derived from flat's own ramps, and the sky is in it.
+  check('the material map knows where the sky is, so paint can refuse it', (() => {
+    if (!stf.surfaces || !stf.surfaces.what) return false;
+    const what = stf.surfaces.what;
+    let sky = 0;
+    for (let i = 0; i < N4; i += 1) if (what[i] === 0) sky += 1;
+    // the sky band is the top 40% of the picture, so it must be a large share and mostly up there
+    let skyTop = 0;
+    for (let y = 0; y < H4 * 0.4; y += 1) for (let x = 0; x < W4; x += 1) if (what[y * W4 + x] === 0) skyTop += 1;
+    return sky > N4 * 0.2 && skyTop > sky * 0.9;
+  })(), 'the sky is the top band, not everywhere and not nowhere');
+  const { takesPaint } = await import('./src/frame.js');
+  check('the paint rule refuses the sky and accepts a wall',
+    stf.surfaces && takesPaint(stf.surfaces.what, W4, H4, 10, 5) === false
+    && takesPaint(stf.surfaces.what, W4, H4, 10, H4 * 0.55) === true,
+    'sky no, wall yes');
+}
 
 // ---- WHICH STYLE THE GAME ACTUALLY USES, asserted rather than assumed -----------------------------------
 // The unit checks above test `stylise` in isolation, so when the game was switched to the flat route the

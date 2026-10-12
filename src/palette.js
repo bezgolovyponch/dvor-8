@@ -15,11 +15,21 @@ export const PALETTE_SIZE = COLOURS + 2;
 export const OUTLINE = COLOURS;       // the dark line round a thing
 export const VOID = COLOURS + 1;      // what is left where something was
 export const SIZE = COLOURS + 2;
+
+// HOW MANY COLOURS A PALETTE ACTUALLY HAS, and why this cannot be the constant.
+//
+// `COLOURS` is how many colours the MEDIAN-CUT route cuts from a photograph. It is not a property of a
+// palette: the flat route builds a fixed table of six ramps x four tones plus the two structural entries, so
+// 26, and a yard's palette is whatever its own route produced. Two failures came from treating the constant
+// as the size — `scorchMap` searched past the end of a 26-entry table and threw, so the demo yard never
+// built, and the street's block arithmetic assumed every yard contributes exactly COLOURS. Both are fixed by
+// asking the palette.
+export const colourCount = (palette) => Math.max(1, palette.length - 2);
 // A street of several photographs keeps every photograph's own colours: the table grows by one block of
 // COLOURS per photograph, after the first block and the two shared entries. An index is one byte, and 255
 // means "nothing fallen here", so nine photographs is the most a street can hold.
 export const MAX_YARDS = 9;
-export const baseOf = (yard) => (yard === 0 ? 0 : SIZE + (yard - 1) * COLOURS);
+export const baseOf = (yard, block = COLOURS) => (yard === 0 ? 0 : SIZE + (yard - 1) * block);
 const blockOf = (i) => (i < SIZE ? 0 : SIZE + Math.floor((i - SIZE) / COLOURS) * COLOURS);
 const OUTLINE_RGB = [11, 0, 24], VOID_RGB = [4, 0, 10];
 
@@ -104,13 +114,27 @@ export function nearest(table, r, g, b, upto = COLOURS, from = 0) {
   return best;
 }
 
-// For each colour, the colour its wreck has: the nearest entry, among its own photograph's colours, to a
-// dark, greyed version of it.
+/**
+ * For each colour, the colour its wreck has: the nearest entry to a dark, greyed version of it.
+ *
+ * EVERYTHING IS DERIVED FROM THE TABLE, and it was not before. The original hard-wired COLOURS and SIZE, which
+ * are the constants of the median-cut palette the photograph used to be reduced to. When the game moved to
+ * the flat route — a fixed palette of six ramps x four tones plus the outline and the void, so 26 entries
+ * rather than 30 — this function searched past the end of the table, `table[i]` came back undefined, and
+ * `nearest` threw. The whole demo yard failed to build and nothing appeared on screen, while every unit test
+ * passed because none of them built a world from a flat palette.
+ *
+ * The two structural entries are found by POSITION, not by the constant: buildPalette and flat.js both append
+ * the outline and then the void, so the last two are those two and the rest are colours.
+ */
 export function scorchMap(table) {
+  const colours = Math.max(1, table.length - 2);
+  const OUT = table.length - 2, VOID = table.length - 1;
   return Uint8Array.from({ length: table.length }, (_, i) => {
-    if (i === OUTLINE || i === VOID) return i;
-    const [r, g, b] = table[i], grey = luma(table[i]) * 255, from = blockOf(i);
-    return nearest(table, (r * 0.4 + grey * 0.6) * 0.34, (g * 0.4 + grey * 0.6) * 0.34, (b * 0.4 + grey * 0.6) * 0.34, from + COLOURS, from);
+    if (i === OUT || i === VOID) return i;
+    const [r, g, b] = table[i];
+    const grey = luma(table[i]) * 255;
+    return nearest(table, (r * 0.4 + grey * 0.6) * 0.34, (g * 0.4 + grey * 0.6) * 0.34, (b * 0.4 + grey * 0.6) * 0.34, colours, 0);
   });
 }
 

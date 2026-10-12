@@ -12,11 +12,15 @@ export const DEBRIS_MAX = 220;     // pieces a broken thing throws; more than th
 
 export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1 }) {
   const picture = Uint8Array.from(idx);
+  // The outline index is the palette's second-to-last entry. It used to be the OUTLINE constant, which is
+  // COLOURS — correct only for the median-cut route's 28-colour table. A flat palette is shorter, so the
+  // constant wrote past the end and the thing's outline became an undefined colour.
+  const OUT = palette.length - 2;
   // A dark line round each thing, so it stands off the yard the way a sprite does.
   for (const r of regions) {
     for (const p of r.pixels) {
       const x = p % w, y = (p / w) | 0;
-      if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || owner[p - 1] !== r.id || owner[p + 1] !== r.id || owner[p - w] !== r.id || owner[p + w] !== r.id) picture[p] = OUTLINE;
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || owner[p - 1] !== r.id || owner[p + 1] !== r.id || owner[p - w] !== r.id || owner[p + w] !== r.id) picture[p] = OUT;
     }
   }
   return {
@@ -58,6 +62,7 @@ export function strike(world, region, x, y, { damage = 1, combo = 2.5 } = {}) {
   if (!region || region.gone) return null;
   const rnd = mulberry32(world.seed + (world.strikes += 1) * 7919);
   const { w, idx, owner, scorch } = world;
+  const OUT = world.palette.length - 2, VOIDP = world.palette.length - 1;
   region.hits += damage;
   world.hits += 1;
   world.combo = world.comboLeft > 0 ? world.combo + 1 : 1;
@@ -71,8 +76,8 @@ export function strike(world, region, x, y, { damage = 1, combo = 2.5 } = {}) {
     const every = Math.max(1, Math.ceil(region.area / DEBRIS_MAX));
     region.pixels.forEach((p, n) => {
       const px = p % w, py = (p / w) | 0;
-      if (n % every === 0 && idx[p] !== OUTLINE) debris.push({ x: px, y: py, c: idx[p], floor: floor + ((px * 7 + py * 3) % 5) });
-      idx[p] = (px * 3 + py * 5) % 6 === 0 ? VOID : scorch[idx[p]];
+      if (n % every === 0 && idx[p] !== OUT) debris.push({ x: px, y: py, c: idx[p], floor: floor + ((px * 7 + py * 3) % 5) });
+      idx[p] = (px * 3 + py * 5) % 6 === 0 ? VOIDP : scorch[idx[p]];
     });
     region.gone = true;
     world.broken += 1;
@@ -97,8 +102,8 @@ export function strike(world, region, x, y, { damage = 1, combo = 2.5 } = {}) {
         if (xi < 0 || yi < 0 || xi >= w || yi >= world.h) break;
         const p = yi * w + xi;
         if (owner[p] !== region.id) continue;
-        if (idx[p] !== OUTLINE && step % 3 === 0) debris.push({ x: xi, y: yi, c: idx[p], floor: floor + (step % 4) });
-        idx[p] = OUTLINE;
+        if (idx[p] !== OUT && step % 3 === 0) debris.push({ x: xi, y: yi, c: idx[p], floor: floor + (step % 4) });
+        idx[p] = OUT;
       }
     }
     points = 25 * world.combo;

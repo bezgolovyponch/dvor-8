@@ -43,7 +43,7 @@
 // structure. The heavy variants remain in the tool as the evidence for that decision.
 
 import { grade, buildPalette, nearest, luma, COLOURS, OUTLINE, SIZE } from './palette.js';
-import { skyAndGround, patternAtlas, offsetAt } from './materials.js';
+import { skyAndGround, patternAtlas, offsetAt, MATERIALS } from './materials.js';
 import { render as renderFlat, RAMPS, STEPS } from './flat.js';
 
 // WHY eps IS 0.001 AND NOT 0.01. The first shipped version used 0.01 and the creator's verdict was that
@@ -203,7 +203,35 @@ export function inkOver(idx, src, w, h, palette, strength = INK) {
  */
 export function styliseFlat(rgba, w, h, opts = {}) {
   const st = renderFlat(rgba, w, h, opts);
-  return { idx: st.idx, palette: st.palette, smooth: rgba, surfaces: null, ink: null, regions: st.regions, outlinePixels: st.outlinePixels, style: 'flat' };
+  const n = w * h;
+  // THE MATERIAL MAP, and it is derived from flat.js's OWN ramp table rather than from a guess.
+  //
+  // Two things need to know where the sky is: the window finder skips it, and the paint refuses to land on
+  // it. Both read `what`, and an earlier version of this function returned null on the grounds that flat.js
+  // does not classify materials. That was honest about the naming and wrong about the consequence:
+  // `takesPaint` reads `!what || ... !== SKY`, so a null map means EVERY pixel takes paint, and a thrown ball
+  // of paint landed on the sky. A flaw hidden by a test whose assertion was mislabelled.
+  //
+  // The map is built from the ramps themselves. A pixel's palette index is `ramp * STEPS + tone`, so its ramp
+  // comes straight out of the index, and the ramp's own NAME says what it is. No colour rule, no threshold:
+  // flat.js already decided, and this only reads back the decision.
+  const OUT_I = st.palette.length - 2;
+  const what = new Uint8Array(n);
+  const SKY_AT = MATERIALS.indexOf('sky');
+  for (let i = 0; i < n; i += 1) {
+    const k = st.idx[i];
+    if (k >= OUT_I) { what[i] = MATERIALS.length - 1; continue; }
+    const ramp = RAMPS[(k / STEPS) | 0];
+    what[i] = ramp && ramp.name === 'sky' ? SKY_AT : MATERIALS.length - 1;
+  }
+  return {
+    idx: st.idx, palette: st.palette,
+    // `smooth` is what the window finder reads for its colour checks. The flat picture has no smoothed
+    // photographic layer, so the source pixels stand in — flat colours are flat already.
+    smooth: rgba,
+    surfaces: { what, horizon: 0, skyShare: 0, classes: MATERIALS },
+    ink: null, regions: st.regions, outlinePixels: st.outlinePixels, style: 'flat',
+  };
 }
 
 export function stylise(rgba, w, h) {

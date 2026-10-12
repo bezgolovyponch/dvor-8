@@ -7,7 +7,7 @@
 // strip's edge matches the one before it (image quilting, in one direction), and its things are copies of
 // things the detector really found. It is told apart from a photograph in the data (`made`), and on screen.
 
-import { COLOURS, MAX_YARDS, baseOf, scorchMap } from './palette.js';
+import { COLOURS, MAX_YARDS, baseOf, scorchMap, colourCount } from './palette.js';
 import { makeWorld } from './world.js';
 
 export const STRIP = 16;        // width of one borrowed strip, pixels
@@ -112,9 +112,13 @@ export function room(world, yard) {
 export function extend(world, yard) {
   if (!room(world, yard)) return false;
   const twin = world.yards.find((y) => y.palette === yard.palette);
-  const base = twin ? twin.base : baseOf(new Set(world.yards.map((y) => y.palette)).size);
+  // THE BLOCK SIZE COMES FROM THE YARD, not from the constant. `COLOURS` is how many colours the median-cut
+  // route cuts from a photograph; the flat route's table is a different size, and assuming the constant here
+  // meant a flat yard's colours were added with the wrong stride and the palette was left misaligned.
+  const block = colourCount(yard.palette);
+  const base = twin ? twin.base : baseOf(new Set(world.yards.map((y) => y.palette)).size, block);
   if (!twin) {
-    world.palette = [...world.palette, ...yard.palette.slice(0, COLOURS)];
+    world.palette = [...world.palette, ...yard.palette.slice(0, block)];
     world.scorch = scorchMap(world.palette);
   }
   const part = makeWorld({ ...yard, seed: world.seed });   // the new yard with its outlines drawn
@@ -127,7 +131,7 @@ export function extend(world, yard) {
     paint.set(world.paint.subarray(y * x0, y * x0 + x0), y * W);
     for (let x = 0; x < yard.w; x += 1) {
       const v = part.idx[y * yard.w + x], o = part.owner[y * yard.w + x];
-      idx[y * W + x0 + x] = v < COLOURS ? v + base : v;
+      idx[y * W + x0 + x] = v < block ? v + base : v;
       if (o >= 0) owner[y * W + x0 + x] = o + first;
     }
   }
