@@ -149,20 +149,54 @@ export const LOOKS = {
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 
 // The yard's table as one filter shows it at one moment.
+//
+// SATURATION IS SCALED ON A CHROMA AXIS, NOT IN HSL, and that is a fix rather than a preference.
+//
+// The first version multiplied HSL saturation and then divided the colour back to the wanted luma. Those two
+// steps fight: rescaling to luma changes the distance from grey, so a filter set to REDUCE saturation came
+// out MORE saturated. Measured on the flat palette, the alcohol look was supposed to be washed out and
+// instead went from mean saturation 0.330 to 0.392 — the opposite of what it is for.
+//
+// The transform below is the standard one instead. The colour is moved toward or away from its own GREY of
+// the same luma, with the amount capped so nothing clips:
+//
+//     grey = luma(c)          (a neutral of the same brightness)
+//     out  = grey + (c - grey) * k
+//
+// `k > 1` saturates, `k < 1` washes out, and because grey is by definition the same brightness, the operation
+// cannot change the luma at all — so the separate luma correction is not needed for it and cannot undo it.
+// The cap keeps the most saturated entry from reaching 255 and clipping to a different hue.
 export function lookThrough(table, filterId, seconds = 0) {
   const f = LOOKS[filterId];
   if (!f || filterId === 'sober') return table;
   return table.map((rgb) => {
-    const want = luma(rgb) * (f.light ?? 1);
     let [h, s, l] = toHsl(rgb);
     h = (h + (f.drift || 0) * Math.sin(seconds * (f.driftRate || 0)) + 1) % 1;
-    s = Math.max(0, Math.min(1, s * (f.sat ?? 1)));
     let out = fromHsl([h, s, l]);
-    // turning the hue changes how bright a colour looks; it is pulled back so no filter reorders the tones
-    const got = luma(out);
-    if (got > 0) out = out.map((v) => Math.min(255, (v * want) / got));
+    // the hue turn can move brightness, so it is pulled back here — before the chroma scale, so the scale
+    // has the last word on saturation and cannot be undone
+    const want = luma(rgb) * (f.light ?? 1), got = luma(out);
+    if (got > 0) out = out.map((v) => (v * want) / got);
+    // THE TOWARD MIX COMES FIRST, before the chroma scale, because mixing toward a colour moves brightness
+    // and would otherwise reorder the tones AFTER the scale had set them. Measured with the order the other
+    // way round: every filter came out non-monotone in luma, which means a dark thing could read lighter than
+    // a light one — the yard stops being readable.
     if (f.toward) { const to = hex(f.toward); out = out.map((v, i) => v + (to[i] - v) * f.mix); }
+    const k = f.sat ?? 1;
+    if (k !== 1) {
+      const g = luma(out);
+      // the largest k that keeps every channel in range, so a strong filter never clips to another hue
+      let kk = k;
+      for (let i = 0; i < 3; i += 1) {
+        const d = out[i] - g;
+        if (Math.abs(d) < 1e-6) continue;
+        const room = d > 0 ? (255 - g) / d : (0 - g) / d;
+        if (room > 0) kk = Math.min(kk, room);
+      }
+      out = out.map((v) => g + (v - g) * kk);
+    }
     return out.map((v) => Math.round(Math.max(0, Math.min(255, v))));
   });
 }
+
 export const css = ([r, g, b]) => `rgb(${r},${g},${b})`;

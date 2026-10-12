@@ -73,12 +73,23 @@ const SKY = MATERIALS.indexOf('sky');
 export function findWindows({ rgba, w, h, unit = 1, what = null, owner = null, gw = w, gh = h }) {
   const n = w * h, k = Math.max(1, Math.round(unit));
   const game = (x, y) => Math.min(gh - 1, (y / unit) | 0) * gw + Math.min(gw - 1, (x / unit) | 0);
-  const luma = new Float32Array(n), spread = new Uint8Array(n);
+  const luma = new Float32Array(n), spread = new Uint8Array(n), blueLead = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) {
     const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2];
     luma[i] = 0.299 * r + 0.587 * g + 0.114 * b;
     spread[i] = Math.max(r, g, b) - Math.min(r, g, b);
+    blueLead[i] = b > r ? 1 : 0;
   }
+  // IS THIS PIXEL ACTUALLY SKY? A material map alone is not enough to answer that.
+  //
+  // The flat route builds its map from its ramps, so everything on the sky RAMP is labelled sky — and that
+  // ramp also catches blue-ish shadow, which put wall pixels in it. Since the ring test rejects a window
+  // whose surroundings are more than 8% sky, a wall mislabelled as sky threw away almost every window:
+  // measured on the drawn yard, 1 window found with the map and 6 without it. The label is therefore
+  // cross-checked against the pixel's own colour, which is what actually distinguishes sky: bright, and with
+  // blue leading. The map still decides where paint may land, which is a separate question with a different
+  // right answer.
+  const isSky = (i) => luma[i] > 110 && blueLead[i] === 1;
   // the mean of each neighbourhood, from a summed-area table: one pass, whatever the neighbourhood
   const sum = new Float64Array((w + 1) * (h + 1));
   for (let y = 0; y < h; y += 1) {
@@ -93,7 +104,7 @@ export function findWindows({ rgba, w, h, unit = 1, what = null, owner = null, g
   let dark = new Uint8Array(n);
   for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
     const i = y * w + x, gi = game(x, y);
-    if (what && what[gi] === SKY) continue;
+    if (what && what[gi] === SKY && isSky(i)) continue;
     if (owner && owner[gi] >= 0) continue;
     if (luma[i] < mean(x - R, y - R, x + R, y + R) - DARKER) dark[i] = 1;
   }
@@ -144,7 +155,7 @@ export function findWindows({ rgba, w, h, unit = 1, what = null, owner = null, g
       if (x < 0 || y < 0 || x >= w || y >= h) continue;
       const i = y * w + x, gi = game(x, y);
       ringLuma += luma[i]; ringSpread += spread[i]; ringN += 1;
-      if (what && what[gi] === SKY) ringSky += 1;
+      if (what && what[gi] === SKY && isSky(i)) ringSky += 1;
     }
     if (!ringN) continue;
     const contrast = ringLuma / ringN - inside / count;

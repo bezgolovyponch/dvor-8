@@ -7,7 +7,7 @@
 // strip's edge matches the one before it (image quilting, in one direction), and its things are copies of
 // things the detector really found. It is told apart from a photograph in the data (`made`), and on screen.
 
-import { COLOURS, MAX_YARDS, baseOf, scorchMap, colourCount } from './palette.js';
+import { MAX_YARDS, scorchMap, colourCount } from './palette.js';
 import { makeWorld } from './world.js';
 
 export const STRIP = 16;        // width of one borrowed strip, pixels
@@ -44,9 +44,14 @@ export function cleared(yard) {
 // indices of the same photograph, or null), so the join with what is already there does not show.
 export function grow(src, rnd, edge = null) {
   const { w, h, palette } = src, clean = cleared(src);
-  const far = new Float32Array(COLOURS * COLOURS);
-  for (let a = 0; a < COLOURS; a += 1) for (let b = 0; b < COLOURS; b += 1) {
-    far[a * COLOURS + b] = Math.hypot(palette[a][0] - palette[b][0], palette[a][1] - palette[b][1], palette[a][2] - palette[b][2]);
+  // The colour-distance table is built over the palette's OWN colours, which is not COLOURS: that constant
+  // is how many colours the median-cut route cuts from a photograph, and the flat route's table is a
+  // different size. Using the constant indexed past the end of a flat palette — `palette[a]` came back
+  // undefined and `[0]` threw — which broke the whole street. Ask the palette.
+  const nCol = colourCount(palette);
+  const far = new Float32Array(nCol * nCol);
+  for (let a = 0; a < nCol; a += 1) for (let b = 0; b < nCol; b += 1) {
+    far[a * nCol + b] = Math.hypot(palette[a][0] - palette[b][0], palette[a][1] - palette[b][1], palette[a][2] - palette[b][2]);
   }
   const idx = new Uint8Array(w * h), owner = new Int16Array(w * h).fill(-1);
   let last = edge;
@@ -54,7 +59,7 @@ export function grow(src, rnd, edge = null) {
     const width = Math.min(STRIP, w - x), fits = [];
     for (let from = 0; from + width <= w; from += 2) {
       let cost = 0;
-      if (last) for (let y = 0; y < h; y += 2) { const a = last[y], b = clean[y * w + from]; if (a < COLOURS) cost += far[a * COLOURS + b]; }
+      if (last) for (let y = 0; y < h; y += 2) { const a = last[y], b = clean[y * w + from]; if (a < nCol && b < nCol) cost += far[a * nCol + b]; }
       fits.push({ from, cost: cost + rnd() * 0.001 });
     }
     fits.sort((a, b) => a.cost - b.cost);
@@ -95,7 +100,7 @@ export function edgeOf(world, base) {
   let known = 0;
   for (let y = 0; y < world.h; y += 1) {
     const v = world.idx[y * world.w + x] - base;
-    if (v >= 0 && v < COLOURS) { edge[y] = v; known += 1; }
+    if (v >= 0 && v < colourCount(world.palette)) { edge[y] = v; known += 1; }
   }
   return known > world.h / 2 ? edge : null;
 }
@@ -115,8 +120,19 @@ export function extend(world, yard) {
   // THE BLOCK SIZE COMES FROM THE YARD, not from the constant. `COLOURS` is how many colours the median-cut
   // route cuts from a photograph; the flat route's table is a different size, and assuming the constant here
   // meant a flat yard's colours were added with the wrong stride and the palette was left misaligned.
+  // THE BASE IS THE WORLD PALETTE'S OWN COLOUR COUNT, and it has to be.
+  //
+  // It used to be `baseOf(numberOfDistinctPalettes, block)`, which counts palettes and multiplies by a
+  // stride. That is only correct while every yard brings the SAME number of colours: with two yards of
+  // different sizes the base and the stride disagree, the appended pixels are indexed past the end of the
+  // palette, and the picture's colours become undefined. Measured on a flat yard followed by another flat
+  // yard: the base landed at 26 while the stride was 24, so indices ran to 53 in a 50-entry palette and 4410
+  // pixels had no colour at all.
+  //
+  // The world palette's colour count IS where the next block starts, by construction: it currently holds
+  // exactly `colourCount(world.palette)` colours plus the two structural entries.
   const block = colourCount(yard.palette);
-  const base = twin ? twin.base : baseOf(new Set(world.yards.map((y) => y.palette)).size, block);
+  const base = twin ? twin.base : colourCount(world.palette);
   if (!twin) {
     world.palette = [...world.palette, ...yard.palette.slice(0, block)];
     world.scorch = scorchMap(world.palette);

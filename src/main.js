@@ -7,7 +7,7 @@
 // day's news from news.js. frame.js finds the windows in the walls, glass.js says how one breaks, decal.js
 // keeps the colour thrown at the yard, parts.js throws the pieces. This file wires them to the page and the finger.
 
-import { stylise, styliseFlat } from './stylise.js';
+import { styliseFlat } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { demoYard } from './demo.js';
@@ -189,19 +189,27 @@ function setSize(w, h) {
 // The windows in the walls, added to the things the detector found. `big` is the same crop at several
 // picture-pixels to one of the game's, where a window still has a shape; a drawn yard has none and is
 // searched at its own size.
-function withWindows(seg, st, w, h, big) {
-  // `st.surfaces` may be null — the flat route does not classify materials — so this reads it defensively.
-  // It did not, and `build()` threw on `st.surfaces.what`, which meant the demo yard never built at all and
-  // the picture never appeared. A null-safe read plus the regression test below is the fix.
+function withWindows(seg, st, w, h, big, photo) {
+  // WINDOWS ARE LOOKED FOR IN THE PHOTOGRAPH, NOT IN THE PAINTED PICTURE.
+  //
+  // This was reading `st.smooth` — the styled output — and that is the wrong image to search. A window is
+  // found by being a dark opening in a brighter wall, and the flat route deliberately collapses a wall to ONE
+  // flat colour: on the drawn yard the wall and its panes both came out at luma 6, so the contrast the finder
+  // looks for had been painted away and it found 1 window out of the demo's 15. Searching the source
+  // photograph keeps the contrast that is actually there.
+  //
+  // `st.surfaces` is still read defensively: the flat route's material map is built from its ramps and may be
+  // absent, and a null map used to throw here, which stopped the demo yard building at all.
+  const src = photo || st.smooth;
   const where = { what: st.surfaces ? st.surfaces.what : null, owner: seg.owner, gw: w, gh: h };
-  const found = big ? findWindows({ rgba: big.data, w: big.w, h: big.h, unit: big.w / w, ...where }) : findWindows({ rgba: st.smooth, w, h, ...where });
+  const found = big ? findWindows({ rgba: big.data, w: big.w, h: big.h, unit: big.w / w, ...where }) : findWindows({ rgba: src, w, h, ...where });
   addWindows(found, seg.regions, seg.owner, w);
   return seg;
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
 function build(rgba, w, h, dets, big = null) {
   const st = styliseFlat(rgba, w, h);
-  const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big);
+  const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big, rgba);
   if (!regions.length) return false;
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
   yard = { rgba, w, h, st, regions, owner, home: yardFrom({ w, h, idx: st.idx, palette: st.palette, regions, owner }), more: [] };
@@ -387,7 +395,7 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
-  const st = styliseFlat(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big) });
+  const st = styliseFlat(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);
