@@ -164,6 +164,51 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
     }
     function fsVariant(src) { return fsVariantFrom(guided(src, 4, 0.22)); }
 
+    // Structure lines, at strength of the way to the palette's darkest colour.
+    //
+    // The operator is Canny's shape without its hysteresis: Sobel gradient, non-maximum suppression across
+    // the gradient direction so the ridge collapses to ONE pixel, then a threshold on the magnitude. NMS is
+    // the part that matters — it is the difference between an ink line and a wide grey smear.
+    function inkVariant(src, strength) {
+      const out = fsVariantFrom(guided(src, 1, 0.001)).out;
+      const pal = paletteOf(src, 28);
+      const g = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i += 1) g[i] = luma(src[i*4], src[i*4+1], src[i*4+2]);
+      const mag = new Float32Array(W * H), dir = new Float32Array(W * H);
+      for (let y = 1; y < H-1; y += 1) for (let x = 1; x < W-1; x += 1) {
+        const i = y*W+x;
+        const gx = -g[i-W-1] -2*g[i-W] -g[i-W+1] + g[i+W-1] +2*g[i+W] +g[i+W+1];
+        const gy = -g[i-W-1] -2*g[i-1] -g[i+W-1] + g[i-W+1] +2*g[i+1] +g[i+W+1];
+        mag[i] = Math.hypot(gx, gy);
+        dir[i] = Math.atan2(gy, gx);
+      }
+      // non-maximum suppression: keep a pixel only if it is the peak along its own gradient direction
+      const thin = new Uint8Array(W * H);
+      for (let y = 1; y < H-1; y += 1) for (let x = 1; x < W-1; x += 1) {
+        const i = y*W+x, a = dir[i];
+        const dx = Math.cos(a), dy = Math.sin(a);
+        const s = (px, py) => mag[Math.round(py)*W + Math.round(px)] || 0;
+        const f = s(x+dx, y+dy), b = s(x-dx, y-dy);
+        if (mag[i] >= f && mag[i] >= b) thin[i] = 1;
+      }
+      const vals = [];
+      for (let i = 0; i < W*H; i += 1) if (thin[i]) vals.push(mag[i]);
+      vals.sort((p, q) => p - q);
+      const cut = vals.length ? vals[Math.floor(vals.length * 0.82)] : 1e9;   // keep the strongest 18%
+      // the darkest palette colour is the ink; if the palette has no dark entry, fall back to near-black
+      let ink = 0;
+      for (let i = 1; i < pal.length; i += 1) if (luma(pal[i][0],pal[i][1],pal[i][2]) < luma(pal[ink][0],pal[ink][1],pal[ink][2])) ink = i;
+      const ir = pal[ink][0], ig = pal[ink][1], ib = pal[ink][2];
+      for (let i = 0; i < W*H; i += 1) {
+        if (!thin[i] || mag[i] < cut) continue;
+        const k = i*4;
+        out[k]   = out[k]   * (1-strength) + ir * strength;
+        out[k+1] = out[k+1] * (1-strength) + ig * strength;
+        out[k+2] = out[k+2] * (1-strength) + ib * strength;
+      }
+      return { out, pal };
+    }
+
     // Diffusion on the raw pixels, with the error scaled by strength. strength=1 is textbook
     // Floyd-Steinberg; lower values diffuse less, which keeps colour transitions tighter and the picture
     // crisper while still smoothing the gradients.
@@ -239,13 +284,19 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
       e3: (() => { const sm = guided(base, 1, 0.003); return diffVariant(sm, 28, 1.0); })(),
       e1: (() => { const sm = guided(base, 1, 0.001); return diffVariant(sm, 28, 1.0); })(),
       r2e1: (() => { const sm = guided(base, 2, 0.001); return diffVariant(sm, 28, 1.0); })(),
+      // The ink layer: a structure line drawn ON TOP of the quantised picture. Non-maximum suppression
+      // keeps the line one pixel wide, which is what a drawn line looks like; a plain Sobel threshold would
+      // give three-pixel smears and read as a shadow rather than as ink.
+      ink15: inkVariant(base, 0.15),
+      ink30: inkVariant(base, 0.30),
+      ink45: inkVariant(base, 0.45),
       gentleFs: (() => { const sm = guided(base, 1, 0.01); const save = base; return fsVariantFrom(sm); })(),
     };
 
     // ---- build the sheet: photograph, then each variant at 2x ----
     const K = 2, GAP = 8, LABEL = 22;
     const sheet = document.createElement('canvas');
-    sheet.width = W*K*11 + GAP*12; sheet.height = H*K + LABEL + GAP*2;
+    sheet.width = W*K*14 + GAP*15; sheet.height = H*K + LABEL + GAP*2;
     const sc = sheet.getContext('2d');
     sc.fillStyle = '#12052e'; sc.fillRect(0,0,sheet.width,sheet.height);
     sc.imageSmoothingEnabled = false;
@@ -269,6 +320,9 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
     draw(variants.e3.out, GAP*9+W*K*8, 'r1 eps.003');
     draw(variants.e1.out, GAP*10+W*K*9, 'r1 eps.001');
     draw(variants.r2e1.out, GAP*11+W*K*10, 'r2 eps.001');
+    draw(variants.ink15.out, GAP*12+W*K*11, 'INK 0.15');
+    draw(variants.ink30.out, GAP*13+W*K*12, 'INK 0.30');
+    draw(variants.ink45.out, GAP*14+W*K*13, 'INK 0.45');
 
     const fsSheet = document.createElement('canvas');
     fsSheet.width = W*K; fsSheet.height = H*K;
@@ -293,6 +347,9 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
       e3: stats(variants.e3.out),
       e1: stats(variants.e1.out),
       r2e1: stats(variants.r2e1.out),
+      ink15: stats(variants.ink15.out),
+      ink30: stats(variants.ink30.out),
+      ink45: stats(variants.ink45.out),
       palettes: Object.fromEntries(Object.entries(variants).map(([k,v]) => [k, v.pal.length])),
     };
   `);
@@ -306,7 +363,7 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
   console.log('separation = closest two surfaces / widest spread inside one. Higher is better.');
   console.log('flatness   = mean per-surface sd. LOWER is better: a flat surface should not buzz.');
   console.log();
-  for (const k of ['raw', 'current', 'gentleFs', 'crisp', 'e3', 'e1', 'r2e1']) console.log(row(k, res[k]));
+  for (const k of ['raw', 'current', 'e1', 'ink15', 'ink30', 'ink45']) console.log(row(k, res[k]));
   console.log();
   console.log(`sheet written to ${outPng}  (and ${outPng.replace(/\\.png$/, '-fs.png')})`);
 });

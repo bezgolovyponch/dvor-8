@@ -5,6 +5,7 @@
 //                  a surface boundary
 //   3. palette     the 28 colours that describe THIS yard best
 //   4. diffuse     each pixel takes its nearest palette colour and passes the error to its neighbours
+//   5. ink         the strongest structure lines are drawn over it, one pixel wide
 //
 // The yard must stay the yard. What is red in the photograph is red in the picture.
 //
@@ -26,13 +27,22 @@
 //   not suffer from the gradient reversal artifacts" — gradient reversal being exactly what would draw a
 //   halo along a roofline against the sky. It is also O(N) in the window radius.
 //
+//   INK. Quantising a photograph keeps its edges low-contrast, because a quantiser can only pick the nearest
+//   of 28 colours and an edge is usually between two of them. The creator's words were that "the borders of
+//   the structures and elements are not really detailed", and that is exactly this: the boundary is there in
+//   the luminance but nothing draws it. The operator is Canny's shape without its hysteresis — Sobel, then
+//   NON-MAXIMUM SUPPRESSION across the gradient direction so the ridge collapses to one pixel, then a
+//   threshold. The suppression is the part that matters: without it a Sobel threshold three pixels wide
+//   reads as a shadow rather than as a drawn line. Canny's own hysteresis thresholds are NOT used, and the
+//   often-quoted 2:1 or 3:1 ratio between them is not cited here because Canny's paper could not be opened.
+//
 // The parameters were chosen by measuring five variants on two real photographs
 // (tools/stylise-compare.mjs) and then LOOKING at the results, because the metric alone misled: a heavy
 // smoothing pass scored BEST on surface separation while visibly erasing the bench, the tree branches and
 // the car's edges. r=1 with a small epsilon is the light touch that cleans the grain and keeps the
 // structure. The heavy variants remain in the tool as the evidence for that decision.
 
-import { grade, buildPalette, nearest, luma, COLOURS } from './palette.js';
+import { grade, buildPalette, nearest, luma, COLOURS, OUTLINE, SIZE } from './palette.js';
 
 // WHY eps IS 0.001 AND NOT 0.01. The first shipped version used 0.01 and the creator's verdict was that
 // the picture was blurred with no style. That was correct, and the mechanism is the ratio var/(var+eps):
@@ -46,6 +56,9 @@ import { grade, buildPalette, nearest, luma, COLOURS } from './palette.js';
 export const GUIDED_R = 1;         // window radius. r=1 reaches only immediate neighbours: a light touch
 export const GUIDED_EPS = 0.001;   // regularisation. Small enough that texture survives; see above
 export const DITHER = 26;          // kept as the exported name; now the clamp on a diffused sample
+export const INK = 0.45;           // how far a structure line is taken toward the palette's darkest colour
+export const INK_KEEP = 0.18;      // the share of thin edge pixels kept: the strongest fifth becomes ink
+export const INK_FLOOR = 24;       // gradient magnitude below which there is no edge at all, 0-255 luma
 
 // Box mean over a (2r+1) window, separable and O(N), so the radius is nearly free.
 function boxMean(src, w, h, r) {
@@ -99,6 +112,79 @@ export function guided(rgba, w, h, r = GUIDED_R, eps = GUIDED_EPS) {
   return out;
 }
 
+/**
+ * Structure lines, drawn over a quantised picture, as palette indices.
+ *
+ * Sobel gradient, non-maximum suppression along the gradient, then keep the strongest `INK_KEEP` share and
+ * move those pixels `INK` of the way toward the darkest colour in the palette. Taking the ink FROM the
+ * palette rather than using pure black is what keeps it looking drawn in the picture's own colours instead
+ * of pasted on top of it.
+ *
+ * It returns INDICES, not colours, because that is what the whole renderer draws from — a palette index per
+ * pixel — so an ink pixel has to be a real palette entry like every other pixel, which is also why this
+ * cannot invent a black the yard does not contain.
+ */
+export function inkOver(idx, src, w, h, palette, strength = INK) {
+  const n = w * h;
+  const g = new Float32Array(n);
+  for (let i = 0; i < n; i += 1) g[i] = luma([src[i * 4], src[i * 4 + 1], src[i * 4 + 2]]) * 255;
+  const mag = new Float32Array(n), dir = new Float32Array(n);
+  for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
+    const i = y * w + x;
+    const gx = -g[i - w - 1] - 2 * g[i - w] - g[i - w + 1] + g[i + w - 1] + 2 * g[i + w] + g[i + w + 1];
+    const gy = -g[i - w - 1] - 2 * g[i - 1] - g[i + w - 1] + g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1];
+    mag[i] = Math.sqrt(gx * gx + gy * gy);
+    dir[i] = Math.atan2(gy, gx);
+  }
+  // THE FLOOR IS NOT OPTIONAL, and leaving it out is a bug that inks the entire picture.
+  //
+  // In a flat region the gradient is exactly 0, and 0 is a local maximum in every direction, so
+  // non-maximum suppression alone marks almost every flat pixel as a thin edge. On a synthetic two-tone
+  // image that was 5704 of 6144 pixels "thin", of which the great majority had a magnitude of 0; the
+  // percentile cut then landed on 0 as well, and `mag < cut` was false for them, so every one became ink.
+  // Canny's first threshold is what prevents this, and it is the threshold that is kept here: a pixel is an
+  // edge only if it is a local maximum AND its gradient clears a floor. The second, higher threshold and the
+  // hysteresis between them are NOT used — Canny's own paper could not be opened to verify the ratio.
+  const thin = new Uint8Array(n);
+  const at = (x, y) => mag[Math.round(y) * w + Math.round(x)] || 0;
+  for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
+    const i = y * w + x;
+    if (mag[i] < INK_FLOOR) continue;
+    const dx = Math.cos(dir[i]), dy = Math.sin(dir[i]);
+    if (mag[i] >= at(x + dx, y + dy) && mag[i] >= at(x - dx, y - dy)) thin[i] = 1;
+  }
+  const vals = [];
+  for (let i = 0; i < n; i += 1) if (thin[i]) vals.push(mag[i]);
+  if (!vals.length) return idx;
+  vals.sort((a, b) => a - b);
+  // `cut` is never allowed below the floor, so the strongest-share rule cannot be defeated by a picture
+  // whose edges are all weak.
+  const cut = Math.max(INK_FLOOR, vals[Math.floor(vals.length * (1 - INK_KEEP))]);
+
+  let ink = 0;
+  for (let i = 1; i < palette.length; i += 1) {
+    if (luma(palette[i]) < luma(palette[ink])) ink = i;
+  }
+  const [ir, ig, ib] = palette[ink];
+  const cache = new Int16Array(32768).fill(-1);
+  let drawn = 0;
+  for (let i = 0; i < n; i += 1) {
+    if (!thin[i] || mag[i] < cut) continue;
+    const own = palette[idx[i]];
+    const r = (own[0] * (1 - strength) + ir * strength) | 0;
+    const g = (own[1] * (1 - strength) + ig * strength) | 0;
+    const b = (own[2] * (1 - strength) + ib * strength) | 0;
+    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    // `nearest` defaults to scanning up to COLOURS entries; the palette handed in may be shorter, so the
+    // bound is passed explicitly rather than relying on the default.
+    if (cache[key] < 0) cache[key] = nearest(palette, r, g, b, Math.min(palette.length, SIZE));
+    idx[i] = cache[key];
+    drawn += 1;
+  }
+  idx.inkDrawn = drawn;
+  return idx;
+}
+
 export function stylise(rgba, w, h) {
   const n = w * h;
   // the photograph's own darkest and brightest 1%
@@ -140,7 +226,9 @@ export function stylise(rgba, w, h) {
       const i = y * w + x, p = i * 3;
       const r = clamp(buf[p]), g = clamp(buf[p + 1]), b = clamp(buf[p + 2]);
       const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-      if (cache[key] < 0) cache[key] = nearest(palette, r, g, b);
+      // `nearest` defaults to scanning up to COLOURS entries; the palette handed in may be shorter, so the
+    // bound is passed explicitly rather than relying on the default.
+    if (cache[key] < 0) cache[key] = nearest(palette, r, g, b, Math.min(palette.length, SIZE));
       const q = cache[key];
       idx[i] = q;
       const er = r - palette[q][0], eg = g - palette[q][1], eb = b - palette[q][2];
@@ -154,5 +242,6 @@ export function stylise(rgba, w, h) {
       push(1, 0, 7 / 16); push(-1, 1, 3 / 16); push(0, 1, 5 / 16); push(1, 1, 1 / 16);
     }
   }
-  return { idx, palette };
+  inkOver(idx, smooth, w, h, palette);
+  return { idx, palette, smooth };
 }

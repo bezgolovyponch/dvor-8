@@ -7,6 +7,11 @@
 // into the same heat-map, which is why nothing in it could be recognised.
 
 export const COLOURS = 28;
+// The palette is not COLOURS long. buildPalette appends the game's own ink and void colours after the
+// photograph's colours, so a pixel index runs to PALETTE_SIZE, not to COLOURS. COLOURS stays as it was —
+// it is how many colours are cut from the PHOTOGRAPH — and this is the bound for anything that walks the
+// finished table, which is what `nearest` needs and what a test should assert against.
+export const PALETTE_SIZE = COLOURS + 2;
 export const OUTLINE = COLOURS;       // the dark line round a thing
 export const VOID = COLOURS + 1;      // what is left where something was
 export const SIZE = COLOURS + 2;

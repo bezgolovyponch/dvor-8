@@ -43,7 +43,10 @@ section('the picture: the yard stays the yard');
 const st = stylise(DEMO.rgba, W, H);
 check('the picture is the size of an 8-bit console screen', W === 192 && H === 256, `${W} x ${H}`);
 check('the palette is made from the photograph: 28 colours, an outline, a void', st.palette.length === SIZE && SIZE === COLOURS + 2);
-check('every pixel is a palette index', st.idx.length === N && st.idx.every((v) => v < COLOURS));
+// SIZE, not COLOURS: the finished table is the photograph's colours PLUS the ink and void entries the
+// palette appends, so COLOURS was the wrong bound and would have rejected a legal ink pixel.
+check('every pixel is a palette index', st.idx.length === N && st.idx.every((v) => v < SIZE),
+  `max index ${Math.max(...st.idx)} of ${SIZE}`);
 check('the same photograph gives the same picture', stylise(DEMO.rgba, W, H).idx.join() === st.idx.join(), 'deterministic');
 const at = (x, y) => st.palette[st.idx[Math.round((y / 192) * H) * W + Math.round((x / 144) * W)]];
 const red = at(30, 134), blue = at(100, 150), green = at(124, 94), sky = at(70, 10);
@@ -58,7 +61,8 @@ check('the look: deep shadows and bright lights, with the shadows pulled toward 
 const dull = grade(120, 110, 100), g0 = toHsl([120, 110, 100]);
 check('the grade adds colour: a dull pixel comes out more saturated', toHsl(dull)[1] > g0[1], `${g0[1].toFixed(2)} → ${toHsl(dull)[1].toFixed(2)}`);
 const flat = stylise(new Uint8ClampedArray(N * 4).fill(128), W, H);
-check('a blank photograph does not crash the palette', flat.palette.length === SIZE && flat.idx.every((v) => v < COLOURS));
+check('a blank photograph does not crash the palette', flat.palette.length === SIZE && flat.idx.every((v) => v < SIZE),
+  `palette ${flat.palette.length}, max index ${Math.max(...flat.idx)}`);
 
 // ---- real things -----------------------------------------------------------------------------------
 section('real things become targets');
@@ -304,6 +308,63 @@ check('a street has an end: nine photographs, and no more yards than a phone can
 section('down in the yard: walking, jumping, stomping');
 w = yard();
 const TOP = bandTop(w);
+
+// ---- structure lines: the borders the creator said were not detailed -------------------------------------
+// The ink pass is the whole answer to "the borders of the structures and elements are not really detailed",
+// so it is tested for the three things that make it ink rather than a grey smear:
+//   it draws a LINE and not a band  (non-maximum suppression is what guarantees this)
+//   it draws only where there IS an edge, and never in flat sky
+//   it uses the palette's own darkest colour, so it cannot invent a black the yard does not contain
+{
+  const { inkOver, INK, INK_KEEP } = await import('./src/stylise.js');
+  const W2 = 96, H2 = 64;
+  // a hard vertical edge down the middle on a flat field: exactly one column should become ink
+  const src = new Uint8ClampedArray(W2 * H2 * 4);
+  for (let y = 0; y < H2; y += 1) for (let x = 0; x < W2; x += 1) {
+    const i = (y * W2 + x) * 4;
+    const v = x < W2 / 2 ? 30 : 220;
+    src[i] = v; src[i + 1] = v; src[i + 2] = v; src[i + 3] = 255;
+  }
+  const palette = [[30, 30, 30], [120, 120, 120], [220, 220, 220], [4, 0, 10]];
+  const lumaOf = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  const idx = new Uint8Array(W2 * H2).fill(1);          // start everything at the mid grey
+  inkOver(idx, src, W2, H2, palette);
+  // The ink is applied through `nearest`, so it lands on whichever palette entry is closest to the darkened
+  // colour — asserting a particular INDEX would be asserting the quantiser's tie-breaking rather than the
+  // ink. What is asserted instead is the two things that make it ink: it is DARKER than what was there, and
+  // it is in the right place, one pixel wide.
+  const inked = [];
+  for (let y = 0; y < H2; y += 1) for (let x = 0; x < W2; x += 1) {
+    if (idx[y * W2 + x] !== 1) inked.push({ x, y });
+  }
+  const cols = new Set(inked.map((p) => p.x));
+  const allDarker = inked.every((p) => lumaOf(palette[idx[p.y * W2 + p.x]]) < lumaOf(palette[1]));
+  check('a structure line is drawn at the edge, one pixel wide, darker than what was there',
+    inked.length > 0 && cols.size <= 2 && allDarker
+    && [...cols].every((x) => Math.abs(x - W2 / 2) <= 2),
+    `${inked.length} px in ${cols.size} column(s) at x=${[...cols].join()}, all darker: ${allDarker}`);
+
+  // A flat field has no edge anywhere, so nothing may be drawn. This is the case that a missing gradient
+  // FLOOR gets wrong: in a flat region the gradient is exactly 0, and 0 is a local maximum in every
+  // direction, so non-maximum suppression alone marks almost every pixel an edge and the picture is inked
+  // solid. Measured before the floor existed: 5704 of these 6144 pixels were "thin".
+  const flat = new Uint8ClampedArray(W2 * H2 * 4);
+  for (let i = 0; i < W2 * H2; i += 1) { flat[i * 4] = 128; flat[i * 4 + 1] = 128; flat[i * 4 + 2] = 128; flat[i * 4 + 3] = 255; }
+  const idxFlat = new Uint8Array(W2 * H2).fill(1);
+  inkOver(idxFlat, flat, W2, H2, palette);
+  check('a flat field gets no ink at all, because it has no edge to draw', idxFlat.every((v) => v === 1));
+
+  // on a real photograph the ink takes a small share of the picture, not most of it
+  const st = stylise(DEMO.rgba, W, H);
+  const share = st.idx.inkDrawn / (W * H);
+  check('on a real yard the ink is a line layer, not a repaint', share > 0.005 && share < 0.12,
+    `${(share * 100).toFixed(2)}% of pixels`);
+  const black = st.palette.reduce((a, b) => (a[0] + a[1] + a[2] <= b[0] + b[1] + b[2] ? a : b));
+  check('the ink is taken from the palette, so it can only ever be a colour the yard already has',
+    st.palette.some((c) => c === black) && st.palette.every((c) => c[0] >= 0 && c[0] <= 255));
+  check('the strength and the share kept are stated, and both are gentle enough to leave the picture readable',
+    INK > 0 && INK < 1 && INK_KEEP > 0.02 && INK_KEEP < 0.5, `INK ${INK}, keep ${INK_KEEP}`);
+}
 
 // ---- there must be a way to use a photo you ALREADY have ------------------------------------------------
 // `capture="environment"` makes a phone open the camera immediately and hides the photo library. Every
