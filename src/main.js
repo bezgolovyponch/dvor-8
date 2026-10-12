@@ -743,6 +743,17 @@ $('paletteWhy').textContent = item.why;
 $('lookNow').textContent = mode.label.toUpperCase();
 $('lookWhy').textContent = mode.why;
 
+// The palette opens by itself the first time, because a folded panel nobody knows about is a feature nobody
+// has. The creator reported "no palette with object to throw added" while it was on the screen, folded at
+// the bottom — that is a discoverability failure, not a missing feature, and the fix is to show it once.
+const PALETTE_SEEN = 'dvor8.paletteSeen';
+try {
+  if (!localStorage.getItem(PALETTE_SEEN)) {
+    $('paletteBox').open = true;
+    localStorage.setItem(PALETTE_SEEN, '1');
+  }
+} catch { $('paletteBox').open = true; }
+
 // While a yard is being played the extra panels fold themselves away, so the screen holds the yard, the
 // thing in the hand and the danger meter — and nothing else the player did not ask for.
 function foldForPlay(playing) {

@@ -43,6 +43,7 @@
 // structure. The heavy variants remain in the tool as the evidence for that decision.
 
 import { grade, buildPalette, nearest, luma, COLOURS, OUTLINE, SIZE } from './palette.js';
+import { skyAndGround, patternAtlas, offsetAt } from './materials.js';
 
 // WHY eps IS 0.001 AND NOT 0.01. The first shipped version used 0.01 and the creator's verdict was that
 // the picture was blurred with no style. That was correct, and the mechanism is the ratio var/(var+eps):
@@ -59,6 +60,7 @@ export const DITHER = 26;          // kept as the exported name; now the clamp o
 export const INK = 0.45;           // how far a structure line is taken toward the palette's darkest colour
 export const INK_KEEP = 0.18;      // the share of thin edge pixels kept: the strongest fifth becomes ink
 export const INK_FLOOR = 24;       // gradient magnitude below which there is no edge at all, 0-255 luma
+export const SEED = 7;             // the material patterns are seeded, so a yard always looks the same
 
 // Box mean over a (2r+1) window, separable and O(N), so the radius is nearly free.
 function boxMean(src, w, h, r) {
@@ -211,6 +213,9 @@ export function stylise(rgba, w, h) {
 
   // Floyd-Steinberg. The error a pixel could not represent is pushed onto neighbours not yet visited,
   // which is what lets an uneven palette reproduce a smooth gradient without banding.
+  // The surface map is computed BEFORE quantisation so the diffusion can be told what each pixel is made of.
+  const surfaces = skyAndGround(smooth, w, h);
+  const atlas = patternAtlas(SEED);
   const idx = new Uint8Array(n);
   const buf = new Float32Array(n * 3);
   for (let i = 0; i < n; i += 1) { buf[i * 3] = smooth[i * 4]; buf[i * 3 + 1] = smooth[i * 4 + 1]; buf[i * 3 + 2] = smooth[i * 4 + 2]; }
@@ -224,7 +229,9 @@ export function stylise(rgba, w, h) {
     for (let k = 0; k < w; k += 1) {
       const x = ltr ? k : w - 1 - k;
       const i = y * w + x, p = i * 3;
-      const r = clamp(buf[p]), g = clamp(buf[p + 1]), b = clamp(buf[p + 2]);
+      // the material's own pattern, added before the nearest colour is chosen
+      const mat = offsetAt(atlas, surfaces.what, i, x, y);
+      const r = clamp(buf[p] + mat), g = clamp(buf[p + 1] + mat), b = clamp(buf[p + 2] + mat);
       const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
       // `nearest` defaults to scanning up to COLOURS entries; the palette handed in may be shorter, so the
     // bound is passed explicitly rather than relying on the default.
@@ -243,5 +250,10 @@ export function stylise(rgba, w, h) {
     }
   }
   inkOver(idx, smooth, w, h, palette);
-  return { idx, palette, smooth };
+  // The material layer uses only the two surfaces that can be found reliably: sky and ground. Sky is a FLAT
+  // surface and gets no grain of its own, so it dithers as a smooth gradient instead of speckling; ground
+  // gets the organic random pattern the pixel-art convention assigns to earth. Everything between the two is
+  // left as it was, because those surfaces cannot be named without a model — see the measurements at the top
+  // of materials.js. The split between them is the horizon this module measured.
+  return { idx, palette, smooth, surfaces };
 }
