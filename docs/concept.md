@@ -32,6 +32,8 @@ it is there is removed, not kept "for later". This is checked, not hoped for:
 | `walk.js` | Going down into your own yard: walking round the things, jumping, and coming down on your neighbour's car. A jump is a hit made with the feet. |
 | `drink.js` | Under alcohol the bottle can be drunk before it is thrown: each swig widens the burst and loosens the hand, so how drunk the mode plays is the player's own doing. |
 | `album.js` | A reason to come back that cannot be lost: every kind of thing ever wrecked, the days visited, the records — and the line a player sends to someone else. |
+| `font.js` | The page's own type smears when a 192-pixel picture is scaled, and it differs from phone to phone. So the words that fly over the yard are written the way an 8-bit console wrote them: one fixed set of dots, readable on any screen. |
+| `news.js` | The sky over the yard carries something that is not the player's own doings — what the world did today, from Wikipedia's «Текущие события» box, with no key and no account — and when there is no network, the yard's own news instead. Nothing is invented in its place. **Not yet wired: `main.js` does not import this module, so today the sky carries only the fallback.** |
 | `main.js` | Wires the parts to the page and the finger. |
 | the score, combo and best score | A reason to throw faster, and a number to beat on «ЕЩЁ РАЗ». |
 | brackets and pips on targets | What can be hit, and how much it can take, is never a guess. |
