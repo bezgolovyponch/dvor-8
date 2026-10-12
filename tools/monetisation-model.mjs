@@ -158,7 +158,12 @@ export function lifetimeDays({ d1, d7 }, horizon = 3650) {
  */
 export function impressionsPerDau({ sessions, playMinutes, stopsPerSession, pacingMinutes }) {
   const byTime = playMinutes / pacingMinutes;
-  const adSlots = Math.min(stopsPerSession, byTime);
+  // An ad is a DISCRETE event placed at a stop, so the number of slots that fit is a whole number.
+  // Without the floor, a long session gets a fractional allowance (10.95 min / 3 = 3.65 slots) which
+  // exceeds the 3 stops the design actually provides — so the ad term leaks revenue the game could
+  // never show, and it leaks MORE as `stopsPerSession` rises. That is precisely the overstuffing the
+  // cap exists to prevent, and it was hiding in the tail of the engagement distribution.
+  const adSlots = Math.min(stopsPerSession, Math.floor(byTime));
   return sessions * adSlots;
 }
 
@@ -218,6 +223,28 @@ export function arpdau(cfg) {
 /** The published top-down identity. */
 export function ltv(arpdauValue, lifetime) {
   return arpdauValue * lifetime;
+}
+
+/**
+ * D1 and D7 are NOT independent levers, and this constant is how a model catches anyone who treats
+ * them as such. `retention()` derives the single decay exponent from both (because d7 = d1 * 7^beta),
+ * so raising D1 while holding D7 makes the curve STEEPER and LOWERS long-run retention. Measured:
+ *
+ *   d1 .1100, d7 .0368 -> beta -0.563, lifetime  8.8 d, d30 .0162   both median        COHERENT
+ *   d1 .2709, d7 .0368 -> beta -1.026, lifetime  2.0 d, d30 .0083   D1 raised alone    INCOHERENT
+ *   d1 .2709, d7 .0750 -> beta -0.660, lifetime 12.2 d, d30 .0287   both top quartile  COHERENT
+ *
+ * A retention claim must move D1 and D7 together, from one benchmark band.
+ */
+export const CURVE_MEDIAN = { d1: 0.11, d7: 0.0368 };       // GameAnalytics median bands
+export const CURVE_TOP_QUARTILE = { d1: 0.2709, d7: 0.075 }; // GameAnalytics top-25% bands
+export const CURVE_INCOHERENT = { d1: 0.2709, d7: 0.0368 };  // D1 raised alone: NOT a lever
+
+/** Still-active share of a cohort on a given day. Distinct from avgDau, which averages DAU-days over
+ *  the whole horizon and is therefore near-invariant to the curve — a trap that once made engagement
+ *  look flat when it is in fact material. */
+export function activeAtDay(day, curve) {
+  return retention(day, curve);
 }
 
 // ---------------------------------------------------------------------------------------------

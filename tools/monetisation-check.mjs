@@ -12,7 +12,8 @@
 // Usage:  node tools/monetisation-check.mjs
 
 import {
-  P, ESTIMATES, rng, retention, lifetimeDays, impressionsPerDau,
+  P, ESTIMATES, rng, retention, lifetimeDays, impressionsPerDau, activeAtDay,
+  CURVE_MEDIAN, CURVE_TOP_QUARTILE, CURVE_INCOHERENT,
   arpdauAds, arpdauIap, arpdauIapDaily, arpdauIapMonthly, arpdauIapBlended,
   arpdau, ltv, simulateCohort, PROFILES, compare,
   payerShareFromMonthly,
@@ -122,8 +123,24 @@ console.log('\n=== 2. STRUCTURE: shapes and bounds that must hold ===');
   check('and the two sampled revenues agree within Monte Carlo error (10%)',
     Math.abs(eight.ltv - three.ltv) / three.ltv < 0.10,
     `3 stops $${three.ltv.toFixed(4)} vs 8 stops $${eight.ltv.toFixed(4)} = ${(100 * Math.abs(eight.ltv - three.ltv) / three.ltv).toFixed(1)}% apart`);
-  finding('anti-overstuffing: ad slots are bounded by play-time / pacing, not by how many stops the ' +
-    'designer declares. Asking for 8 in a 5.5-minute session buys exactly nothing over asking for 3.');
+  // The bound holds for the AVERAGE session, and NOT in the tail — and the size of the tail is the
+  // finding. A player's minutes scale with the same lognormal `k` as their sessions, so the longest
+  // sessions clear the 3-stop cap: measured, 221 of 20,000 players have sessions over 12 minutes,
+  // where 6 stops legitimately allows more ads than 3. So the ad term has a real (small) slope in
+  // `stops` that the average case hides.
+  {
+    const next = rng(8);
+    let over = 0;
+    for (let i = 0; i < 20000; i += 1) {
+      const k = Math.exp((() => { let u = 0, v = 0; while (u === 0) u = next(); while (v === 0) v = next(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); })() * 0.35);
+      next();                                        // the payer draw
+      if (Math.max(0.5, PROFILES.dvor8_stops_as_built.playMinutes * k) > 3 * P.poki_pacing.value) over += 1;
+    }
+    finding(`anti-overstuffing holds at the AVERAGE session but not in the tail: ${over} of 20,000 ` +
+      `players have sessions over ${3 * P.poki_pacing.value} minutes, where extra stops genuinely do ` +
+      'buy extra impressions. The average-case claim "extra stops buy nothing" is false as a general ' +
+      'statement and true as an average; the slope is small (about x1.04 for 3 -> 6 stops).');
+  }
 }
 {
   // Concentration behaves differently by strategy, and this is a real distinction the testbed exists
@@ -245,6 +262,24 @@ console.log('\n=== 4. The reward-schedule claim, checked against its own source 
     P.reward_schedule_eta2p.value < 0.01);
   findings.push('design consequence: the verified effect is matching the reward to the player\'s ' +
     'preference (partial eta2 .205), NOT making the schedule variable (partial eta2 .004, ns).');
+}
+
+console.log('\n=== 4b. COHERENCE: D1 and D7 are one lever, not two ===');
+{
+  const med = lifetimeDays(CURVE_MEDIAN);
+  const top = lifetimeDays(CURVE_TOP_QUARTILE);
+  const bad = lifetimeDays(CURVE_INCOHERENT);
+  console.log(`  note  median band        d1 ${CURVE_MEDIAN.d1} d7 ${CURVE_MEDIAN.d7} -> lifetime ${med.toFixed(1)} d, d30 ${activeAtDay(30, CURVE_MEDIAN).toFixed(4)}`);
+  console.log(`  note  top-quartile band  d1 ${CURVE_TOP_QUARTILE.d1} d7 ${CURVE_TOP_QUARTILE.d7} -> lifetime ${top.toFixed(1)} d, d30 ${activeAtDay(30, CURVE_TOP_QUARTILE).toFixed(4)}`);
+  console.log(`  note  D1 raised ALONE    d1 ${CURVE_INCOHERENT.d1} d7 ${CURVE_INCOHERENT.d7} -> lifetime ${bad.toFixed(1)} d, d30 ${activeAtDay(30, CURVE_INCOHERENT).toFixed(4)}`);
+
+  check('raising both D1 and D7 improves lifetime', top > med, `${med.toFixed(1)} -> ${top.toFixed(1)} days`);
+  check('raising D1 while HOLDING D7 makes the curve steeper and lifetime WORSE',
+    bad < med, `${bad.toFixed(1)} d against ${med.toFixed(1)} d — so it is not a lever`);
+  check('that is the trap this constant exists to catch: a "better D1" can mean a worse game',
+    bad < med * 0.5, `lifetime falls to ${(100 * bad / med).toFixed(0)}% of the median band`);
+  finding('retention is a two-parameter lever. A claim that moves D1 alone is a misspecification, ' +
+    'not a design change, and the model now refuses to treat it as one.');
 }
 
 console.log('\n=== 5. REGRESSION: what each design lever is worth, paired on the same seeds ===');

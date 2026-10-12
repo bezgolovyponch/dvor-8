@@ -1,0 +1,148 @@
+{
+  "generatedFor": "docs/game-pieces-audit.md",
+  "base": "dvor8_stops_as_built",
+  "profiles": {
+    "dvor8_as_built": {
+      "why": "DVOR-8 today: no ads, no IAP, no paid layer at all",
+      "ltv": 0,
+      "arpdau": 0,
+      "lifetimeDays": 4.582,
+      "top1pctShare": 0,
+      "impressionsPerDau": 0
+    },
+    "dvor8_stops_as_built": {
+      "why": "the three natural stops DVOR-8 already has, moneted by ads only",
+      "ltv": 0.11951,
+      "arpdau": 0.02608,
+      "lifetimeDays": 4.582,
+      "top1pctShare": 0.0782,
+      "impressionsPerDau": 3.75
+    },
+    "dvor8_strong_retention": {
+      "why": "same stops, but a top-quartile retention curve — what \"worth coming back to\" is worth",
+      "ltv": 0.26598,
+      "arpdau": 0.03647,
+      "lifetimeDays": 7.292,
+      "top1pctShare": 0.056,
+      "impressionsPerDau": 7.5
+    },
+    "dvor8_overstuffed": {
+      "why": "the failure mode: 8 ad slots attempted per session against a 3-minute pacing rule",
+      "ltv": 0.12384,
+      "arpdau": 0.02703,
+      "lifetimeDays": 4.582,
+      "top1pctShare": 0.1084,
+      "impressionsPerDau": 3.75
+    },
+    "dvor8_web_puzzle": {
+      "why": "the closest published web analogue: CrazyGames puzzle, 21 min per play, 8.9 impressions",
+      "ltv": 0.47987,
+      "arpdau": 0.10474,
+      "lifetimeDays": 4.582,
+      "top1pctShare": 0.0578,
+      "impressionsPerDau": 26.25
+    }
+  },
+  "levers": [
+    {
+      "lever": "sessions/day 3.75 -> 5.45",
+      "ltvRatio": 1.4533,
+      "ltvBase": 0.12011,
+      "ltvVariant": 0.17456,
+      "t": 121.39,
+      "note": ""
+    },
+    {
+      "lever": "session 5.5 -> 8.5 min",
+      "ltvRatio": 1.3936,
+      "ltvBase": 0.12011,
+      "ltvVariant": 0.16739,
+      "t": 132.86,
+      "note": ""
+    },
+    {
+      "lever": "stops 3 -> 6 (pacing binds at the average)",
+      "ltvRatio": 1.0434,
+      "ltvBase": 0.12011,
+      "ltvVariant": 0.12532,
+      "t": 8.64,
+      "note": "small positive, not zero: pacing binds at the AVERAGE session but 1583 of 20000 players run past 9 minutes, where extra stops do buy impressions"
+    },
+    {
+      "lever": "eCPM rewarded 3.05 -> 4.15 (iOS)",
+      "ltvRatio": 1.3607,
+      "ltvBase": 0.12011,
+      "ltvVariant": 0.16343,
+      "t": 100.9,
+      "note": ""
+    },
+    {
+      "lever": "retention median -> top quartile (both ends)",
+      "ltvRatio": 1.5924,
+      "ltvBase": 0.12011,
+      "ltvVariant": 0.19126,
+      "t": 146.08,
+      "note": ""
+    },
+    {
+      "lever": "ad-only -> ad + a payer layer",
+      "ltvRatio": 51.6463,
+      "ltvBase": 0.12011,
+      "ltvVariant": 6.20334,
+      "t": 101.13,
+      "note": "UPPER BOUND ONLY: the payer parameters come from a social-casino filing, not a casual game"
+    }
+  ],
+  "curves": {
+    "median": {
+      "d1": 0.11,
+      "d7": 0.0368,
+      "beta": -0.5627,
+      "lifetimeDays": 8.836,
+      "d30": 0.01623,
+      "d90": 0.00874,
+      "d365": 0.00398
+    },
+    "topQuartile": {
+      "d1": 0.2709,
+      "d7": 0.075,
+      "beta": -0.66,
+      "lifetimeDays": 12.163,
+      "d30": 0.0287,
+      "d90": 0.0139,
+      "d365": 0.00552
+    },
+    "incoherent": {
+      "d1": 0.2709,
+      "d7": 0.0368,
+      "beta": -1.0259,
+      "lifetimeDays": 2.002,
+      "d30": 0.00827,
+      "d90": 0.00268,
+      "d365": 0.00064
+    }
+  },
+  "pacingCeiling": {
+    "5.5 min session": {
+      "slotsAtThreeMinutePacing": 1.83,
+      "stopsNeededToReachIt": 2,
+      "impressionsPerDau": 3.75
+    },
+    "8.5 min session": {
+      "slotsAtThreeMinutePacing": 2.83,
+      "stopsNeededToReachIt": 3,
+      "impressionsPerDau": 7.5
+    },
+    "21 min session": {
+      "slotsAtThreeMinutePacing": 7,
+      "stopsNeededToReachIt": 7,
+      "impressionsPerDau": 26.25
+    }
+  },
+  "estimatesAtLarge": [
+    "fill_rate = 1.0 (no published figure)",
+    "d1_median interpolated between printed benchmark bands",
+    "all design -> parameter links (stops per session, session length)",
+    "casual ARPPU $1.55 (an ESTIMATE, not a filing)"
+  ]
+}
