@@ -206,8 +206,12 @@ tail of the engagement distribution.
 measured slope is **×1.04**.
 
 **And a third, from the retention lever.** D1 and D7 are **one lever, not two**: `retention()` derives the decay
-exponent from both, so raising D1 while holding D7 makes the curve *steeper*. Measured: lifetime **8.8 d → 2.0 d
-(23%)**. A "better D1" can mean a worse game. Now guarded by `CURVE_INCOHERENT` and tested.
+exponent from both, so raising D1 while holding D7 makes the curve *steeper*. Measured: the median curve gives
+a lifetime of **8.84 d**, the top-quartile curve **12.16 d**, and the top quartile's D1 with the median's D7 —
+which is what "raise D1" looks like on its own — gives **2.00 d**. That is a fall of **77%, not 23%**; an
+earlier version of this line printed 23%, which is 2.0 as a share OF 8.8 rather than the fall from it. A
+"better D1" can mean a much worse game, and the retention figure goes UP while it happens. Guarded by
+`CURVE_INCOHERENT` and tested.
 
 ---
 
