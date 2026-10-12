@@ -3,6 +3,9 @@
 
 import { lookThrough, css, OUTLINE } from './palette.js';
 import { inFocus } from './modes.js';
+import { glyph, ADVANCE, GLYPH_W, GLYPH_H } from './font.js';
+import { boxes, SHIP, PLANE, BANNER_H, SHADOW } from './sky.js';
+import { textWidth } from './font.js';
 
 export function makeBuffer(w, h) {
   const canvas = document.createElement('canvas');
@@ -15,6 +18,7 @@ const THINGS = {
   sober: (c, x, y) => { c.fillStyle = '#2a2233'; c.fillRect(x - 2, y - 1, 4, 4); c.fillStyle = '#e8e4f0'; c.fillRect(x - 2, y - 2, 3, 3); },
   weed: (c, x, y, spin) => { c.fillStyle = '#ff6fa8'; if (spin) c.fillRect(x - 1, y - 3, 3, 6); else c.fillRect(x - 3, y - 1, 6, 3); c.fillStyle = '#fff'; c.fillRect(x - 1, y - 1, 2, 2); },
   alcohol: (c, x, y, spin) => { c.fillStyle = '#35d07f'; if (spin) { c.fillRect(x - 3, y - 1, 5, 3); c.fillRect(x + 2, y, 2, 1); } else { c.fillRect(x - 1, y - 2, 3, 5); c.fillRect(x, y - 4, 1, 2); } c.fillStyle = '#d7ffe9'; c.fillRect(x - 1, y - 1, 1, 1); },
+  water: (c, x, y, spin) => { c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 3, 6, 6); c.fillStyle = '#3f8cf0'; c.fillRect(x - 2, y - 2, 4, 4); c.fillStyle = '#d7f4ff'; c.fillRect(x - 2 + (spin ? 2 : 0), y - 2, 2, 1); },
   depression: (c, x, y) => { c.fillStyle = '#3a1410'; c.fillRect(x - 3, y - 1, 7, 4); c.fillStyle = '#b5482f'; c.fillRect(x - 3, y - 2, 6, 3); c.fillStyle = '#7a2c1c'; c.fillRect(x - 3, y - 1, 6, 1); },
 };
 
@@ -53,9 +57,118 @@ function bottle(c, w, h, full, busy) {
   c.restore();
 }
 
+// A line in the picture's own letters. Only the dots between `from` and `to` are drawn (a board has
+// edges); `lift` raises or lowers a letter by where it stands (a banner is not flat).
+function write(c, text, x, y, colour, { from = -1e9, to = 1e9, lift = null } = {}) {
+  c.fillStyle = colour;
+  for (let i = 0; i < text.length; i += 1) {
+    const gx = x + i * ADVANCE;
+    if (gx + GLYPH_W <= from || gx >= to || text[i] === ' ') continue;
+    const rows = glyph(text[i]), gy = y + (lift ? lift(gx) : 0);
+    for (let r = 0; r < GLYPH_H; r += 1) {
+      for (let col = 0, bits = rows[r]; bits; col += 1, bits = (bits << 1) & 31) {
+        if (bits & 16 && gx + col >= from && gx + col < to) c.fillRect(gx + col, gy + r, 1, 1);
+      }
+    }
+  }
+}
+
+const INK = '#0b0018', PINK = '#f0286e', CYAN = '#3fe0f0', GOLD = '#ffd23f', PALE = '#fff6c2';
+const rects = (c, colour, list) => { c.fillStyle = colour; for (const [x, y, w, h] of list) c.fillRect(x, y, w, h); };
+
+// The plane, nose to the left, and the line it tows. A banner that was cut loose falls flapping.
+function plane(c, f, w, seconds) {
+  const { body: { x, y }, sign } = boxes(f);
+  rects(c, 'rgba(11,0,24,.35)', [[x + 2, y + SHADOW, PLANE.w - 4, 2]]);
+  rects(c, INK, [[x + 1, y + 2, 15, 6], [x + 12, y - 1, 4, 4], [x + 5, y + 7, 7, 2]]);
+  rects(c, PINK, [[x + 2, y + 3, 13, 4], [x + 13, y, 2, 3]]);
+  rects(c, CYAN, [[x + 4, y + 3, 3, 2]]);
+  rects(c, PALE, [[x + 6, y + 6, 5, 2]]);
+  rects(c, GOLD, [[x + 1, y + 4, 1, 2]]);
+  rects(c, Math.floor(seconds * 24) % 2 ? PALE : INK, [[x, y + 2, 1, 6]]);   // the propeller
+  if (f.hit) { for (let n = 0; n < 4; n += 1) rects(c, n % 2 ? '#b9a9d6' : PALE, [[x + 18 + n * 7, y + 2 + Math.round(2 * Math.sin(f.t * 9 + n)), 3 - (n >> 1), 3 - (n >> 1)]]); }
+  else rects(c, PALE, [[x + PLANE.w, y + 4, PLANE.rope, 1]]);
+  const flap = f.hit ? 2.6 : 1.5, wave = (px) => Math.round(flap * Math.sin((px - sign.x) * 0.09 - f.t * 6));
+  for (let bx = Math.max(sign.x, sign.x + Math.floor(-sign.x / ADVANCE) * ADVANCE); bx < Math.min(w, sign.x + sign.w); bx += ADVANCE) {
+    const by = sign.y + wave(bx), end = bx === sign.x || bx + ADVANCE >= sign.x + sign.w;
+    rects(c, INK, [[bx, by, ADVANCE, BANNER_H]]);
+    rects(c, end ? PINK : PALE, [[bx, by + 1, ADVANCE, BANNER_H - 2]]);
+  }
+  write(c, f.text, sign.x + ADVANCE, sign.y + 2, INK, { from: 0, to: w, lift: wave });
+}
+
+// The airship, and the line running through the board on its side.
+function ship(c, f, seconds) {
+  const { body: { x, y }, sign } = boxes(f);
+  rects(c, 'rgba(11,0,24,.35)', [[x + 10, y + SHADOW + 8, SHIP.w - 20, 3]]);
+  rects(c, INK, [[x - 3, y + 1, 7, 7], [x - 3, y + 13, 7, 7], [x + 6, y, 62, 21], [x + 2, y + 3, 70, 15], [x, y + 6, 74, 9], [x + 27, y + 20, 20, 5]]);
+  rects(c, PINK, [[x - 2, y + 2, 5, 5], [x - 2, y + 14, 5, 5]]);
+  rects(c, '#3b1fa8', [[x + 7, y + 1, 60, 19], [x + 3, y + 4, 68, 13], [x + 1, y + 7, 72, 7]]);
+  rects(c, CYAN, [[x + 10, y + 2, 50, 1]]);
+  rects(c, PINK, [[x + 7, y + 17, 60, 2]]);
+  rects(c, GOLD, [[x + 29, y + 22, 3, 1], [x + 35, y + 22, 3, 1], [x + 41, y + 22, 3, 1]]);
+  rects(c, INK, [[sign.x, sign.y, sign.w, sign.h]]);
+  if (f.hit) {   // a dead board: a few dots that will not settle
+    for (let n = 0; n < 9; n += 1) rects(c, n % 2 ? '#b9a9d6' : PINK, [[sign.x + 2 + ((n * 37 + Math.floor(seconds * 18) * 11) % (sign.w - 4)), sign.y + 1 + ((n * 5) % 7), 2, 1]]);
+  } else write(c, f.text, sign.x + sign.w - Math.round(f.scroll), sign.y + 1, GOLD, { from: sign.x + 1, to: sign.x + sign.w - 1 });
+}
+
+// Someone passing through the yard. The same dozen pixels as the walker, dressed by kind, and above the
+// head what they are doing about you: «!» has noticed, an eye-high «!» in pink is looking, «?» has lost
+// you, «112» is calling. That mark is the whole of the stealth: it must be readable at a glance.
+const DRESS = {
+  walker: { coat: '#b9a9d6', legs: '#2a2233', hair: '#2a2233' },
+  drunk: { coat: '#35d07f', legs: '#560d6e', hair: '#7a2c1c' },
+  lady: { coat: '#a3178c', legs: '#ffd9a8', hair: GOLD },
+  cop: { coat: '#3b6cff', legs: '#12052e', hair: '#12052e' },
+  courier: { coat: GOLD, legs: '#2a2233', hair: '#f0286e' },
+};
+function passer(c, p, seconds, hidden) {
+  const d = DRESS[p.kind], still = p.state === 'alarm' || p.state === 'look';
+  const sway = p.kind === 'drunk' && !still ? Math.round(Math.sin(p.t * 3 + p.phase)) : 0;
+  const x = Math.round(p.x) + sway, y = Math.round(p.y), up = p.state === 'look' ? 1 : 0;
+  const stride = still ? 0 : Math.floor((p.t + p.phase) * (p.state === 'flee' ? 14 : 7)) % 2;
+  rects(c, 'rgba(11,0,24,.5)', [[x - 4, y, p.kind === 'courier' ? 13 : 8, 2]]);
+  if (p.kind === 'courier') {   // the bicycle under him, and the box on his back
+    const turn = Math.floor((p.t + p.phase) * 12) % 2;
+    for (const wx of [x - 7, x + 3]) { rects(c, INK, [[wx, y - 5, 5, 5]]); rects(c, turn && !still ? PALE : '#b9a9d6', [[wx + 1, y - 4, 3, 3]]); rects(c, INK, [[wx + 2, y - 3, 1, 1]]); }
+    rects(c, CYAN, [[x - 4, y - 6, 8, 1]]);
+    rects(c, INK, [[x - p.dir * 5 - 2, y - 15, 6, 7]]); rects(c, '#ff9a2e', [[x - p.dir * 5 - 1, y - 14, 4, 5]]);
+  }
+  const by = p.kind === 'courier' ? y - 3 : y;
+  rects(c, INK, [[x - 3, by - 13 - up, 7, 13 + up]]);
+  if (p.kind === 'lady') rects(c, INK, [[x - 4, by - 7, 9, 5]]);
+  rects(c, d.hair, [[x - 2, by - 12 - up, 5, 1]]);
+  rects(c, '#ffd9a8', [[x - 2, by - 11 - up, 5, 3]]);
+  if (up) rects(c, INK, [[x - 1, by - 11 - up, 1, 1], [x + 1, by - 11 - up, 1, 1]]);   // both eyes: the face is turned up at you
+  else rects(c, INK, [[x + p.dir, by - 10, 1, 1]]);
+  if (p.kind === 'cop') rects(c, GOLD, [[x, by - 12 - up, 1, 1]]);
+  rects(c, d.coat, p.kind === 'lady' ? [[x - 2, by - 8, 5, 3], [x - 3, by - 6, 7, 3]] : [[x - 2, by - 8, 5, 4]]);
+  if (p.kind !== 'courier') rects(c, d.legs, [[x - 2, by - (p.kind === 'lady' ? 3 : 4), 2, (p.kind === 'lady' ? 2 : 3) + stride], [x + 1, by - (p.kind === 'lady' ? 3 : 4), 2, (p.kind === 'lady' ? 3 : 4) - stride]]);
+  if (p.kind === 'drunk') rects(c, '#ffb347', [[x + 3 * p.dir, by - 7, 1, 3]]);
+  if (p.kind === 'lady') rects(c, PINK, [[x - 4 * p.dir, by - 5, 2, 3]]);
+  if (p.wet && Math.floor(seconds * 8 + p.phase) % 3) rects(c, '#3f8cf0', [[x - 3, by - 9 + (Math.floor(seconds * 8) % 4), 1, 2], [x + 3, by - 6 - (Math.floor(seconds * 8) % 3), 1, 2]]);
+  const mark = p.state === 'alarm' ? '!' : p.state === 'look' ? (hidden ? '?' : '!') : p.state === 'flee' && !p.called ? '112' : '';
+  if (!mark) return;
+  const mx = x - Math.floor(textWidth(mark) / 2), my = by - 23 - up - (p.state === 'look' && !hidden ? Math.floor(seconds * 10) % 2 : 0);
+  rects(c, INK, [[mx - 2, my - 2, textWidth(mark) + 4, GLYPH_H + 4]]);
+  write(c, mark, mx, my, p.state === 'look' ? (hidden ? CYAN : PINK) : GOLD);
+}
+
+// Hidden: the balcony's rail is between you and the yard. The yard can still be watched through it,
+// which is the point — you wait for the look to pass — but nothing can be thrown.
+function rail(c, w, h) {
+  rects(c, 'rgba(11,0,24,.45)', [[0, 0, w, h]]);
+  const top = h - Math.round(h * 0.2);
+  rects(c, INK, [[0, top, w, h - top]]);
+  rects(c, CYAN, [[0, top, w, 2]]);
+  for (let x = 4; x < w; x += 10) rects(c, '#12052e', [[x, top + 2, 4, h - top - 2]]);
+  write(c, 'СПРЯТАН', Math.round((w - textWidth('СПРЯТАН')) / 2), top + 6, PALE);
+}
+
 // scanY: null once the scan is over; before that, everything below it is still the photograph.
 // cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
-export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null }) {
+export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null }) {
   const pal = lookThrough(world.palette, filter, seconds);
   const { idx, rubble, photo, sw } = world, W = world.w, H = world.h;
   const w = cam.w, h = cam.h, cx = cam.x, cy = cam.y;
@@ -112,6 +225,7 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     // how much it can still take, as pips under it
     for (let n = 0; n < r.hp - r.hits; n += 1) { ctx.fillStyle = '#0b0018'; ctx.fillRect(x0 + n * 4, y1 + 2, 4, 3); ctx.fillStyle = '#f0286e'; ctx.fillRect(x0 + n * 4, y1 + 2, 3, 2); }
   }
+  if (folk && scanY === null) for (const p of [...folk.people].sort((a, b) => a.y - b.y)) if (p.x > cx - 12 && p.x < cx + w + 12) passer(ctx, p, seconds, folk.hidden);
   if (me?.down) person(ctx, me, seconds);
   for (const p of fx.particles) {
     ctx.fillStyle = p.rgb || css(pal[p.c]);
@@ -137,6 +251,13 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     ctx.fillRect(cx - 8, Math.round(scanY) + 2, w + 16, 1);
   }
   ctx.restore();
+  if (flier && scanY === null) {
+    ctx.save();
+    ctx.translate(ox, oy);
+    if (flier.kind === 'plane') plane(ctx, flier, w, seconds); else ship(ctx, flier, seconds);
+    ctx.restore();
+  }
+  if (folk?.hidden && scanY === null) rail(ctx, w, h);
   if (drink && scanY === null) bottle(ctx, w, h, drink.full, drink.busy);
   if (fx.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${(fx.flash * 0.5).toFixed(3)})`;

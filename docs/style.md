@@ -32,6 +32,7 @@ external source; numbers set by eye.
 | F18 | The belt-scroll format gives "both vertical and horizontal movement along a side-scrolling environment"; it was introduced by *Nekketsu Kōha Kunio-kun* (1986). | SOURCED[14] |
 | F19 | Wordle's emoji result was made by players first and then built in; after the share function was added the game "became a viral phenomenon"; one puzzle a day "creates a sense of scarcity, leaving players wanting more". | SOURCED[15] |
 | F20 | People feel "an urge to complete tasks previously initiated". The stronger claim, that unfinished tasks are remembered better, "lacks universal validity" (2025 meta-analysis). | SOURCED[16] |
+| F21 | Wikipedia's feed for a date (`/api/rest_v1/feed/featured/YYYY/MM/DD`) returns a `news` list — the front page's «In the news» stories, as HTML — for Russian and English, with `access-control-allow-origin: *` and no key. Fetched 2026-10-12: six stories in Russian. | SOURCED[17] (the response itself) |
 
 **Not found:** a source for how games show cannabis, or depression as distinct from grief. The weed mode is
 built from F4 and is a `CHOICE`; the depression mode leans on F5, which is about grief.
@@ -72,6 +73,14 @@ Rewritten 2026-10-11 for the third build. What changed from the second, and why,
 | D27 | **What is kept only grows**: kinds wrecked, days visited, best score, furthest walked. No streak, because a streak that resets is a loss. | SOURCED[F20] for the pull of the unfinished; no-loss from brief Q8 | *a worse run takes nothing away* · *days are never lost* |
 | D28 | **The made street is built from the date.** | SOURCED[F19], with the difference that players do not share a yard | *tomorrow's street is not today's* · *the same day's number makes the same street* |
 | D29 | **The line to show someone** is a row of what the yard held, thing by thing, wrecked or standing; it carries no picture and no place. The picture, when asked for, is the game's 192-pixel picture, never the photograph. | SOURCED[F19]; privacy from `feasibility.md` §4.4 | *the line … says nothing about where it is* |
+| D30 | **The day's real headlines fly over the yard**, on by default, off with one button. They are Wikipedia's, asked for once a day and kept; with no network the yard's own facts fly instead, and say that they are that. | source SOURCED[F21]; that news belongs here at all is the creator's request (CHOICE) | *what is not a feed gives no lines* · *with no network the sky carries the yard's own facts* · *the request carries the date and nothing else* |
+| D31 | **Words inside the picture are in fixed 5×7 dots**, capitals, Russian and Latin, not in the page's type. | DERIVED[D1]: the picture is 192 pixels across | *every capital and every figure has dots* · *no two letters that differ are drawn alike* |
+| D32 | **Two carriers, in turn**: a plane crossing once with the line on a banner at 38 px/s (about six letters a second), and an airship that stops and runs the line through a 62-pixel board at 30 px/s. Each lies a shadow on the ground, as the walker does (D22), which is what puts it above a picture seen from above. | CHOICE; speeds are guesses nobody has read at | *a plane comes in from the right* · *the ship stops over the yard and runs the line* |
+| D33 | **A throw at the sky turns the page**: the banner is cut loose and falls, or the board goes dark; 25 points, once; the next line comes after 1.5 s instead of 5. Leaving them alone costs nothing, missing costs nothing. | no-loss from brief Q8; numbers CHOICE | *a hit gives its points once* · *the next comes sooner after a hit* |
+| D34 | **People pass through the yard and cannot be harmed.** A touch on one throws a ball of water whatever is in the hand; it scores and makes them look up. | creator's request; that only water is ever thrown at a person is the brief's line on people, kept | *no kind can be harmed* · *water gives points and harms nothing* |
+| D35 | **Being seen is the danger**: five marks, filled while someone looks at a player in the open, emptied slowly when nobody does; full ends the run. A look is always announced first («!», 0.3–1.2 s) and no single passer-by's look fills the meter from empty. | creator's request (the wanted level of GTA); the warning and the cap are CHOICE, so that a loss is the player's doing | *there is a moment before they look* · *no single look ends a run* · *to be seen is the end* |
+| D36 | **Hiding costs the hand**: hidden, nothing can be thrown and the walker does not move; the combo and the clock run on. | CHOICE: a hiding place with no cost would be stood in for the whole run | *a hidden player risks nothing* (and cannot throw: `folk-check`) |
+| D37 | **Four kinds, four askings**: courier fast and brief, walker plain, drunk harmless, lady calls at once. Twice soaked is a call; the police look four times with 1.6 s between. | creator's request for the cast; every number CHOICE | *the courier is the fastest* · *the lady calls at the first soaking* · *the drunk never calls* · *the police … in turns* |
 
 ## Sources — pages opened on 2026-10-11
 
@@ -93,6 +102,7 @@ Rewritten 2026-10-11 for the third build. What changed from the second, and why,
 14. Wikipedia, "Beat 'em up" — https://en.wikipedia.org/wiki/Beat_%27em_up
 15. Wikipedia, "Wordle" — https://en.wikipedia.org/wiki/Wordle
 16. Wikipedia, "Zeigarnik effect" — https://en.wikipedia.org/wiki/Zeigarnik_effect
+17. Wikimedia REST API, featured feed, Russian Wikipedia, opened 2026-10-12 — https://ru.wikipedia.org/api/rest_v1/feed/featured/2026/10/12
 
-All sixteen were read through a summarising fetch. The quotations are as it returned them and have not been
+The first sixteen were read through a summarising fetch. The quotations are as it returned them and have not been
 checked against the pages by a second reading.

@@ -47,6 +47,7 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .pop { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; font: italic 900 20px/1 var(--display);
   color: #fff; text-shadow: 2px 2px 0 var(--pink), -1px -1px 0 var(--cyan); animation: pop .7s steps(8) forwards; }
 .pop.big { font-size: 34px; color: var(--gold); text-shadow: 3px 3px 0 var(--ink); }
+.pop.warn { font-size: 15px; color: #fff; text-shadow: 2px 2px 0 var(--pink), -1px -1px 0 var(--ink); animation-duration: 1.1s; }
 .pop.tag { font: 700 11px/1 var(--mono); color: var(--cyan); text-shadow: 1px 1px 0 var(--ink); }
 @keyframes pop { 0% { transform: translate(-50%, -50%) scale(1.7) rotate(-6deg); opacity: 1; }
   25% { transform: translate(-50%, -70%) scale(1) rotate(-3deg); opacity: 1; }
@@ -104,5 +105,15 @@ body[data-view="walk"] .frame { width: min(100%, calc(46vh * var(--aspect))); }
 .sip span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
 .sip i { display: block; height: 8px; background: rgba(11, 0, 24, .6); margin-top: 4px; }
 .sip u { display: block; height: 100%; width: 0; background: #ffb347; }
+
+/* Hiding, and how close you are to being seen: five marks, as a wanted level is shown. */
+.stealth { width: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+.stealth span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
+.heat { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; height: 14px; margin-top: 4px; }
+.heat u { display: block; background: rgba(11, 0, 24, .6); }
+.heat u.on { background: var(--gold); box-shadow: 2px 2px 0 var(--ink); }
+.heat.hot u.on { background: var(--pink); animation: hot .3s steps(2) infinite; }
+@keyframes hot { 50% { background: #fff; } }
+body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); box-shadow: 5px 5px 0 var(--ink); }
 
 @media (prefers-reduced-motion: reduce) { body { animation: none; } .pop, .banner.show, .bump { animation-duration: .01s; } }

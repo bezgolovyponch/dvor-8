@@ -12,11 +12,13 @@ const BASE = process.env.BASE || 'http://127.0.0.1:4310/';
 const state = `({ stage: document.getElementById('end').hidden ? (document.getElementById('empty').hidden ? (document.getElementById('title').hidden ? 'playing' : 'title') : 'empty') : 'end',
   score: +document.getElementById('score').textContent, left: +document.getElementById('left').textContent, combo: document.getElementById('combo').textContent,
   hand: document.getElementById('hand').textContent, note: document.getElementById('note').textContent, endLine: document.getElementById('endLine').textContent, best: document.getElementById('endBest').textContent })`;
-// taps: a grid swept over the picture, the way an impatient thumb would
+// taps: a grid swept over the picture, the way an impatient thumb would — but one that hides when
+// someone it has splashed looks up, and comes out when they have lost it
 const sweep = (gap, rounds, upto = 1) => `
   const el = document.getElementById('tilt');
   for (let k = 0; k < ${rounds}; k += 1) for (let fy = 0.06; fy < ${upto}; fy += ${gap > 300 ? 0.09 : 0.06}) for (let fx = 0.06; fx < 1; fx += ${gap > 300 ? 0.16 : 0.07}) {
     if (!document.getElementById('end').hidden) break;
+    if (document.querySelector('.pop.warn')) { document.getElementById('hideBtn').click(); await new Promise((res) => setTimeout(res, 2200)); document.getElementById('hideBtn').click(); }
     const r = document.getElementById('frame').getBoundingClientRect(), o = { clientX: r.left + r.width * fx, clientY: r.top + r.height * fy, bubbles: true, cancelable: true, pointerId: 1 };
     el.dispatchEvent(new PointerEvent('pointerdown', o)); el.dispatchEvent(new PointerEvent('pointerup', o));
     await new Promise((res) => setTimeout(res, ${gap}));

@@ -3,7 +3,8 @@
 // Nothing here decides anything. detect.js says what is in the photograph, objects.js turns that into
 // targets, stylise.js makes the picture, modes.js says what is in the hand, world.js says what a hit does,
 // fx.js makes it felt, render.js shows it. street.js makes more yard beyond the photograph, walk.js is
-// whoever goes down into it, drink.js is the bottle. This file wires them to the page and the finger.
+// whoever goes down into it, drink.js is the bottle, sky.js is what flies over it with a line of the
+// day's news from news.js. This file wires them to the page and the finger.
 
 import { stylise } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
@@ -14,11 +15,14 @@ import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js'
 import { MODES, aimWith, splashTargets, chainNext } from './modes.js';
 import { viewMotion, clientToWorld, cameraFor, LONG, SHORT, SCAN_TIME } from './view.js';
 import { yardFrom, grow, extend, edgeOf, room, bandTop } from './street.js';
-import { makeWalker, stepWalker, walked } from './walk.js';
+import { makeWalker, stepWalker, walked, standing } from './walk.js';
 import { makeDrink, swig, fresh, stepDrink, level, drunkMode, stagger, SWIG_TIME } from './drink.js';
 import { MAX_YARDS } from './palette.js';
 import { makeAlbum, visit, record, progress, shareText, dayKey, dayLabel, daySeed, KINDS, SIGN } from './album.js';
 import { makeBuffer, draw, postcard } from './render.js';
+import { makeSky, clearSky, stepSky, hitAt, knock } from './sky.js';
+import { headlines, yardNews, feedUrl, SOURCE } from './news.js';
+import { makeFolk, stepFolk, personAt, soak, threw, stars, KINDS as FOLK } from './folk.js';
 import { mulberry32 } from './rng.js';
 import { sfx, unlock, setMuted } from './audio.js';
 
@@ -27,7 +31,7 @@ const canvas = $('yard'), ctx = canvas.getContext('2d');
 const frameEl = $('frame'), tiltEl = $('tilt'), pops = $('pops');
 const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
 const rnd = mulberry32(8);
-const BEST_AT = 'dvor8.best', ALBUM_AT = 'dvor8.album';
+const BEST_AT = 'dvor8.best', ALBUM_AT = 'dvor8.album', NEWS_AT = 'dvor8.news', NEWS_ON = 'dvor8.newsOn';
 const today = dayKey(new Date());
 // What is kept between visits. Without storage the game still plays; it only forgets.
 const album = (() => { try { return makeAlbum(JSON.parse(localStorage.getItem(ALBUM_AT))); } catch { return makeAlbum(); } })();
@@ -47,6 +51,12 @@ let cam = { x: 0, y: 0, w: SHORT, h: LONG };   // the part of the street on scre
 let drink = makeDrink();
 let queue = [], like = null, grown = rnd, top = 0, ended = false, stomps = 0;   // the street still to come, and how it is made
 const pad = { x: 0, y: 0, jump: false, once: false }, keys = new Set();
+// The news over the yard: on unless the player turned it off. `wire` is today's headlines, once fetched.
+let newsOn = (() => { try { return localStorage.getItem(NEWS_ON) !== '0'; } catch { return true; } })(), wire = [], asked = false;
+const sky = makeSky();
+// The people passing through, and how close they are to having seen you. A water ball is all that is ever thrown at them.
+let folk = makeFolk();
+const WATER = { flight: 0.26, damage: 0, splash: 0, chain: 0, cooldown: 0.2 };
 
 const note = (text) => { $('note').textContent = text; };
 const cards = (which) => { for (const id of ['title', 'end', 'empty', 'album']) $(id).hidden = id !== which; };
@@ -93,6 +103,13 @@ function paintHud() {
   $('comboBar').style.width = `${(world.comboLeft / world.comboWindow) * 100}%`;
   $('coolBar').style.width = mode.cooldown ? `${(1 - fx.cool / mode.cooldown) * 100}%` : '100%';
   $('drunkBar').style.width = `${drink.drunk * 100}%`;
+  const lit = stars(folk);
+  if (lit !== shown.stars) {
+    [...$('heat').children].forEach((el, n) => { el.className = n < lit ? 'on' : ''; });
+    $('heat').classList.toggle('hot', lit >= 4); $('heat').setAttribute('aria-valuenow', String(lit));
+    if (lit > (shown.stars || 0)) bump($('heat'));
+    shown.stars = lit;
+  }
   if (drink.left !== shown.sips) { $('sipBtn').textContent = drink.left ? `ГЛОТОК ×${drink.left}` : 'ПУСТО — БРОСАЙ'; shown.sips = drink.left; }
 }
 function paintView() {
@@ -127,7 +144,10 @@ function build(rgba, w, h, dets) {
 function begin() {
   world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8 });
   fx = makeFx(world);
-  me = null; drink = makeDrink(); queue = [...yard.more]; like = yard.home; grown = mulberry32(daySeed(today));   // today's street top = bandTop(world); ended = false; stomps = 0;
+  me = null; drink = makeDrink(); queue = [...yard.more]; like = yard.home; grown = mulberry32(daySeed(today));   // today's street
+  top = bandTop(world); ended = false; stomps = 0;
+  clearSky(sky, skyLines());
+  folk = makeFolk(); paintHide();
   paintView();
   stage = 'scan'; scanT = 0; endIn = 0; shown = {}; press = null;
   pops.replaceChildren();
@@ -140,6 +160,85 @@ function nothingFound(why) {
   $('banner').classList.remove('hold', 'show');
   $('emptyWhy').textContent = why;
   cards('empty');
+}
+
+// ---- the news over the yard -------------------------------------------------------------------------
+// What the sky carries: the day's headlines; with no network, the yard's own news; turned off, nothing.
+function skyLines() {
+  if (!newsOn) return [];
+  const { have, of } = progress(album);
+  return wire.length ? wire : yardNews({ day: today, days: album.days.length, have, of, best: album.best, far: album.far });
+}
+// Asked once a day and kept, so a second visit the same day costs no request and works with no network.
+// The request carries the date and nothing about the player or the yard.
+async function loadNews() {
+  if (asked) return;
+  asked = true;
+  try {
+    const kept = JSON.parse(localStorage.getItem(NEWS_AT));
+    if (kept?.day === today && Array.isArray(kept.lines) && kept.lines.length) wire = kept.lines.map(String);
+  } catch { /* nothing kept */ }
+  if (!wire.length) {
+    try {
+      const reply = await fetch(feedUrl(today), { signal: AbortSignal.timeout?.(8000) });
+      if (reply.ok) wire = headlines(await reply.json());
+      if (wire.length) try { localStorage.setItem(NEWS_AT, JSON.stringify({ day: today, lines: wire })); } catch { /* not kept */ }
+    } catch { /* no network: the yard's own news flies */ }
+  }
+  sky.lines = skyLines();
+  document.body.dataset.news = wire.length ? 'world' : 'yard';
+}
+function paintNews() {
+  $('newsBtn').setAttribute('aria-pressed', String(newsOn));
+  $('newsBtn').className = `btn small ${newsOn ? 'on' : 'alt'}`;
+}
+// A throw reached the sky. True if it found the flier still there.
+function skyHit(rock) {
+  const f = hitAt(sky, rock.tx - cam.x, rock.ty - cam.y, 6);
+  if (!f) return false;
+  const points = knock(sky);
+  world.score += points; world.hits += 1;
+  impact(fx, 'hit', calm);
+  burst(fx, Array.from({ length: 12 }, (_, n) => ({ x: rock.tx + (n % 4) * 3 - 5, y: rock.ty, c: 0, rgb: n % 3 ? '#fff6c2' : '#f0286e', floor: rock.ty + 60 })), rock.tx, rock.ty + 4, rnd, 55);
+  sfx.paper();
+  navigator.vibrate?.(18);
+  pop(`+${points}`, rock.tx, rock.ty);
+  pop(f.kind === 'plane' ? 'ЛЕНТА СОРВАНА' : 'ТАБЛО ПОГАСЛО', rock.tx, rock.ty + 14, 'tag');
+  return true;
+}
+
+// ---- the people in the yard -----------------------------------------------------------------------
+function paintHide() {
+  document.body.dataset.hidden = String(folk.hidden);
+  $('hideBtn').setAttribute('aria-pressed', String(folk.hidden));
+  $('hideBtn').textContent = folk.hidden ? 'ВЫГЛЯНУТЬ' : 'СПРЯТАТЬСЯ';
+}
+function hide(on) {
+  if (stage !== 'play' || !world || folk.hidden === on) return;
+  folk.hidden = on; press = null;
+  paintHide();
+}
+// What the people did in this step, answered: every change in who is looking is heard and named.
+function folkSays(ev) {
+  const p = ev.who;
+  if (ev.type === 'look') { sfx.alarm(); pop(folk.hidden ? 'ИЩЕТ' : 'СМОТРИТ — ПРЯЧЬСЯ', p.x, p.y - 30, folk.hidden ? 'tag' : 'warn'); navigator.vibrate?.(25); }
+  else if (ev.type === 'lost') { sfx.lost(); pop('НЕ ВИДИТ', p.x, p.y - 30, 'tag'); }
+  else if (ev.type === 'call') { sfx.phone(); banner('ЗВОНЯТ В ПОЛИЦИЮ'); }
+  else if (ev.type === 'police') { sfx.siren(); banner('ПОЛИЦИЯ'); note('полиция смотрит по очереди: спрячься, пока смотрит, и действуй, пока отвернулась'); }
+  else if (ev.type === 'seen') { sfx.seen(); navigator.vibrate?.([60, 40, 120]); banner('ЗАМЕТИЛИ'); endIn = 0.9; }
+}
+// A ball of water came down. Whoever is still under it is soaked, and looks up.
+function waterLands(rock) {
+  sfx.splash();
+  burst(fx, Array.from({ length: 12 }, (_, n) => ({ x: rock.tx + (n % 4) * 2 - 3, y: rock.ty - 4, c: 0, rgb: n % 3 ? '#3f8cf0' : '#d7f4ff', floor: rock.ty + 2 })), rock.tx, rock.ty, rnd, 60);
+  const p = personAt(folk, rock.tx, rock.ty, 8);
+  if (!p) return;
+  const points = soak(folk, p);
+  world.score += points; world.hits += 1;
+  impact(fx, 'hit', calm);
+  navigator.vibrate?.(15);
+  pop(`+${points}`, p.x, p.y - 12);
+  pop(FOLK[p.kind].ru.toUpperCase(), p.x, p.y - 26, 'tag');
 }
 
 // A photograph, cut to the picture's shape. `size` forces that shape (a photograph added to a street must
@@ -212,7 +311,9 @@ function fromDemo() {
 
 // ---- a landing ------------------------------------------------------------------------------------
 function resolve(rock) {
+  if (rock.kind === 'water') { waterLands(rock); return; }
   const m = MODES[rock.kind];
+  if (rock.sky && skyHit(rock)) return;
   // What it lands on: everything near, for a thing that bursts; otherwise the one thing it was thrown at.
   const targets = rock.splash ? splashTargets(world, rock.tx, rock.ty, rock.splash) : rock.region && !rock.region.gone ? [rock.region] : [];
   if (rock.splash) {
@@ -283,7 +384,8 @@ function goDown(down) {
   if (down) note(`улица дня ${dayLabel(today)}: направо за двором она сегодня такая, завтра будет другая`);
 }
 function walk(dt) {
-  const input = {
+  // crouched behind something: nobody walks hidden
+  const input = folk.hidden ? { x: 0, y: 0, jump: false } : {
     x: pad.x + (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0),
     y: pad.y + (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0),
     jump: pad.jump || pad.once || keys.has('jump'),
@@ -291,10 +393,14 @@ function walk(dt) {
   pad.once = false;
   const did = stepWalker(world, me, input, dt, { top, stagger: filter === 'alcohol' && !calm ? stagger(drink.drunk) : 0 });
   if (did.jumped) sfx.jump();
-  if (did.landed) sfx.land();
+  if (did.landed) { sfx.land(); dust(5); }
   if (did.blocked && clock - nudged > 4) { nudged = clock; pop('ПРЫГАЙ', me.x, me.y - 20, 'tag'); }   // a thing in the way is jumped, and nobody was told
   if (did.stomped) { stomps += 1; hit(did.stomped, me.x, me.y, 1, mode.combo); if (world.done) allClear(); }
   if (me.x > world.w - cam.w * 0.75 && !ended) further();   // before the end of the street can come into view
+}
+// Dust from under the feet: a landing is seen as well as heard.
+function dust(n) {
+  burst(fx, Array.from({ length: n }, (_, i) => ({ x: me.x + (i - n / 2) * 2, y: me.y, c: 0, rgb: i % 2 ? '#fff6c2' : '#b9a9d6', floor: me.y + 1 })), me.x, me.y + 5, rnd, 26);
 }
 function sip() {
   if (filter !== 'alcohol' || stage !== 'play' || !world) return;
@@ -304,6 +410,7 @@ function sip() {
 
 function finish() {
   stage = 'done';
+  folk.hidden = false; paintHide();
   const best = album.best, metres = me ? walked(me) : 0;
   const news = record(album, { wrecked: world.regions.filter((r) => r.gone).map((r) => r.kind), score: world.score, metres });
   keep();
@@ -313,8 +420,8 @@ function finish() {
   $('shared').textContent = '';
   $('endScore').textContent = world.score;
   const aim = world.throws ? Math.min(100, Math.round(((world.hits - stomps) / world.throws) * 100)) : 0;   // a burst can hit several things with one throw
-  $('endTitle').textContent = world.done ? 'ДВОР РАЗНЕСЁН' : 'ХВАТИТ';
-  $('endLine').textContent = `${world.time.toFixed(1)} с · комбо x${world.maxCombo} · бросков ${world.throws} · попаданий ${aim}%${me ? ` · прыжков на вещи ${stomps} · пройдено ${walked(me)} м` : ''}`;
+  $('endTitle').textContent = folk.seen ? 'ЗАМЕТИЛИ' : world.done ? 'ДВОР РАЗНЕСЁН' : 'ХВАТИТ';
+  $('endLine').textContent = `${world.time.toFixed(1)} с · комбо x${world.maxCombo} · бросков ${world.throws} · попаданий ${aim}%${me ? ` · прыжков на вещи ${stomps} · пройдено ${walked(me)} м` : ''}${folk.soaked ? ` · облито ${folk.soaked}` : ''}${folk.calls ? ` · звонков в полицию ${folk.calls}` : ''}`;
   if (me) me.down = false;
   paintView();
   $('endBest').textContent = news.best ? 'НОВЫЙ РЕКОРД' : `рекорд ${best}`;
@@ -347,6 +454,9 @@ function frame(now) {
       tick(world, dt);
       stepDrink(drink, dt);
       if (me?.down) walk(dt);
+      if (stepSky(sky, dt, cam.w)) sfx.fly();
+      if (!world.done && !folk.seen) for (const ev of stepFolk(folk, dt, { x0: cam.x, x1: cam.x + cam.w, top: Math.max(top + 6, cam.y + cam.h * 0.45), bottom: cam.y + cam.h * 0.78 }, rnd)) folkSays(ev);
+      if (folk.seen && (endIn -= dt) <= 0) finish();
       if (world.done && (endIn -= dt) <= 0) finish();
     }
     cam = cameraFor(world, me);
@@ -357,7 +467,7 @@ function frame(now) {
     else { fx.hand.x = cam.x + cam.w / 2; fx.hand.y = world.h + 4; }
     shake = shakeOffset(fx);
     draw(ctx, buf, world, fx, { filter, mode, seconds: clock, scanY, motion, shake, cam, me,
-      drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null });
+      drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk });
     paintHud();
   }
   requestAnimationFrame(frame);
@@ -371,11 +481,25 @@ const toWorld = (e) => {
 };
 
 function throwAt(at) {
+  if (folk.hidden) { sfx.miss(); pop('СПРЯТАН — ВЫГЛЯНИ', at.x, at.y, 'tag'); return; }
   if (fx.cool > 0 || drink.busy > 0) { sfx.miss(); pop('…', at.x, at.y, 'tag'); return; }   // the hand is not free yet
+  threw(folk);
+  // A touch on a person is a ball of water, whatever is in the hand: nothing else is ever thrown at one.
+  // A thing under the finger comes first, so nobody is soaked by a throw meant for the car behind them.
+  const who = standing(world, at.x, at.y) ? null : personAt(folk, at.x, at.y, 3, WATER.flight);
+  if (who && !hitAt(sky, at.x - cam.x, at.y - cam.y)) {
+    world.throws += 1;
+    throwThing(fx, world, WATER, 'water', at.x, at.y, null);
+    sfx.throw();
+    return;
+  }
   const live = filter === 'alcohol' ? drunkMode(mode, drink.drunk) : mode;   // as drunk as the player has made it
   const landing = aimWith(live, at.x, at.y, rnd);
   world.throws += 1;
-  throwThing(fx, world, live, filter, landing.x, landing.y, live.splash ? null : pick(world, landing.x, landing.y));
+  // a touch on what is flying is a throw at the sky: it goes where the hand sends it, and the things under it are left alone
+  const up = Boolean(hitAt(sky, at.x - cam.x, at.y - cam.y));
+  throwThing(fx, world, live, filter, landing.x, landing.y, up || live.splash ? null : pick(world, landing.x, landing.y));
+  if (up) fx.rocks[fx.rocks.length - 1].sky = true;
   if (filter === 'alcohol') fresh(drink);
   sfx.throw();
 }
@@ -383,7 +507,7 @@ function throwAt(at) {
 // Where the narrow view is dark, a finger first LOOKS (drag) and then throws (tap): the throw happens on
 // lifting, and only if the finger did not travel. Everywhere else a throw is on touch, with no wait.
 tiltEl.addEventListener('pointerdown', (e) => {
-  if (stage !== 'play' || world.done) return;
+  if (stage !== 'play' || world.done || folk.seen) return;
   e.preventDefault();
   unlock();
   const at = toWorld(e);
@@ -417,7 +541,11 @@ $('shot2').addEventListener('change', shoot);
 for (const id of ['demoBtn', 'demoBtn2']) $(id).addEventListener('click', () => { unlock(); fromDemo(); });
 $('againBtn').addEventListener('click', begin);
 $('restartBtn').addEventListener('click', () => { if (yard && (stage === 'play' || stage === 'done' || stage === 'scan')) begin(); });
-const home = () => { stage = 'title'; world = null; yard = null; me = null; paintView(); paintKeep(); cards('title'); ctx.clearRect(0, 0, canvas.width, canvas.height); note(''); };
+const home = () => {
+  stage = 'title'; world = null; yard = null; me = null; shown = {};
+  $('score').textContent = '0'; $('combo').textContent = '—'; $('left').textContent = '0'; $('comboBar').style.width = '0';
+  paintView(); paintKeep(); cards('title'); ctx.clearRect(0, 0, canvas.width, canvas.height); note('');
+};
 $('newBtn').addEventListener('click', home);
 $('homeBtn').addEventListener('click', home);
 $('soundBtn').addEventListener('click', (e) => {
@@ -470,6 +598,15 @@ $('albumBack').addEventListener('click', () => cards('title'));
 $('viewBtn').addEventListener('click', () => goDown(!me?.down));
 $('stopBtn').addEventListener('click', () => { if (stage === 'play' && world) finish(); });
 $('sipBtn').addEventListener('click', sip);
+$('hideBtn').addEventListener('click', () => { unlock(); hide(!folk.hidden); });
+$('newsBtn').addEventListener('click', () => {
+  newsOn = !newsOn;
+  try { localStorage.setItem(NEWS_ON, newsOn ? '1' : '0'); } catch { /* not kept */ }
+  paintNews();
+  clearSky(sky, skyLines());
+  if (newsOn) loadNews();
+  note(newsOn ? `новости над двором: ${SOURCE}. Попади в самолёт или дирижабль — прилетит следующая` : 'новости выключены: в небе пусто, в сеть игра не ходит');
+});
 $('more').addEventListener('change', (e) => {
   const file = e.target.files?.[0];
   e.target.value = '';
@@ -498,6 +635,7 @@ window.addEventListener('keydown', (e) => {
   if (stage !== 'play') return;
   if (e.code === 'KeyV' && !e.repeat) goDown(!me?.down);
   if (e.code === 'KeyE' && !e.repeat) sip();
+  if (e.code === 'KeyH' && !e.repeat) hide(!folk.hidden);
   if (KEYS[e.code] && me?.down) { keys.add(KEYS[e.code]); e.preventDefault(); }
 });
 window.addEventListener('keyup', (e) => { keys.delete(KEYS[e.code]); });
@@ -519,8 +657,13 @@ for (const [id, m] of Object.entries(MODES)) {
 
 paintHand();
 paintView();
+paintNews();
+paintHide();
+if (newsOn) loadNews();
 if (visit(album, today)) keep();
 paintKeep();
 // The model is fetched while the player is still reading the title, so the first photograph does not wait for it.
+// For tools/folk-check.mjs only: a script cannot see who is where, so with ?debug in the address it is told.
+if (/[?&]debug\b/.test(location.search)) window.dvor8 = { folk: () => folk, cam: () => cam };
 loadDetector().then(() => note('готов искать вещи на снимке')).catch((error) => note(`детектор не запустился (${error.message}) — работает только демо`));
 requestAnimationFrame(frame);

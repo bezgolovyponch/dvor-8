@@ -45,8 +45,8 @@ td code { color: var(--gold); }
     <div class="course" style="--w: 54%"><b><span class="n">6</span>Coming back, showing someone</b><code>album.js</code>
       <span>album of kinds wrecked · days · records · a street remade by the date · the line and the picture</span>
       <span class="fails">Fails alone: the game still plays, and is over in a minute.</span></div>
-    <div class="course" style="--w: 64%"><b><span class="n">5</span>A body in the yard</b><code>walk.js · drink.js · street.js</code>
-      <span>walk, jump, stomp · the bottle and how drunk · more street from the photographs, and added photographs</span>
+    <div class="course" style="--w: 64%"><b><span class="n">5</span>A body in the yard</b><code>walk.js · drink.js · street.js · sky.js · news.js · font.js</code>
+      <span>walk, jump, stomp · the bottle and how drunk · more street from the photographs, and added photographs · the day's headlines flown over the yard, and a throw that turns the page</span>
       <span class="fails">Fails alone: back to one yard seen from the balcony. Course 6 loses the walk and the daily street.</span></div>
     <div class="course" style="--w: 74%"><b><span class="n">4</span>Feel</b><code>fx.js · audio.js · view.js · render.js</code>
       <span>pause, kick, flash, pieces, wrecks that stay · sound · lean and camera · everything drawn</span>
@@ -79,14 +79,17 @@ td code { color: var(--gold); }
         <tr><td><code>world.js</code></td><td>3</td><td>palette, rng</td><td>street, main</td></tr>
         <tr><td><code>modes.js</code></td><td>3</td><td>—</td><td>render, main</td></tr>
         <tr><td><code>fx.js</code> <code>audio.js</code> <code>view.js</code></td><td>4</td><td>—</td><td>main</td></tr>
-        <tr><td><code>render.js</code></td><td>4</td><td>palette, modes</td><td>main</td></tr>
+        <tr><td><code>render.js</code></td><td>4</td><td>palette, modes, font, sky</td><td>main</td></tr>
         <tr><td><code>street.js</code></td><td>5</td><td>palette, world</td><td>main</td></tr>
         <tr><td><code>walk.js</code> <code>drink.js</code></td><td>5</td><td>—</td><td>main</td></tr>
+        <tr><td><code>font.js</code></td><td>5</td><td>—</td><td>news, sky, render</td></tr>
+        <tr><td><code>news.js</code></td><td>5</td><td>font</td><td>main</td></tr>
+        <tr><td><code>sky.js</code></td><td>5</td><td>font</td><td>render, main</td></tr>
         <tr><td><code>album.js</code></td><td>6</td><td>objects</td><td>main</td></tr>
         <tr><td><code>main.js</code></td><td>all</td><td>every module above</td><td>the page</td></tr>
       </table>
     </div>
-    <p class="note" style="margin-top:10px">No module imports from a course above its own. <code>walk.js</code> and <code>drink.js</code> import nothing: they are pure rules and sit on course 5 because of what they need to exist at run time (a world, a mode), which <code>main.js</code> hands them.</p>
+    <p class="note" style="margin-top:10px">No module imports from a course above its own, with one exception: <code>render.js</code> (course 4) draws the fliers and so imports <code>sky.js</code> and <code>font.js</code> from course 5. <code>walk.js</code> and <code>drink.js</code> import nothing: they are pure rules and sit on course 5 because of what they need to exist at run time (a world, a mode), which <code>main.js</code> hands them.</p>
   </section>
 
   <section>
@@ -97,6 +100,7 @@ td code { color: var(--gold); }
         <tr><td>tap → hit → combo</td><td>0.1–0.35 s</td><td>1–4</td><td>a second hit inside the window</td></tr>
         <tr><td>jump → stomp → bounce</td><td>~0.5 s</td><td>1–5</td><td>coming down on the car, going up again</td></tr>
         <tr><td>swig → throw</td><td>0.7 s + a throw</td><td>3–5</td><td>how drunk is the player's own choice</td></tr>
+        <tr><td>headline flies → throw → next headline</td><td>5–30 s</td><td>1–5</td><td>something over the yard that was not there yesterday</td></tr>
         <tr><td>photograph → clear → card</td><td>20–60 s</td><td>1–4</td><td>the scan names the neighbour's car</td></tr>
         <tr><td>go down → walk the street → «хватит»</td><td>open</td><td>1–5</td><td>the yard goes on past the photograph</td></tr>
         <tr><td>album · days · the day's street</td><td>days</td><td>1–6</td><td>empty places; a different street tomorrow</td></tr>
@@ -105,5 +109,5 @@ td code { color: var(--gold); }
     </div>
   </section>
 
-  <p class="note">Build <code>walk-and-drink</code>, 11 October 2026. 109 checks pass and a headless play-through runs clean; whether any course above the fourth earns a second visit is not known until a person plays it. Detail and sources: <code>docs/structure.md</code>.</p>
+  <p class="note">Build <code>walk-and-drink</code> plus the news, 12 October 2026. 133 checks pass and a headless play-through runs clean; whether any course above the fourth earns a second visit is not known until a person plays it. Detail and sources: <code>docs/structure.md</code>.</p>
 </main>

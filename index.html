@@ -32,7 +32,7 @@
         <input id="shot" type="file" accept="image/*" capture="environment" hidden>
       </label>
       <button id="demoBtn" type="button" class="btn alt">ДЕМО-ДВОР</button>
-      <p class="fine">Снимок не покидает телефон: вещи на нём ищет сам телефон.</p>
+      <p class="fine">Снимок не покидает телефон: вещи на нём ищет сам телефон. Над двором летают заголовки дня из Википедии — за ними игра раз в день ходит в сеть; кнопка НОВОСТИ это выключает.</p>
       <p id="keep" class="best"></p>
       <button id="albumBtn" type="button" class="btn small alt" hidden>АЛЬБОМ</button>
     </section>
@@ -47,7 +47,7 @@
     <section id="empty" class="card" hidden>
       <h2>НИЧЕГО НЕ УЗНАЛ</h2>
       <p id="emptyWhy"></p>
-      <p class="fine">Узнаю машины, грузовики, автобусы, мотоциклы, велосипеды, скамейки, стулья, цветы в горшках. Людей и животных не трогаю никогда. Сними так, чтобы что-то из этого было видно целиком.</p>
+      <p class="fine">Узнаю машины, грузовики, автобусы, мотоциклы, велосипеды, скамейки, стулья, цветы в горшках. Людей и животных со снимка не трогаю никогда. Сними так, чтобы что-то из этого было видно целиком.</p>
       <label class="btn">СНЯТЬ ЕЩЁ РАЗ
         <input id="shot2" type="file" accept="image/*" capture="environment" hidden>
       </label>
@@ -82,6 +82,11 @@
     <label class="btn small alt">+ СНИМОК
       <input id="more" type="file" accept="image/*" capture="environment" hidden>
     </label>
+    <button id="newsBtn" type="button" class="btn small on" aria-pressed="true">НОВОСТИ</button>
+  </div>
+  <div class="stealth">
+    <button id="hideBtn" type="button" class="btn small" aria-pressed="false">СПРЯТАТЬСЯ</button>
+    <div><span>опасность</span><i id="heat" class="heat" role="meter" aria-label="опасность" aria-valuemin="0" aria-valuemax="5"><u></u><u></u><u></u><u></u><u></u></i></div>
   </div>
   <div class="hand"><span>в руке</span><b id="hand"></b><i><u id="coolBar"></u></i><em id="hint"></em></div>
   <div id="sip" class="sip" hidden>

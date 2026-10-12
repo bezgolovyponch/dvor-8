@@ -22,6 +22,10 @@ import { makeDrink, swig, fresh, stepDrink, level, drunkMode, stagger, SWIGS, SW
 import { makeAlbum, visit, record, progress, shareText, dayKey, daySeed, KINDS, SIGN, SHARE_MAX } from './src/album.js';
 import { baseOf, MAX_YARDS } from './src/palette.js';
 import { cameraFor, ZOOM } from './src/view.js';
+import { plain, glyph, textWidth, ADVANCE, GLYPH_H } from './src/font.js';
+import { headline, headlines, yardNews, feedUrl, LINE_MAX, LINES_MAX } from './src/news.js';
+import { makeSky, clearSky, stepSky, boxes, hitAt, knock, SKY_POINTS, GAP, GAP_HIT, FIRST, SHIP } from './src/sky.js';
+import { makeFolk, stepFolk, personAt, boxOf, soak, threw, stars, watchers, KINDS as FOLK, ORDER, STARS, FIRST_IN, MAX_FOLK, GIVE_UP, JOLT, CALL_TIME, POLICE_IN, SWEEPS, TURN } from './src/folk.js';
 import { readFileSync, readdirSync } from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -312,6 +316,125 @@ const line = shareText({ things: [{ kind: 'car', gone: true }, { kind: 'bench', 
 check('the line to show someone says what the yard held and what became of it, and nothing about where it is', line.split('\n').length === 4 && line.includes('🚗⬜🚗') && line.includes('2/3') && line.includes('2450') && line.includes('37 м') && line.includes('11.10'), line.split('\n')[1]);
 check('it is never longer than a yard, and leaves out a walk that was not taken', [...shareText({ things: Array.from({ length: 30 }, () => ({ kind: 'car', gone: true })), score: 1, combo: 1, metres: 0, day: '2026-10-11', url: '' }).split('\n')[1]].length === SHARE_MAX
   && !shareText({ things: [], score: 1, combo: 1, metres: 0, day: '2026-10-11', url: '' }).includes(' м'));
+
+// ---- the news over the yard ----------------------------------------------------------------------------
+section('the news: real lines, in the picture\'s own letters, and a throw turns the page');
+{
+  const abc = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const blank = glyph(' ').join();
+  check('every Russian and Latin capital and every figure has dots', [...abc].every((ch) => glyph(ch).length === GLYPH_H && glyph(ch).join() !== blank), [...abc].filter((ch) => glyph(ch).join() === blank).join(''));
+  const shapes = new Map();
+  for (const ch of 'БГДЖЗИЙЛПУФЦЧШЩЪЫЬЭЮЯ') shapes.set(glyph(ch).join(), ch);
+  check('no two letters that differ are drawn alike', shapes.size === 21 && glyph('Ь').join() !== glyph('Б').join() && glyph('З').join() !== glyph('3').join() && glyph('О').join() === glyph('O').join(), `${shapes.size} of 21 distinct`);
+  check('a line is written as it will be read: capitals, accents dropped, unknown marks out', plain('Kensō Soai — «мир»… ☃ ёж') === 'KENSO SOAI - «МИР»... ЁЖ', plain('Kensō Soai — «мир»… ☃ ёж'));
+  check('a line is as wide as its letters', textWidth('ДВОР') === 4 * ADVANCE - 1 && textWidth('') === 0);
+
+  const story = '<!--Oct 09--><b id="a"><a rel="mw:WikiLink" href="./X" title="X">Нобелевская премия</a></b> присуждена&nbsp;<a href="./Y">Энн Карсон</a> <i>(на илл.)</i> за &laquo;смелое&raquo; творчество.';
+  check('a story from the feed becomes one clean line', headline(story) === 'НОБЕЛЕВСКАЯ ПРЕМИЯ ПРИСУЖДЕНА ЭНН КАРСОН ЗА «СМЕЛОЕ» ТВОРЧЕСТВО', headline(story));
+  const long = headline(`<b>${'слово '.repeat(60)}</b>`);
+  check('a long story is cut at a word, and says it was cut', long.length <= LINE_MAX && long.endsWith('СЛОВО...'), `${long.length} letters`);
+  const feed = { news: Array.from({ length: 12 }, (_, n) => ({ story: `<b>Событие номер ${n}</b> произошло.` })) };
+  check('the feed gives its lines in its own order, and no more than fit a visit', headlines(feed).length === LINES_MAX && headlines(feed)[0] === 'СОБЫТИЕ НОМЕР 0 ПРОИЗОШЛО');
+  check('what is not a feed gives no lines: nothing is made up', headlines(null).length === 0 && headlines({ news: 'x' }).length === 0 && headlines({ news: [{ story: '' }] }).length === 0);
+  const own = yardNews({ day: '2026-10-12', days: 3, have: 4, of: 25, best: 900, far: 31 });
+  check('with no network the sky carries the yard\'s own facts, and says so', own.some((l) => l.includes('ДЕНЬ 3')) && own.some((l) => l.includes('4 ИЗ 25')) && own.some((l) => l.includes('900')) && own.some((l) => l.includes('НЕТ СЕТИ')), own[0]);
+  check('the request carries the date and nothing else', feedUrl('2026-10-12') === 'https://ru.wikipedia.org/api/rest_v1/feed/featured/2026/10/12');
+
+  const VW = 192, run = (sky, secs, w = VW) => { let up = null; for (let t = 0; t < secs; t += 1 / 60) up = stepSky(sky, 1 / 60, w) || up; return up; };
+  const LONG_LINE = 'ВТОРАЯ СТРОКА ДЛИННЕЕ ПЕРВОЙ, ЧТОБЫ ЕЁ БЫЛО ВРЕМЯ ПРОЧЕСТЬ НАД ДВОРОМ';
+  const sky = makeSky(['ПЕРВАЯ', LONG_LINE, 'ТРЕТЬЯ']);
+  check('the sky is empty while the yard is first looked at', run(sky, FIRST - 0.2) === null && !sky.flier);
+  const first = run(sky, 0.4);
+  check('then a plane comes in from the right with the first line', first?.kind === 'plane' && first.text === 'ПЕРВАЯ' && boxes(first).body.x > VW - 20, `${first?.kind} at ${first && boxes(first).body.x}`);
+  const x0 = first.x; run(sky, 1);
+  check('it flies left, towing the line behind it', first.x < x0 - 30 && boxes(first).sign.x > boxes(first).body.x + boxes(first).body.w);
+  check('an empty sky cannot be hit', hitAt(makeSky(['А']), 50, 12) === null);
+  const b = boxes(first);
+  check('the plane and its banner can both be hit', hitAt(sky, b.body.x + 4, b.body.y + 4) === first && hitAt(sky, b.sign.x + 10, b.sign.y + 5) === first && hitAt(sky, b.body.x + 4, b.body.y + 60) === null);
+  check('a hit gives its points once', knock(sky) === SKY_POINTS && knock(sky) === 0 && hitAt(sky, b.body.x + 4, b.body.y + 4) === null);
+  const y0 = boxes(first).sign.y, sx = boxes(first).sign.x; run(sky, 0.8);
+  check('the banner is cut loose: it falls where it was, and the plane runs', boxes(first).sign.y > y0 + 15 && boxes(first).sign.x === sx && first.x < b.body.x - 60);
+  run(sky, 2.2);
+  check('the sky clears, and the next comes sooner after a hit', sky.flier === null && sky.wait <= GAP_HIT && GAP_HIT < GAP);
+  const second = run(sky, GAP_HIT + 0.2);
+  check('the next is an airship with the next line', second?.kind === 'ship' && second.text === LONG_LINE);
+  run(sky, 8);
+  check('the ship stops over the yard and runs the line through its board', Math.abs(second.x - (VW - SHIP.w) / 2) < 1 && second.scroll > 60 && boxes(second).sign.w === SHIP.board.w);
+  run(sky, 1, 120);
+  check('seen from down in the yard, it comes back over the narrower view', second.x < (VW - SHIP.w) / 2 - 20);
+  run(sky, 16, 120);
+  const third = sky.flier || run(sky, GAP + 0.5, 120);
+  check('left alone it finishes the line and leaves; the lines take turns and come round', third?.kind === 'plane' && third.text === 'ТРЕТЬЯ');
+  clearSky(sky, []);
+  check('turned off, nothing flies', run(sky, 20) === null && sky.flier === null);
+  clearSky(sky, ['ПЕРВАЯ', LONG_LINE, 'ТРЕТЬЯ']);
+  check('turned on again, it goes on with the next line, not the first', run(sky, FIRST + 0.2)?.text === 'ПЕРВАЯ' && sky.at === 4);
+}
+
+// ---- the people in the yard ----------------------------------------------------------------------------
+section('the people: nobody is harmed, and being seen is the danger');
+{
+  const AREA = { x0: 0, x1: 192, top: 150, bottom: 200 };
+  const go = (folk, secs, r = mulberry32(3)) => { const all = []; for (let t = 0; t < secs; t += 1 / 60) all.push(...stepFolk(folk, 1 / 60, AREA, r)); return all; };
+  // one person of a kind, standing in the middle of the yard, and nobody else coming
+  const alone = (kind) => { const f = makeFolk(); f.wait = 1e9; f.people.push({ kind, dir: 1, x: 96, y: 180, y0: 180, state: 'go', t: 0, wet: 0, lost: 0, phase: 0, sweeps: kind === 'cop' ? SWEEPS : 0, to: null, called: false, leaving: false }); return f; };
+
+  const f0 = makeFolk();
+  check('the yard is empty while it is first looked at', go(f0, FIRST_IN - 0.3).length === 0 && f0.people.length === 0);
+  const came = go(f0, 0.6);
+  check('the first to come is the courier, in from an edge, on the ground', came[0]?.type === 'enter' && came[0].who.kind === 'courier' && ORDER[0] === 'courier' && (came[0].who.x < 20 || came[0].who.x > 172) && came[0].who.y >= AREA.top && came[0].who.y <= AREA.bottom);
+  const f1 = makeFolk(); go(f1, 60);
+  check('all four kinds are met in the first minute, never more than three at once', f1.turn >= 4 && f1.people.filter((p) => p.kind !== 'cop').length <= MAX_FOLK, `${f1.turn} came`);
+  check('left alone, nobody looks and nothing is risked', f1.heat === 0 && f1.calls === 0 && !f1.seen && !f1.people.some((p) => p.kind === 'cop'));
+  check('the courier is the fastest and worth the most of those who pass', ORDER.every((k) => FOLK.courier.v >= FOLK[k].v && FOLK.courier.points >= FOLK[k].points));
+  check('no kind can be harmed: a person has no hits to take and no way to be gone but walking off', Object.values(FOLK).every((k) => !('hp' in k) && !('damage' in k)));
+
+  const w = alone('walker');
+  check('a touch finds the person, and allows for where a moving one will be', personAt(w, 96, 172) === w.people[0] && personAt(w, 130, 172) === null && personAt(w, 96 + 5 + 4, 172, 0, 0.3) === w.people[0] && personAt(w, 96 - 5 - 4, 172, 0, 0.3) === null);
+  check('the courier is a wider mark than someone on foot', boxOf({ kind: 'courier', x: 0, y: 0 }).w > boxOf({ kind: 'walker', x: 0, y: 0 }).w);
+  check('water gives points and harms nothing', soak(w, w.people[0]) === FOLK.walker.points && w.people.length === 1 && w.soaked === 1);
+  check('soaked, they stop — and there is a moment before they look', w.people[0].state === 'alarm' && go(w, FOLK.walker.alarm - 0.1).length === 0 && w.heat === 0);
+  const looked = go(w, 0.2);
+  check('then they look up, and that is announced', looked.some((e) => e.type === 'look') && watchers(w) === 1);
+  go(w, 1);
+  check('in the open under their eyes, the danger climbs', w.heat > 0.3 && stars(w) >= 2, `${w.heat.toFixed(2)} → ${stars(w)} of ${STARS}`);
+  const h0 = w.heat; threw(w);
+  check('a throw under their eyes is noticed at once', Math.abs(w.heat - h0 - JOLT) < 1e-9);
+  w.hidden = true; const h1 = w.heat; const lostEv = go(w, GIVE_UP + 0.1);
+  check('hidden, the danger stops climbing; they lose you and go on their way', w.heat <= h1 && lostEv.some((e) => e.type === 'lost') && w.people[0].state === 'go' && watchers(w) === 0);
+  threw(w);
+  check('a hidden player risks nothing', w.heat <= h1);
+  go(w, 2);
+  check('with nobody looking the danger falls again', w.heat < h1 - 0.05);
+
+  const twice = alone('walker'); twice.hidden = true;
+  soak(twice, twice.people[0]); go(twice, 3); soak(twice, twice.people[0]);
+  const ran = go(twice, FOLK.walker.alarm + GIVE_UP + 0.3);
+  check('soaked a second time, they run for the nearer way out', twice.people[0]?.state === 'flee' && !ran.some((e) => e.type === 'call'));
+  const called = go(twice, CALL_TIME + 0.2);
+  check('and call the police', called.some((e) => e.type === 'call') && twice.calls === 1 && twice.police >= 0);
+  const arrived = go(twice, POLICE_IN + 0.2);
+  check('who come', arrived.some((e) => e.type === 'police') && twice.people.some((p) => p.kind === 'cop'));
+  const lady = alone('lady'); lady.hidden = true; soak(lady, lady.people[0]); go(lady, FOLK.lady.alarm + GIVE_UP + 0.3);
+  check('the angry lady calls at the first soaking', lady.people[0].state === 'flee' && FOLK.lady.calls === 1);
+  const drunk = alone('drunk'); drunk.hidden = true;
+  for (let n = 0; n < 4; n += 1) { soak(drunk, drunk.people[0] || { kind: 'drunk', wet: 0, state: 'flee' }); go(drunk, 5); }
+  check('the drunk never calls anyone, and barely sees you', drunk.calls === 0 && FOLK.drunk.calls === 0 && FOLK.drunk.rate * FOLK.drunk.look < 0.5);
+
+  const p = alone('cop'); p.people[0].to = 110; p.hidden = true;
+  const log = [];
+  for (let t = 0; t < 40 && p.people.length; t += 1 / 60) { stepFolk(p, 1 / 60, AREA, mulberry32(1)); const s = p.people[0]?.state; if (s && log[log.length - 1] !== s) log.push(s); }
+  check('the police walk in, look and look away in turns, and leave', log.join(' ').startsWith('go alarm look search alarm look') && log.filter((s) => s === 'look').length === SWEEPS && p.people.length === 0, log.join(' '));
+  check('between two looks there is time to act', TURN + FOLK.cop.alarm >= 1.5);
+  const c = alone('cop'); c.people[0].state = 'look';
+  go(c, 0.5); const half = c.heat; go(c, 1.2);
+  check('the police see faster than anyone, and to be seen is the end', FOLK.cop.rate > FOLK.lady.rate && half > 0.4 && c.seen && c.heat === 1 && stars(c) === STARS);
+  check('once seen, nothing more happens', go(c, 2).length === 0);
+  const wetCop = alone('cop'); const s0 = wetCop.people[0].sweeps; soak(wetCop, wetCop.people[0]);
+  check('water on the police only makes them look more', wetCop.people[0].sweeps === s0 + 1 && wetCop.people[0].state === 'alarm');
+  const longest = Math.max(...ORDER.map((k) => FOLK[k].rate * FOLK[k].look));
+  check('no single passer-by\'s look ends a run on its own: there is always time to hide', longest < 1 && Object.values(FOLK).every((k) => k.alarm >= 0.3), longest.toFixed(2));
+}
 
 // ---- nothing in vain ---------------------------------------------------------------------------------
 section('nothing in vain');

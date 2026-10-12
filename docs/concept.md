@@ -33,7 +33,9 @@ it is there is removed, not kept "for later". This is checked, not hoped for:
 | `drink.js` | Under alcohol the bottle can be drunk before it is thrown: each swig widens the burst and loosens the hand, so how drunk the mode plays is the player's own doing. |
 | `album.js` | A reason to come back that cannot be lost: every kind of thing ever wrecked, the days visited, the records — and the line a player sends to someone else. |
 | `font.js` | The page's own type smears when a 192-pixel picture is scaled, and it differs from phone to phone. So the words that fly over the yard are written the way an 8-bit console wrote them: one fixed set of dots, readable on any screen. |
-| `news.js` | The sky over the yard carries something that is not the player's own doings — what the world did today, from Wikipedia's «Текущие события» box, with no key and no account — and when there is no network, the yard's own news instead. Nothing is invented in its place. **Not yet wired: `main.js` does not import this module, so today the sky carries only the fallback.** |
+| `news.js` | The sky over the yard carries something that is not the player's own doings — what the world did today, from Wikipedia's «Текущие события» box, with no key and no account, asked for once a day — and when there is no network, the yard's own news instead. Nothing is invented in its place. |
+| `sky.js` | The line needs a carrier that belongs in the picture and can be played with: a plane towing a banner, an airship with a running board. They take turns because they are read differently. A throw at either turns the page — the next line comes sooner — so the news is a thing in the yard and not a caption over it. |
+| `folk.js` | A yard that only stands still is a shooting range. People pass through it — a courier on a bicycle, a walker, a drunk, an angry lady — and none of them can be harmed: all that is ever thrown at one is a ball of water, and all it does is make them look up. Being looked at while in the open is the danger; hiding ends it; soaking someone twice brings the police, who look in turns. It gives the run a way to be lost that is the player's own doing, at the creator's request. |
 | `main.js` | Wires the parts to the page and the finger. |
 | the score, combo and best score | A reason to throw faster, and a number to beat on «ЕЩЁ РАЗ». |
 | brackets and pips on targets | What can be hit, and how much it can take, is never a guess. |
@@ -91,13 +93,13 @@ method's output. `CREATOR` is the creator's word. `BUILT` exists and is tested.
 
 ## What is verified, and what is not
 
-**Verified.** `node test.mjs`: 109 checks. `tools/walk-check.mjs` in headless Chrome: down into the demo
+**Verified.** `node test.mjs`: 160 checks. `tools/folk-check.mjs` in headless Chrome: a courier soaked and looking up, the player hidden and lost, a second soaking and a call, the police arriving and looking, a thing wrecked while they looked away, the player seen in the open and the run ended as «ЗАМЕТИЛИ»; no page errors. `tools/news-check.mjs` in headless Chrome, with the network: the day's six real headlines fetched and kept; the plane and its banner over the demo yard, the banner cut loose by a throw (+25), the airship and its board from the balcony and from down in the yard, the board put out by a throw, the news turned off; no page errors. `tools/walk-check.mjs` in headless Chrome: down into the demo
 yard, things stomped, the street walked past the picture's edge, a real photograph added and walked into,
 a bottle drunk dry and thrown, the card, the line, the album; no page errors. And, from the build before: `tools/check.mjs` in headless Chrome: the demo yard played to the
 end in each of the four modes; three real street photographs searched in 1.6–1.8 s on a Mac, with cars, a
 bench and a motorcycle found, named and wrecked; no page errors.
 
-**Not verified.** That it is fun — nobody has played this build, and nobody has walked, jumped or drunk in
+**Not verified.** Whether the people are fun or only a nuisance; whether 0.3–1.2 s of warning is enough for a thumb to reach СПРЯТАТЬСЯ; whether the «!», «?» and «112» marks are read on a phone. Every number in `folk.js` is a first guess. Whether a headline can be read on a phone while playing, at six letters a second in letters five dots wide. Whether real news over a yard being wrecked is wanted at all: on the day this was built two of the six lines were about people killed in a war, and a throw at the banner scores. That it is fun — nobody has played this build, and nobody has walked, jumped or drunk in
 it with a thumb: the stick and the buttons have only been driven by a script. Whether a made yard reads as
 more of the player's street. Whether anything here brings a player back. How long the search takes on a phone.
 Whether the detector loads on an older phone. What it finds in *your* yard: from a high balcony, cars are
