@@ -81,15 +81,44 @@ function paintAlbum() {
 }
 
 // ---- small pieces of feedback ---------------------------------------------------------------------
+// A floating word, clamped so that the whole word stays on screen.
+//
+// The old clamp bounded the text's CENTRE to 8-92% of the width, which still let a long label run off the
+// edge -- and the longest label in the game is the hide warning, which is the one prompt that must never be
+// clipped because it is what keeps being seen a fair failure rather than an arbitrary one. This measures the
+// text and clamps its real bounds, so the widest label is the case that is handled rather than the case that
+// breaks.
+// The largest scale the `.pop` keyframes reach. Kept here, next to the clamp that depends on it, and
+// checked against style.css by the test suite so the two cannot drift apart silently.
+const POP_MAX_SCALE = 1.7;
+
 function pop(text, x, y, kind = '') {
   while (pops.children.length > 14) pops.firstChild.remove();
   const el = document.createElement('div');
   el.className = `pop ${kind}`;
   el.textContent = text;
-  el.style.left = `${Math.max(8, Math.min(92, ((x - cam.x + motion.x) / cam.w) * 100))}%`;
-  el.style.top = `${Math.max(6, Math.min(94, ((y - cam.y + motion.y) / cam.h) * 100))}%`;
-  el.addEventListener('animationend', () => el.remove());
+
+  const box = pops.getBoundingClientRect();
+  const vw = Math.max(1, box.width || frameEl.getBoundingClientRect().width);
+  const vh = Math.max(1, box.height || frameEl.getBoundingClientRect().height);
+  const wantX = ((x - cam.x + motion.x) / cam.w) * vw;   // where the word points, in screen pixels
+  const wantY = ((y - cam.y + motion.y) / cam.h) * vh;
+
+  // Measure, then keep both edges inside AT EVERY FRAME OF THE ANIMATION, not just at rest. The pop
+  // animation opens at scale(1.7), so a word measured with offsetWidth is about 1.7x wider at its first
+  // frame — which is how a word that fits at rest still gets clipped as it appears. Measuring with
+  // getBoundingClientRect instead does not help: it returns the ANIMATED box, so the width changes while
+  // you read it and the clamp becomes a moving target. So clamp on the layout width scaled by the
+  // animation's own maximum, which is the worst case by construction.
   pops.append(el);
+  const pad = 6;
+  const w = (el.offsetWidth || 0) * POP_MAX_SCALE;
+  const h = (el.offsetHeight || 0) * POP_MAX_SCALE;
+  const lo = w / 2 + pad, hi = Math.max(lo, vw - w / 2 - pad);
+  el.style.left = `${(Math.max(lo, Math.min(hi, wantX)) / vw) * 100}%`;
+  const tlo = h / 2 + pad, thi = Math.max(tlo, vh - h / 2 - pad);
+  el.style.top = `${(Math.max(tlo, Math.min(thi, wantY)) / vh) * 100}%`;
+  el.addEventListener('animationend', () => el.remove());
 }
 function banner(text, hold = false) {
   const el = $('banner');

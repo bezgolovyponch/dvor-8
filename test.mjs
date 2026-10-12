@@ -266,6 +266,19 @@ section('down in the yard: walking, jumping, stomping');
 w = yard();
 const TOP = bandTop(w);
 
+// ---- a floating word must stay on screen ---------------------------------------------------------------
+// The clamp in main.js depends on the pop animation's maximum scale, and the two live in different files.
+// This holds them together: if style.css ever opens wider, the clamp is wrong and this fails rather than the
+// hide warning silently going off the edge.
+{
+  const css = readFileSync(new URL('./style.css', import.meta.url), 'utf8');
+  const m = css.match(/@keyframes pop \{[^}]*scale\(([0-9.]+)\)/);
+  const declared = readFileSync(new URL('./src/main.js', import.meta.url), 'utf8').match(/POP_MAX_SCALE = ([0-9.]+)/);
+  check('the pop clamp is derived from the animation\'s real maximum scale',
+    !!m && !!declared && Number(m[1]) === Number(declared[1]),
+    `style.css scale(${m ? m[1] : '?'}) vs POP_MAX_SCALE ${declared ? declared[1] : '?'}`);
+}
+
 // ---- the sourced shake model ---------------------------------------------------------------------------
 // Eiserloh (GDC 2016): trauma accumulates, decays LINEARLY, and shake is trauma^POW. These checks hold the
 // three properties that make it a model rather than a decay constant, because each one is easy to lose in a
