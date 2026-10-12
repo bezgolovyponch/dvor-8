@@ -12,11 +12,12 @@ import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { demoYard } from './demo.js';
 import { makeWorld, pick, strike, tick, left } from './world.js';
 import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js';
-import { MODES, aimWith, splashTargets, chainNext } from './modes.js';
+import { MODES, splashTargets, chainNext } from './modes.js';
+import { THROWABLES, ORDER as THROW_ORDER, throwWith, aimWith } from './throwables.js';
 import { viewMotion, clientToWorld, cameraFor, stepDuck, LONG, SHORT, SCAN_TIME } from './view.js';
 import { yardFrom, grow, extend, edgeOf, room, bandTop } from './street.js';
 import { makeWalker, stepWalker, walked, standing } from './walk.js';
-import { makeDrink, swig, fresh, stepDrink, level, drunkMode, stagger, SWIG_TIME } from './drink.js';
+import { makeDrink, swig, fresh, stepDrink, level, drunkItem, stagger, SWIG_TIME } from './drink.js';
 import { MAX_YARDS } from './palette.js';
 import { makeAlbum, visit, record, progress, shareText, dayKey, dayLabel, daySeed, KINDS, SIGN } from './album.js';
 import { makeBuffer, draw, postcard } from './render.js';
@@ -42,7 +43,8 @@ let result = null, nudged = 0;   // the last finished run, for sharing; and when
 let yard = null;        // the photograph, its picture and its things: kept, so «ЕЩЁ РАЗ» costs nothing
 let world = null, fx = null, buf = null;
 let stage = 'title';    // title → detect → scan → play → done   (or → empty)
-let filter = 'sober', mode = MODES.sober;
+let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
+let hand = 'stone', item = THROWABLES.stone;      // hand/item: what you THROW
 let clock = 0, scanT = 0, endIn = 0, last = performance.now();
 let motion = viewMotion(filter, 0, calm), shake = { x: 0, y: 0 };
 let shown = {}, press = null;
@@ -163,7 +165,7 @@ function paintView() {
   $('knob').style.transform = '';
 }
 function paintHand() {
-  $('hand').textContent = mode.thing.toUpperCase();
+  $('hand').textContent = item.label.toUpperCase();
   $('hint').textContent = mode.hint;
   $('sip').hidden = filter !== 'alcohol';
 }
@@ -191,7 +193,7 @@ function begin() {
   clearSky(sky, skyLines());
   folk = makeFolk(); paintHide(); hideT = 0;
   paintView();
-  stage = 'scan'; scanT = 0; endIn = 0; shown = {}; press = null;
+  stage = 'scan'; scanT = 0; endIn = 0; shown = {}; press = null; foldForPlay(false);
   pops.replaceChildren();
   $('banner').classList.remove('hold', 'show');
   cards(null);
@@ -354,7 +356,7 @@ function fromDemo() {
 // ---- a landing ------------------------------------------------------------------------------------
 function resolve(rock) {
   if (rock.kind === 'water') { waterLands(rock); return; }
-  const m = MODES[rock.kind];
+  const m = THROWABLES[rock.kind] || THROWABLES.stone;
   if (rock.sky && skyHit(rock)) return;
   // What it lands on: everything near, for a thing that bursts; otherwise the one thing it was thrown at.
   const targets = rock.splash ? splashTargets(world, rock.tx, rock.ty, rock.splash) : rock.region && !rock.region.gone ? [rock.region] : [];
@@ -493,7 +495,7 @@ function frame(now) {
         sfx.tick(r.id);
         pop(r.label.toUpperCase(), r.cx, r.cy, 'tag');
       }
-      if (scanT >= SCAN_TIME) { stage = 'play'; scanY = null; sfx.ready(); banner(`${world.regions.length} ${world.regions.length === 1 ? 'ЦЕЛЬ' : 'ЦЕЛЕЙ'}`); }
+      if (scanT >= SCAN_TIME) { stage = 'play'; scanY = null; foldForPlay(true); sfx.ready(); banner(`${world.regions.length} ${world.regions.length === 1 ? 'ЦЕЛЬ' : 'ЦЕЛЕЙ'}`); }
     }
     const frozen = fx.freeze > 0;
     for (const rock of stepFx(fx, world, dt)) resolve(rock);
@@ -541,12 +543,13 @@ function throwAt(at) {
     sfx.throw();
     return;
   }
-  const live = filter === 'alcohol' ? drunkMode(mode, drink.drunk) : mode;   // as drunk as the player has made it
+  // What is in the hand now scatters, not how the player is looking; drinking makes the HAND wander.
+  const live = filter === 'alcohol' ? drunkItem(item, drink.drunk) : item;
   const landing = aimWith(live, at.x, at.y, rnd);
   world.throws += 1;
   // a touch on what is flying is a throw at the sky: it goes where the hand sends it, and the things under it are left alone
   const up = Boolean(hitAt(sky, at.x - cam.x, at.y - cam.y));
-  throwThing(fx, world, live, filter, landing.x, landing.y, up || live.splash ? null : pick(world, landing.x, landing.y));
+  throwThing(fx, world, live, hand, landing.x, landing.y, up || live.splash ? null : pick(world, landing.x, landing.y));
   if (up) fx.rocks[fx.rocks.length - 1].sky = true;
   if (filter === 'alcohol') fresh(drink);
   sfx.throw();
@@ -697,6 +700,7 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { keys.delete(KEYS[e.code]); });
 
+// HOW YOU LOOK. A mode now decides only the focus and the lean; what you throw is a separate choice below.
 for (const [id, m] of Object.entries(MODES)) {
   const button = document.createElement('button');
   button.type = 'button';
@@ -706,10 +710,43 @@ for (const [id, m] of Object.entries(MODES)) {
     filter = id; mode = m; press = null;
     document.body.dataset.filter = id;
     for (const other of $('filters').children) other.className = `btn small ${other === button ? 'on' : 'alt'}`;
+    $('lookNow').textContent = m.label.toUpperCase();
+    $('lookWhy').textContent = m.why;
     paintHand();
-    if (world && stage === 'play') { banner(m.thing.toUpperCase()); fx.cool = 0; }
+    if (world && stage === 'play') { banner(m.label.toUpperCase()); fx.cool = 0; }
   });
   $('filters').append(button);
+}
+
+// WHAT YOU THROW. Five things, each with its own flight, and each one says why it is in the palette rather
+// than being a second stone of a different colour. The panel is a <details>, so it folds away and the player
+// can keep the whole of the yard on a phone screen.
+for (const id of THROW_ORDER) {
+  const t = THROWABLES[id];
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `btn small chip ${id === hand ? 'on' : 'alt'}`;
+  button.innerHTML = `<b>${t.label.toUpperCase()}</b><i>${t.hint}</i>`;
+  button.addEventListener('click', () => {
+    hand = id; item = t; press = null;
+    for (const other of $('palette').children) other.classList.toggle('on', other === button);
+    for (const other of $('palette').children) other.classList.toggle('alt', other !== button);
+    $('paletteNow').textContent = t.label.toUpperCase();
+    $('paletteWhy').textContent = t.why;
+    paintHand();
+    if (world && stage === 'play') banner(t.label.toUpperCase());
+  });
+  $('palette').append(button);
+}
+$('paletteNow').textContent = item.label.toUpperCase();
+$('paletteWhy').textContent = item.why;
+$('lookNow').textContent = mode.label.toUpperCase();
+$('lookWhy').textContent = mode.why;
+
+// While a yard is being played the extra panels fold themselves away, so the screen holds the yard, the
+// thing in the hand and the danger meter — and nothing else the player did not ask for.
+function foldForPlay(playing) {
+  for (const id of ['paletteBox', 'lookBox', 'moreBox']) $(id).open = !playing;
 }
 
 paintHand();

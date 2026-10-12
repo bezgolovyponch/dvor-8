@@ -1,5 +1,9 @@
-// The four ways of seeing the yard. Each is a look AND a way of playing: what is in your hand, how it
-// flies, and how much of the yard you can see clearly.
+// The four ways of SEEING the yard. Each is a look: how much of the yard is sharp, and how the view leans.
+//
+// WHAT CHANGED, AND WHY. These used to carry what is in your hand as well, which coupled two unrelated
+// decisions — a player who wanted a wide splash had to accept a wandering hand. The hand is now its own
+// choice (src/throwables.js) and this file is only about the eyes. The flight, damage, scatter, splash,
+// chain and cooldown fields that used to live here are read from the throwable instead.
 //
 // The rule this file is held to (docs/concept.md, "nothing in vain"): a mode that only recoloured the
 // picture was a decoration, and was reported as "the filters don't change anything". Every mode here must
@@ -35,13 +39,6 @@ export const MODES = {
   },
 };
 export const CHAIN_RANGE = 80;   // how far a skipping thing will reach for its next target, pixels
-
-// Where a throw aimed at (x, y) actually lands.
-export function aimWith(mode, x, y, rnd) {
-  if (!mode.scatter) return { x, y };
-  const a = rnd() * Math.PI * 2, r = mode.scatter * Math.sqrt(rnd());
-  return { x: x + Math.cos(a) * r, y: y + Math.sin(a) * r };
-}
 
 const gap = (r, x, y) => Math.hypot(Math.max(r.x - x, 0, x - (r.x + r.w)), Math.max(r.y - y, 0, y - (r.y + r.h)));
 

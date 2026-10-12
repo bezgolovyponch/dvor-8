@@ -20,7 +20,8 @@ it is there is removed, not kept "for later". This is checked, not hoped for:
 | `objects.js` | Decides which found things are fair to hit (never people or animals) and which pixels are the thing. |
 | `stylise.js` | Makes the photograph an 8-bit picture of the *same* yard — the transformation is the opening hook. |
 | `palette.js` | Lets one picture be seen four ways at no cost: a mode's look is a different table. |
-| `modes.js` | Makes each filter a different way to play, so choosing one is a decision and not a decoration. |
+| `modes.js` | How you SEE: the focus and the lean. A mode is a way of looking, nothing more. |
+| `throwables.js` | What is in your HAND: five things, each flying and landing its own way, and each naming why it exists. Kept apart from the modes because holding a thing and seeing the yard are different decisions — the split means a player who wants a wide splash no longer has to accept a wandering hand. |
 | `world.js` | What a hit does: dent, crack, wreck, combo, score. The rules, with no drawing in them. |
 | `fx.js` | Makes a hit felt: pause, kick, flash, pieces, wreckage that stays — and makes the three kinds of hit felt *differently*, so the player can feel progress toward a break. The shake is Eiserloh's trauma model (trauma accumulates, decays linearly, offset is the cube) rather than an invented decay. Without it a wreck is a pixel swap. |
 | `view.js` | The lean and sway that give each mode its body, the duck that puts the player behind the rail (symmetric, so hiding and standing up cost the same), and the way back from a finger to a pixel, so aim stays true. |

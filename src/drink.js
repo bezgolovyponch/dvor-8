@@ -34,8 +34,13 @@ export function stepDrink(d, dt) {
 // How full the bottle looks, 0…1, falling smoothly while it is at the mouth.
 export const level = (d) => (d.left + d.busy / SWIG_TIME) / SWIGS;
 
-// The alcohol mode as it plays at this moment. At half-drunk it is exactly the mode as modes.js states it.
-export function drunkMode(mode, drunk) {
-  return { ...mode, scatter: mode.scatter * (0.4 + 1.2 * drunk), splash: mode.splash * (0.6 + 0.8 * drunk) };
+// The thing in your hand as it behaves at this moment. At half-drunk it is exactly the throwable as
+// throwables.js states it.
+//
+// The argument changed from a MODE to a THROWABLE. Scatter and splash are properties of the object — how far
+// a bottle sprays, how far a pebble does not — so once the hand was split from the eyes, drinking had to
+// modify the hand. A "drunk mode" that scaled a view's scatter would be scaling a field the view no longer has.
+export function drunkItem(item, drunk) {
+  return { ...item, scatter: item.scatter * (0.4 + 1.2 * drunk), splash: item.splash * (0.6 + 0.8 * drunk) };
 }
 export const stagger = (drunk) => 26 * drunk;   // pixels per second the legs wander, on foot

@@ -13,12 +13,13 @@ import { TARGETS, tilesFor, merge, toRegions, MAX_TARGETS, MIN_SCORE } from './s
 import { demoYard } from './src/demo.js';
 import { makeWorld, pick, strike, tick, left, DEBRIS_MAX } from './src/world.js';
 import { shakeFor, TRAUMA_DECAY, TRAUMA_POW, TRAUMA_DENT, TRAUMA_BREAK, makeFx, throwThing, impact, burst, stepFx, shakeOffset, HIT_PAUSE, BREAK_PAUSE, SHAKE_MAX } from './src/fx.js';
-import { MODES, aimWith, splashTargets, chainNext, inFocus } from './src/modes.js';
+import { MODES, splashTargets, chainNext, inFocus } from './src/modes.js';
+import { THROWABLES, ORDER as THROW_ORDER, throwWith, aimWith } from './src/throwables.js';
 import { stepDuck, viewMotion, clientToWorld, worldToClient, LONG, SHORT, SCAN_TIME } from './src/view.js';
 import { mulberry32 } from './src/rng.js';
 import { yardFrom, cleared, grow, extend, edgeOf, room, bandTop, MAX_STREET } from './src/street.js';
 import { makeWalker, stepWalker, standing, walked, JUMP, FALL, CLEAR } from './src/walk.js';
-import { makeDrink, swig, fresh, stepDrink, level, drunkMode, stagger, SWIGS, SWIG_TIME, PER_SWIG, START } from './src/drink.js';
+import { makeDrink, swig, fresh, stepDrink, level, drunkItem, stagger, SWIGS, SWIG_TIME, PER_SWIG, START } from './src/drink.js';
 import { makeAlbum, visit, record, progress, shareText, dayKey, daySeed, KINDS, SIGN, SHARE_MAX } from './src/album.js';
 import { baseOf, MAX_YARDS } from './src/palette.js';
 import { cameraFor, ZOOM } from './src/view.js';
@@ -114,10 +115,28 @@ check('«ещё раз» is a clean yard: same things, nothing broken, no score'
 section('modes: every filter is a different way to play, and says why');
 const ids = Object.keys(MODES);
 check('every mode has a look to go with it', ids.every((id) => LOOKS[id]) && Object.keys(LOOKS).every((id) => MODES[id]));
-check('every mode says what is in the hand, how to use it, and why it exists', ids.every((id) => MODES[id].thing && MODES[id].hint && MODES[id].why.length > 40));
-check('no two modes put the same thing in the hand', new Set(ids.map((id) => MODES[id].thing)).size === ids.length, ids.map((id) => MODES[id].thing).join(', '));
-const sig = (m) => [m.flight, m.damage, m.scatter, m.splash, m.chain, m.cooldown].join();
-check('every mode but sober changes BOTH the throw and the focus', ids.filter((id) => id !== 'sober').every((id) => sig(MODES[id]) !== sig(MODES.sober) && MODES[id].focus) && MODES.sober.focus === null);
+check('every mode says how to use it and why it exists', ids.every((id) => MODES[id].hint && MODES[id].why.length > 40));
+check('every mode but sober changes the FOCUS, which is now the only thing a mode decides',
+  ids.filter((id) => id !== 'sober').every((id) => MODES[id].focus && MODES[id].focus.radius >= 0) && MODES.sober.focus === null);
+
+section('the hand: five things to throw, each flying its own way');
+const tids = Object.keys(THROWABLES);
+check('every throwable says what it is and why it exists', tids.every((id) => THROWABLES[id].label && THROWABLES[id].hint && THROWABLES[id].why.length > 40));
+const tsig = (t) => [t.flight, t.damage, t.scatter, t.splash, t.chain, t.cooldown].join();
+check('no two throwables fly the same way', new Set(tids.map((id) => tsig(THROWABLES[id]))).size === tids.length,
+  tids.map((id) => `${id}:${tsig(THROWABLES[id])}`).join(' | '));
+check('the fastest thing in the hand is the stone, and the heaviest is the brick',
+  tids.every((id) => THROWABLES[id].flight >= THROWABLES.stone.flight) && Math.max(...tids.map((id) => THROWABLES[id].damage)) === THROWABLES.brick.damage);
+check('water is thrown at people and carries no damage to the yard', THROWABLES.water.damage === 0 && THROWABLES.water.sky);
+check('the order lists every throwable exactly once, so the palette cannot silently lose one',
+  THROW_ORDER.length === tids.length && new Set(THROW_ORDER).size === tids.length && THROW_ORDER.every((id) => THROWABLES[id]));
+check('the hand and the eyes are independent: any throwable can be held under any mode',
+  tids.every((id) => ids.every((v) => { const t = throwWith(THROWABLES[id], MODES[v]); return t.label === THROWABLES[id].label && t.combo === MODES[v].combo; })));
+check('only the bottle strays, only the slipper skips, and only the brick makes the hand wait',
+  tids.filter((id) => THROWABLES[id].scatter > 0).join() === 'bottle'
+  && tids.filter((id) => THROWABLES[id].chain > 0).join() === 'slipper'
+  && tids.filter((id) => THROWABLES[id].cooldown > 0).join() === 'brick',
+  `stray ${tids.filter((id) => THROWABLES[id].scatter > 0)} · skip ${tids.filter((id) => THROWABLES[id].chain > 0)} · rest ${tids.filter((id) => THROWABLES[id].cooldown > 0)}`);
 const R = () => mulberry32(4);
 check('sober: the throw lands exactly where it was aimed', (() => { const a = aimWith(MODES.sober, 50, 60, R()); return a.x === 50 && a.y === 60; })());
 const strays = (() => { const r = R(); return Array.from({ length: 200 }, () => { const a = aimWith(MODES.alcohol, 50, 60, r); return Math.hypot(a.x - 50, a.y - 60); }); })();
@@ -443,8 +462,8 @@ fresh(dr);
 check('throwing it puts a full one in the hand', dr.left === SWIGS && swig(dr));
 dr = makeDrink(); const d0 = dr.drunk; stepDrink(dr, 10);
 check('it wears off on its own, slowly, and never below dry', dr.drunk < d0 && dr.drunk > 0 && (() => { stepDrink(dr, 1000); return dr.drunk === 0; })());
-const half = drunkMode(MODES.alcohol, 0.5), dry = drunkMode(MODES.alcohol, 0), full = drunkMode(MODES.alcohol, 1);
-check('half-drunk is the mode exactly as stated; drier is truer and smaller, drunker is wider and wilder', Math.abs(half.scatter - MODES.alcohol.scatter) < 1e-9 && Math.abs(half.splash - MODES.alcohol.splash) < 1e-9
+const half = drunkItem(THROWABLES.bottle, 0.5), dry = drunkItem(THROWABLES.bottle, 0), full = drunkItem(THROWABLES.bottle, 1);
+check('half-drunk is the throwable exactly as stated; drier is truer and smaller, drunker is wider and wilder', Math.abs(half.scatter - THROWABLES.bottle.scatter) < 1e-9 && Math.abs(half.splash - THROWABLES.bottle.splash) < 1e-9
   && dry.scatter < half.scatter && dry.splash < half.splash && full.scatter > half.scatter && full.splash > half.splash && dry.splash > 0,
   `burst ${dry.splash.toFixed(0)} / ${half.splash.toFixed(0)} / ${full.splash.toFixed(0)} px, stray ${dry.scatter.toFixed(0)} / ${half.scatter.toFixed(0)} / ${full.scatter.toFixed(0)} px`);
 check('the view leans and doubles more the more is drunk, and stays on the screen', Math.abs(viewMotion('alcohol', 1.7, false, 1).angle) > Math.abs(viewMotion('alcohol', 1.7, false, 0).angle)

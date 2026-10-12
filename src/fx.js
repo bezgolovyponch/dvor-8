@@ -45,12 +45,12 @@ export function makeFx(world) {
 }
 
 // A throw. `from` is given for a skip from one thing to the next; otherwise it leaves the balcony.
-export function throwThing(fx, world, mode, id, tx, ty, region, from = null) {
+export function throwThing(fx, world, item, id, tx, ty, region, from = null) {
   fx.rocks.push({
-    x0: from ? from.x : fx.hand.x, y0: from ? from.y : fx.hand.y, tx, ty, t: 0, dur: from ? HOP_TIME : mode.flight,
-    kind: id, region, damage: mode.damage, splash: mode.splash, hops: from ? from.hops : mode.chain, touched: from ? from.touched : new Set(),
+    x0: from ? from.x : fx.hand.x, y0: from ? from.y : fx.hand.y, tx, ty, t: 0, dur: from ? HOP_TIME : item.flight,
+    kind: id, region, damage: item.damage, splash: item.splash, hops: from ? from.hops : item.chain, touched: from ? from.touched : new Set(),
   });
-  if (!from) { fx.rings.push({ x: tx, y: ty, t: 0, r: fx.lastRing || 1 }); fx.cool = mode.cooldown; }   // the tap is answered in the same frame
+  if (!from) { fx.rings.push({ x: tx, y: ty, t: 0, r: fx.lastRing || 1 }); fx.cool = item.cooldown; }   // the tap is answered in the same frame
 }
 
 // Feedback, scaled to what actually happened.

@@ -83,16 +83,6 @@
       <button id="stopBtn" type="button" class="btn small alt">ХВАТИТ</button>
     </div>
   </div>
-  <div class="row">
-    <button id="viewBtn" type="button" class="btn small">ВО ДВОР</button>
-    <label class="btn small alt">СНЯТЬ
-      <input id="more" type="file" accept="image/*" capture="environment" hidden>
-    </label>
-    <label class="btn small alt">ГАЛЕРЕЯ
-      <input id="picIn" type="file" accept="image/*" hidden>
-    </label>
-    <button id="newsBtn" type="button" class="btn small on" aria-pressed="true">НОВОСТИ</button>
-  </div>
   <div class="stealth">
     <button id="hideBtn" type="button" class="btn small" aria-pressed="false">СПРЯТАТЬСЯ</button>
     <div><span>опасность</span><i id="heat" class="heat" role="meter" aria-label="опасность" aria-valuemin="0" aria-valuemax="5"><u></u><u></u><u></u><u></u><u></u></i></div>
@@ -102,12 +92,36 @@
     <button id="sipBtn" type="button" class="btn small">ГЛОТОК</button>
     <div><span>градус</span><i><u id="drunkBar"></u></i></div>
   </div>
-  <div id="filters" class="row" aria-label="взгляд"></div>
-  <div class="row">
-    <button id="restartBtn" type="button" class="btn small alt">ЗАНОВО</button>
-    <button id="homeBtn" type="button" class="btn small alt">НОВЫЙ ДВОР</button>
-    <button id="soundBtn" type="button" class="btn small alt" aria-pressed="true">ЗВУК</button>
-  </div>
+  <details id="paletteBox" class="fold">
+    <summary class="btn small alt">ЧТО БРОСАТЬ <b id="paletteNow"></b></summary>
+    <div id="palette" class="palette" aria-label="что бросить"></div>
+    <p id="paletteWhy" class="fine"></p>
+  </details>
+  <details id="lookBox" class="fold">
+    <summary class="btn small alt">КАК СМОТРЕТЬ <b id="lookNow"></b></summary>
+    <div id="filters" class="row" aria-label="взгляд"></div>
+    <p id="lookWhy" class="fine"></p>
+  </details>
+  <details id="moreBox" class="fold">
+    <summary class="btn small alt">ЕЩЁ</summary>
+    <div class="row">
+      <button id="restartBtn" type="button" class="btn small alt">ЗАНОВО</button>
+      <button id="homeBtn" type="button" class="btn small alt">НОВЫЙ ДВОР</button>
+      <button id="soundBtn" type="button" class="btn small alt" aria-pressed="true">ЗВУК</button>
+    </div>
+    <div class="row">
+      <button id="viewBtn" type="button" class="btn small">ВО ДВОР</button>
+      <button id="newsBtn" type="button" class="btn small on" aria-pressed="true">НОВОСТИ</button>
+    </div>
+    <div class="row">
+      <label class="btn small alt">СНЯТЬ
+        <input id="more" type="file" accept="image/*" capture="environment" hidden>
+      </label>
+      <label class="btn small alt">ГАЛЕРЕЯ
+        <input id="picIn" type="file" accept="image/*" hidden>
+      </label>
+    </div>
+  </details>
   <p id="note" class="source"></p>
 </main>
 

@@ -117,3 +117,26 @@ body[data-view="walk"] .frame { width: min(100%, calc(46vh * var(--aspect))); }
 body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); box-shadow: 5px 5px 0 var(--ink); }
 
 @media (prefers-reduced-motion: reduce) { body { animation: none; } .pop, .banner.show, .bump { animation-duration: .01s; } }
+
+/* ---- folding panels: the palette, the look, and everything else -------------------------------------
+   A phone screen during play has room for the yard, the thing in the hand and the danger meter. Everything
+   else is folded into a <details> that opens on a tap, so the player chooses when to spend screen on menus
+   instead of having them taken. */
+.fold { width: 100%; }
+.fold > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  justify-content: space-between; width: 100%;
+}
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::after { content: '▾'; opacity: .7; font-size: 10px; }
+.fold[open] > summary::after { content: '▴'; }
+.fold > summary b { color: var(--gold, #ffd23f); font-style: italic; }
+
+/* The palette: five things to throw. Each chip shows the thing and what it does, because a palette of
+   unlabelled icons would make the player learn by throwing rather than by choosing. */
+.palette { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.palette .chip { display: grid; gap: 1px; text-align: left; padding: 5px 7px; line-height: 1.15; }
+.palette .chip b { font-size: 12px; }
+.palette .chip i { font-style: normal; font-size: 9px; opacity: .78; letter-spacing: .01em; }
+.palette .chip.on { outline: 2px solid #fff; }
+#paletteWhy { margin-top: 6px; }
