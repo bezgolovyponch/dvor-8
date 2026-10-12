@@ -164,6 +164,31 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
     }
     function fsVariant(src) { return fsVariantFrom(guided(src, 4, 0.22)); }
 
+    // Diffusion on the raw pixels, with the error scaled by strength. strength=1 is textbook
+    // Floyd-Steinberg; lower values diffuse less, which keeps colour transitions tighter and the picture
+    // crisper while still smoothing the gradients.
+    function diffVariant(src, n, strength) {
+      const pal = paletteOf(src, n), out = new Uint8ClampedArray(src.length);
+      const buf = new Float32Array(W*H*3);
+      for (let i=0;i<W*H*3;i+=1) { const ch=i%3, px=((i-ch)/3)*4; buf[i]=src[px+ch]; }
+      for (let y=0;y<H;y+=1) {
+        const ltr = (y & 1) === 0;
+        for (let k=0;k<W;k+=1) {
+          const x = ltr ? k : W-1-k;
+          const p=(y*W+x)*3;
+          const r=Math.max(0,Math.min(255,buf[p])), g=Math.max(0,Math.min(255,buf[p+1])), b=Math.max(0,Math.min(255,buf[p+2]));
+          const idx=nearest(pal,r,g,b);
+          const i=(y*W+x)*4; write(pal,idx,out,i);
+          const er=(r-pal[idx][0])*strength, eg=(g-pal[idx][1])*strength, eb=(b-pal[idx][2])*strength;
+          const d = ltr ? 1 : -1;
+          const push=(dx,dy,w)=>{ const nx=x+dx*d, ny=y+dy; if(nx<0||ny<0||nx>=W||ny>=H) return;
+            const q=(ny*W+nx)*3; buf[q]+=er*w; buf[q+1]+=eg*w; buf[q+2]+=eb*w; };
+          push(1,0,7/16); push(-1,1,3/16); push(0,1,5/16); push(1,1,1/16);
+        }
+      }
+      return { out, pal };
+    }
+
     // ---- regions, each INSIDE one surface ----
     const R = (x0,y0,x1,y1) => ({ xs:Math.round(x0*W), xe:Math.round(x1*W), ys:Math.round(y0*H), ye:Math.round(y1*H) });
     const REGIONS = {
@@ -203,13 +228,24 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
       // A much gentler guided pass: r=1 and a small eps. The hypothesis to test is that a light touch
       // removes single-pixel sensor noise without flattening brick, gravel or foliage into paste.
       gentle: (() => { const sm = guided(base, 1, 0.01); return current(sm, 28, 26); })(),
+      // NO input smoothing at all, only the diffusion. The guided pass turned out to be the blur the
+      // creator objected to, so these isolate the diffusion's contribution on its own.
+      crisp: diffVariant(base, 28, 1.0),
+      crispHalf: diffVariant(base, 28, 0.5),
+      // The blur the creator objected to is the guided filter's EPSILON, not the filter itself: a large
+      // eps makes var/(var+eps) small everywhere, so every window collapses to its local mean and the
+      // texture inside a surface goes with the noise. These sweep eps down to find where noise falls and
+      // texture survives.
+      e3: (() => { const sm = guided(base, 1, 0.003); return diffVariant(sm, 28, 1.0); })(),
+      e1: (() => { const sm = guided(base, 1, 0.001); return diffVariant(sm, 28, 1.0); })(),
+      r2e1: (() => { const sm = guided(base, 2, 0.001); return diffVariant(sm, 28, 1.0); })(),
       gentleFs: (() => { const sm = guided(base, 1, 0.01); const save = base; return fsVariantFrom(sm); })(),
     };
 
     // ---- build the sheet: photograph, then each variant at 2x ----
     const K = 2, GAP = 8, LABEL = 22;
     const sheet = document.createElement('canvas');
-    sheet.width = W*K*6 + GAP*7; sheet.height = H*K + LABEL + GAP*2;
+    sheet.width = W*K*11 + GAP*12; sheet.height = H*K + LABEL + GAP*2;
     const sc = sheet.getContext('2d');
     sc.fillStyle = '#12052e'; sc.fillRect(0,0,sheet.width,sheet.height);
     sc.imageSmoothingEnabled = false;
@@ -228,6 +264,11 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
     draw(variants.flat.out, GAP*4+W*K*3, 'GUIDED+FLAT-DITHER');
     draw(variants.gentle.out, GAP*5+W*K*4, 'GENTLE r=1');
     draw(variants.gentleFs.out, GAP*6+W*K*5, 'GENTLE+FS');
+    draw(variants.crisp.out, GAP*7+W*K*6, 'CRISP FS 1.0');
+    draw(variants.crispHalf.out, GAP*8+W*K*7, 'CRISP FS 0.5');
+    draw(variants.e3.out, GAP*9+W*K*8, 'r1 eps.003');
+    draw(variants.e1.out, GAP*10+W*K*9, 'r1 eps.001');
+    draw(variants.r2e1.out, GAP*11+W*K*10, 'r2 eps.001');
 
     const fsSheet = document.createElement('canvas');
     fsSheet.width = W*K; fsSheet.height = H*K;
@@ -247,6 +288,11 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
       fs: stats(variants.fs.out),
       gentle: stats(variants.gentle.out),
       gentleFs: stats(variants.gentleFs.out),
+      crisp: stats(variants.crisp.out),
+      crispHalf: stats(variants.crispHalf.out),
+      e3: stats(variants.e3.out),
+      e1: stats(variants.e1.out),
+      r2e1: stats(variants.r2e1.out),
       palettes: Object.fromEntries(Object.entries(variants).map(([k,v]) => [k, v.pal.length])),
     };
   `);
@@ -260,7 +306,7 @@ await withPage(BASE, { width: 1000, height: 700 }, async (page) => {
   console.log('separation = closest two surfaces / widest spread inside one. Higher is better.');
   console.log('flatness   = mean per-surface sd. LOWER is better: a flat surface should not buzz.');
   console.log();
-  for (const k of ['raw', 'current', 'guided', 'flat', 'fs', 'gentle', 'gentleFs']) console.log(row(k, res[k]));
+  for (const k of ['raw', 'current', 'gentleFs', 'crisp', 'e3', 'e1', 'r2e1']) console.log(row(k, res[k]));
   console.log();
   console.log(`sheet written to ${outPng}  (and ${outPng.replace(/\\.png$/, '-fs.png')})`);
 });
