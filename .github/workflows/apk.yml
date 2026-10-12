@@ -1,0 +1,76 @@
+# Builds the Android app on GitHub's machines, which have the Android SDK, and attaches it to a pre-release
+# so it can be downloaded straight onto a phone.
+#
+# It builds two versions of the game with the SAME signing key, so a phone can switch between them:
+#   main      the latest work on main
+#   pipeline  this branch (the fixed-palette pixel-art pipeline, docs/pixel-pipeline.md)
+#
+# THE KEY. A phone installs an update only over a build signed with the same key. If the repository has a
+# secret DVOR8_KEYSTORE (the base64 of ~/.android/dvor8.keystore, password "android"), that key is used and
+# these builds install over the existing app. Without it a fresh key is made for each run, and the
+# installed app must be uninstalled first.
+name: apk
+
+on:
+  push:
+    branches: [claude/jolly-euler-jor3qh]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Android SDK pieces the build script names
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          if [ ! -x "$SDK/build-tools/35.0.0/aapt2" ] || [ ! -f "$SDK/platforms/android-35/android.jar" ]; then
+            # `yes` dies of SIGPIPE when sdkmanager stops reading, which pipefail would count as a failure
+            yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" "build-tools;35.0.0" "platforms;android-35" > /dev/null || true
+          fi
+          test -x "$SDK/build-tools/35.0.0/aapt2" && test -f "$SDK/platforms/android-35/android.jar"
+
+      - name: Signing key
+        env:
+          KEYSTORE: ${{ secrets.DVOR8_KEYSTORE }}
+        run: |
+          mkdir -p ~/.android
+          if [ -n "$KEYSTORE" ]; then
+            echo "$KEYSTORE" | base64 -d > ~/.android/dvor8.keystore
+            echo "KEY_NOTE=signed with the DVOR8_KEYSTORE secret: installs over the existing app" >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair -keystore ~/.android/dvor8.keystore -storepass android -keypass android \
+              -alias dvor8 -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=DVOR-8" 2> /dev/null
+            echo "KEY_NOTE=signed with a NEW key: uninstall the installed app first" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build both
+        run: |
+          mkdir -p dist
+          CODE=$((100 + GITHUB_RUN_NUMBER))
+          for pair in "main:origin/main" "pipeline:$GITHUB_SHA"; do
+            label=${pair%%:*}; ref=${pair#*:}
+            rm -rf "/tmp/$label" && git worktree add -f "/tmp/$label" "$ref"
+            sha=$(git -C "/tmp/$label" rev-parse --short HEAD)
+            VERSION="0.5.$GITHUB_RUN_NUMBER-$label-$sha" CODE=$CODE sh "/tmp/$label/android/build.sh"
+            cp "/tmp/$label/android/out/"*.apk "dist/dvor-8-$label-$sha.apk"
+          done
+          ls -l dist
+
+      - name: Pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "apk-$GITHUB_RUN_NUMBER" dist/*.apk --prerelease --target "$GITHUB_SHA" \
+            --title "Phone build $GITHUB_RUN_NUMBER" \
+            --notes "Two builds of the game, same key. $KEY_NOTE.
+          - dvor-8-main-*.apk: the latest main
+          - dvor-8-pipeline-*.apk: branch claude/jolly-euler-jor3qh (fixed-palette pixel-art pipeline)
+          On the phone: open the file, allow installing from that source, install."
