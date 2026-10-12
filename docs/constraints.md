@@ -407,9 +407,22 @@ finished, i.e. the end state is a record and not a reset.
 
 ## PS2 — Autonomy is the strongest measured predictor of enjoyment, so the no-goal design is a finding and not a gap
 
-**Statement.** The absence of a score goal, of loss, and of any forced order is **the design's strongest
-evidence-backed feature**, not the hole that `docs/feasibility.md` treats it as. It must not be "fixed" by
-adding a goal.
+**Statement (REVISED 2026-10-12 — see `docs/audit-and-reconstruction.md` §1.3).** The original wording claimed
+the absence of *loss* was the evidence-backed feature. **That over-claimed the source.** What the SDT study
+measures is **autonomy**, competence and relatedness — it says nothing about losing, and `src/folk.js` has since
+added a loss state (being seen ends the run) that this constraint would have forbidden.
+
+The revised constraint is narrower and testable:
+
+> **Games may contain loss. What they may not contain is loss that is *imposed* rather than *caused*, or loss
+> that *takes something away*.** Progress must remain monotonic; the only permitted cost of failure is the run.
+
+`src/folk.js` satisfies this on four tests, all verified in the build: the loss is caused by the player's own
+throw; it is telegraphed (a star meter, `СМОТРИТ — ПРЯЧЬСЯ`, vibration, sound); it is avoidable with a learnable
+action (`hideBtn`/`KeyH`, and the test *"no single passer-by's look ends a run on its own: there is always time
+to hide"*); and recovery is one tap.
+
+**Also still true, and unchanged:** no score goal and no forced order. The player chooses what to wreck and when.
 
 **Ground.** In the largest SDT game study, in-game **autonomy** was the strongest single predictor of
 enjoyment — stronger than competence, and far stronger than relatedness.
