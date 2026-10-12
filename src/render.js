@@ -6,6 +6,7 @@ import { inFocus } from './modes.js';
 import { glyph, ADVANCE, GLYPH_W, GLYPH_H } from './font.js';
 import { boxes, SHIP, PLANE, BANNER_H, SHADOW } from './sky.js';
 import { textWidth } from './font.js';
+import { PAINTS, COVER } from './decal.js';
 
 export function makeBuffer(w, h) {
   const canvas = document.createElement('canvas');
@@ -21,14 +22,14 @@ export function makeBuffer(w, h) {
 // as a sticker. `spin` swaps the silhouette on alternate frames for the things that tumble.
 const THINGS = {
   // a stone: chipped, lighter on top, and it does not tumble
-  sober: (c, x, y) => {
+  stone: (c, x, y) => {
     c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 2, 6, 5);
     c.fillStyle = '#3a3040'; c.fillRect(x - 2, y - 1, 4, 3);
     c.fillStyle = '#8b8095'; c.fillRect(x - 2, y - 2, 3, 2);
     c.fillStyle = '#e8e4f0'; c.fillRect(x - 2, y - 2, 2, 1);
   },
   // a slipper: flat, floppy, and it flips end over end
-  weed: (c, x, y, spin) => {
+  slipper: (c, x, y, spin) => {
     if (spin) {
       c.fillStyle = '#0b0018'; c.fillRect(x - 2, y - 4, 4, 8);
       c.fillStyle = '#ff6fa8'; c.fillRect(x - 1, y - 3, 2, 6);
@@ -41,7 +42,7 @@ const THINGS = {
     }
   },
   // a bottle: neck, shoulder, body, one lit edge down the glass
-  alcohol: (c, x, y, spin) => {
+  bottle: (c, x, y, spin) => {
     if (spin) {
       c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 2, 7, 4);
       c.fillStyle = '#1f7a4c'; c.fillRect(x - 2, y - 1, 5, 2);
@@ -64,13 +65,21 @@ const THINGS = {
     c.fillStyle = '#1b4a94'; c.fillRect(x - 2, y + 2, 4, 1);
   },
   // a brick: heavy, chipped at one end, and it does not tumble either
-  depression: (c, x, y) => {
+  brick: (c, x, y) => {
     c.fillStyle = '#0b0018'; c.fillRect(x - 4, y - 2, 9, 5);
     c.fillStyle = '#b5482f'; c.fillRect(x - 3, y - 1, 7, 3);
     c.fillStyle = '#d4664a'; c.fillRect(x - 3, y - 1, 7, 1);
     c.fillStyle = '#7a2c1c'; c.fillRect(x + 1, y, 3, 2);
     c.fillStyle = '#3a1410'; c.fillRect(x + 3, y - 1, 1, 3);
     c.fillStyle = '#e08a70'; c.fillRect(x - 3, y - 2, 3, 1);
+  },
+  // a ball of paint: the colour it will leave, with one lit corner, and a drop coming off it as it turns
+  paint: (c, x, y, spin, rock) => {
+    const [r, g, b] = PAINTS[rock?.paint ?? 0].rgb;
+    c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 3, 7, 7);
+    c.fillStyle = `rgb(${r},${g},${b})`; c.fillRect(x - 2, y - 2, 5, 5);
+    c.fillStyle = '#ffffff'; c.fillRect(x - 2, y - 2, 2, 1);
+    c.fillStyle = `rgb(${r},${g},${b})`; c.fillRect(x + (spin ? 3 : -4), y + 3, 1, 2);
   },
 };
 
@@ -325,7 +334,7 @@ function rail(c, w, h, hideT = 1) {
 // cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
 export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0 }) {
   const pal = lookThrough(world.palette, filter, seconds);
-  const { idx, rubble, photo, sw } = world, W = world.w, H = world.h;
+  const { idx, rubble, photo, sw, paint } = world, W = world.w, H = world.h;
   const w = cam.w, h = cam.h, cx = cam.x, cy = cam.y;
   const d = buf.image.data;
   const focus = scanY === null ? mode.focus : null;
@@ -346,6 +355,14 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
         }
       }
       const c = pal[rubble[src] !== 255 ? rubble[src] : idx[src]];
+      // Thrown colour lies OVER the picture and lets it show through, so a painted car is still that car.
+      // The paint keeps its own colour under every way of looking: it is the player's mark, not the yard's.
+      const stain = paint[src];
+      if (stain) {
+        const s = PAINTS[stain - 1].rgb;
+        d[o] = (c[0] + (s[0] - c[0]) * COVER) * dim; d[o + 1] = (c[1] + (s[1] - c[1]) * COVER) * dim; d[o + 2] = (c[2] + (s[2] - c[2]) * COVER) * dim; d[o + 3] = 255;
+        continue;
+      }
       d[o] = c[0] * dim; d[o + 1] = c[1] * dim; d[o + 2] = c[2] * dim; d[o + 3] = 255;
     }
   }
@@ -406,7 +423,7 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     const t = Math.min(1, r.t / r.dur);
     const arc = Math.sin(t * Math.PI) * Math.min(24, r.dur * 90);   // a slow throw rises higher
     const x = Math.round(r.x0 + (r.tx - r.x0) * t), y = Math.round(r.y0 + (r.ty - r.y0) * t - arc);
-    (THINGS[r.kind] || THINGS.sober)(ctx, x, y, Math.floor(seconds * 14) % 2 === 0);
+    (THINGS[r.kind] || THINGS.stone)(ctx, x, y, Math.floor(seconds * 14) % 2 === 0, r);
   }
   // The ring is the "you connected" mark, and its reach is scaled by what kind of hit it was: a dent
   // barely shows, a break throws the ring out past the thing. The colour carries the same information,
@@ -443,11 +460,12 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
 // It is the game's picture, not the photograph — 192 pixels across, so a number plate is two pixels and a
 // face is four.
 export function postcard(world, title, line) {
-  const { sw, h, idx, rubble, palette } = world, k = 3, foot = 104;
+  const { sw, h, idx, rubble, palette, paint } = world, k = 3, foot = 104;
   const small = makeBuffer(sw, h), d = small.image.data;
   for (let y = 0, o = 0; y < h; y += 1) for (let x = 0; x < sw; x += 1, o += 4) {
     const p = y * world.w + x, c = palette[rubble[p] !== 255 ? rubble[p] : idx[p]];
-    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+    const s = paint[p] ? PAINTS[paint[p] - 1].rgb : c;   // what was painted is on the card too
+    d[o] = c[0] + (s[0] - c[0]) * COVER; d[o + 1] = c[1] + (s[1] - c[1]) * COVER; d[o + 2] = c[2] + (s[2] - c[2]) * COVER; d[o + 3] = 255;
   }
   small.ctx.putImageData(small.image, 0, 0);
   const card = document.createElement('canvas');

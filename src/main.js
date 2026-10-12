@@ -4,7 +4,8 @@
 // targets, stylise.js makes the picture, modes.js says what is in the hand, world.js says what a hit does,
 // fx.js makes it felt, render.js shows it. street.js makes more yard beyond the photograph, walk.js is
 // whoever goes down into it, drink.js is the bottle, sky.js is what flies over it with a line of the
-// day's news from news.js. This file wires them to the page and the finger.
+// day's news from news.js. frame.js finds the windows in the walls, glass.js says how one breaks, decal.js
+// keeps the colour thrown at the yard, parts.js throws the pieces. This file wires them to the page and the finger.
 
 import { stylise } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
@@ -26,6 +27,11 @@ import { headlines, yardNews, feedUrl, SOURCE } from './news.js';
 import { makeFolk, stepFolk, personAt, soak, threw, stars, KINDS as FOLK } from './folk.js';
 import { mulberry32 } from './rng.js';
 import { sfx, unlock, setMuted } from './audio.js';
+import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
+import { makeWindow, hitWindow, shards } from './glass.js';
+import { PAINTS, stamp, lay } from './decal.js';
+import { spawn, fling, PRESETS } from './parts.js';
+import { css, VOID } from './palette.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('yard'), ctx = canvas.getContext('2d');
@@ -63,6 +69,10 @@ const sky = makeSky();
 // The people passing through, and how close they are to having seen you. A water ball is all that is ever thrown at them.
 let folk = makeFolk();
 const WATER = { flight: 0.26, damage: 0, splash: 0, chain: 0, cooldown: 0.2 };
+// Paint: the colour of the next ball, which changes with every throw so that a wall is never one colour;
+// and what a splat is worth — little, because it is a mark and not a wreck.
+let paintN = 0;
+const PAINT_POINTS = 5, GLINT = '#d7f4ff';
 
 const note = (text) => { $('note').textContent = text; };
 const cards = (which) => { for (const id of ['title', 'end', 'empty', 'album']) $(id).hidden = id !== which; };
@@ -165,7 +175,7 @@ function paintView() {
   $('knob').style.transform = '';
 }
 function paintHand() {
-  $('hand').textContent = item.label.toUpperCase();
+  $('hand').textContent = (hand === 'paint' ? `${item.label} · ${PAINTS[paintN].name}` : item.label).toUpperCase();
   $('hint').textContent = mode.hint;
   $('sip').hidden = filter !== 'alcohol';
 }
@@ -176,10 +186,20 @@ function setSize(w, h) {
   document.documentElement.style.setProperty('--aspect', String(w / h));
   buf = makeBuffer(w, h);
 }
-function build(rgba, w, h, dets) {
-  const { regions, owner } = toRegions(dets, rgba, w, h);
-  if (!regions.length) return false;
+// The windows in the walls, added to the things the detector found. `big` is the same crop at several
+// picture-pixels to one of the game's, where a window still has a shape; a drawn yard has none and is
+// searched at its own size.
+function withWindows(seg, st, w, h, big) {
+  const where = { what: st.surfaces.what, owner: seg.owner, gw: w, gh: h };
+  const found = big ? findWindows({ rgba: big.data, w: big.w, h: big.h, unit: big.w / w, ...where }) : findWindows({ rgba: st.smooth, w, h, ...where });
+  addWindows(found, seg.regions, seg.owner, w);
+  return seg;
+}
+const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
+function build(rgba, w, h, dets, big = null) {
   const st = stylise(rgba, w, h);
+  const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big);
+  if (!regions.length) return false;
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
   yard = { rgba, w, h, st, regions, owner, home: yardFrom({ w, h, idx: st.idx, palette: st.palette, regions, owner }), more: [] };
   begin();
@@ -311,11 +331,15 @@ async function decode(file, size = null) {
   };
   const k = Math.min(DETECT_LONG / Math.max(w, h), Math.max(iw / w, ih / h));
   const large = fit(Math.round(w * k), Math.round(h * k)), small = fit(w, h);
-  return { w, h, large, small, rgba: small.getContext('2d').getImageData(0, 0, w, h).data };
+  // A third size, between the two, for the windows: three picture-pixels to one of the game's, when the
+  // photograph has that much in it.
+  const unit = large.width >= w * 3 ? 3 : 1, mid = unit > 1 ? fit(w * unit, h * unit) : null;
+  const big = mid ? { data: mid.getContext('2d').getImageData(0, 0, mid.width, mid.height).data, w: mid.width, h: mid.height } : null;
+  return { w, h, large, small, big, rgba: small.getContext('2d').getImageData(0, 0, w, h).data };
 }
 
 async function fromFile(file) {
-  const { w, h, large, small, rgba } = await decode(file);
+  const { w, h, large, small, big, rgba } = await decode(file);
   stage = 'detect'; world = null; me = null; cards(null); paintView();
   cam = { x: 0, y: 0, w, h };
   setSize(w, h);
@@ -326,8 +350,10 @@ async function fromFile(file) {
   const found = await detectAll(large, (done, total) => { $('banner').textContent = `ИЩУ ВЕЩИ ${done}/${total}`; });
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   const names = found.kept.map((d) => TARGETS[d.label].ru);
-  if (build(rgba, w, h, found.kept)) note(`нашёл за ${secs} с: ${names.join(', ')}`);
-  else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
+  if (build(rgba, w, h, found.kept, big)) {
+    const panes = windowsIn(yard.regions);
+    note(`нашёл за ${secs} с: ${[...names, panes ? `окон ${panes} (на глаз, по тёмным проёмам в стене)` : ''].filter(Boolean).join(', ')}`);
+  } else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
 }
 
 // One more photograph: the exact next stretch of street, in place of a made one. It waits at the end of
@@ -338,7 +364,7 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
-  const st = stylise(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...toRegions(found.kept, shot.rgba, w, h) });
+  const st = stylise(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);
@@ -358,6 +384,7 @@ function resolve(rock) {
   if (rock.kind === 'water') { waterLands(rock); return; }
   const m = THROWABLES[rock.kind] || THROWABLES.stone;
   if (rock.sky && skyHit(rock)) return;
+  if (rock.kind === 'paint') { paintLands(rock); return; }
   // What it lands on: everything near, for a thing that bursts; otherwise the one thing it was thrown at.
   const targets = rock.splash ? splashTargets(world, rock.tx, rock.ty, rock.splash) : rock.region && !rock.region.gone ? [rock.region] : [];
   if (rock.splash) {
@@ -366,7 +393,7 @@ function resolve(rock) {
   }
   if (!targets.length) {
     // A miss is answered too: a puff and a low note. It costs nothing and it does not end a combo.
-    if (!rock.splash) { sfx.miss(); burst(fx, Array.from({ length: 5 }, () => ({ x: rock.tx, y: rock.ty, c: 0, rgb: '#e8e4f0', floor: rock.ty + 5 })), rock.tx, rock.ty + 2, rnd, 40); }
+    if (!rock.splash) { sfx.miss(); spawn(fx, rock.tx, rock.ty, PRESETS.puff, rnd); }
     return;
   }
   for (const t of targets) {
@@ -383,17 +410,64 @@ function resolve(rock) {
 
 // One impact on one thing, from a throw or from a pair of feet: the rules decide, and everything answers.
 function hit(t, hx, hy, damage, comboTime) {
+  const pane = t.kind === WINDOW && !t.gone ? struckGlass(t, hx, hy, damage) : null;
   const res = strike(world, t, hx, hy, { damage, combo: comboTime });
   if (!res) return null;
   const broke = res.kind === 'break';
   impact(fx, res.kind, calm);
-  burst(fx, res.debris, hx, hy, rnd, broke ? 150 : 70);
+  if (pane) glassAnswers(t, pane, hx, hy); else burst(fx, res.debris, hx, hy, rnd, broke ? 150 : 70);
+  if (pane) sfx.glass();
   if (broke) sfx.break(res.combo); else sfx.hit(res.combo);
   navigator.vibrate?.(broke ? 35 : 12);
   pop(`+${res.points}`, hx, hy);
   if (broke) pop(t.label.toUpperCase(), t.cx, t.y - 5, 'tag');
   if (res.combo > 1) pop(`x${res.combo}`, cam.x + cam.w / 2, cam.y + cam.h * 0.18, 'big');
   return res;
+}
+
+// A window was struck. glass.js keeps where, and says whether it broke; if it did, the pane is cut into
+// shards round the strikes BEFORE the rules repaint it, so each shard still has the glass's own colours.
+function struckGlass(t, hx, hy, damage) {
+  t.glass ||= makeWindow(t, world.w, mulberry32(world.seed + t.id * 131));
+  t.glass.worldW = world.w;   // the street may have grown since: a pixel's column depends on the width
+  const W = world.w, { broke } = hitWindow(t.glass, hx, hy, damage);
+  const cells = broke ? shards(t.glass).map((cell) => ({ seed: cell.seed, pixels: Array.from(cell.pixels, (p) => ({ x: p % W, y: (p / W) | 0, rgb: css(world.palette[world.idx[p]]) })) })) : [];
+  return { broke, cells };
+}
+// And how it looks. Broken, the pane is a hole with a ragged edge and every shard leaves as one piece,
+// away from where the stone landed; only cracked, a few chips come off.
+function glassAnswers(t, pane, hx, hy) {
+  if (!pane.broke) { spawn(fx, hx, hy, { ...PRESETS.chip, rgb: GLINT, settle: false }, rnd); return; }
+  const W = world.w;
+  for (const p of t.pixels) {
+    const x = p % W, y = (p / W) | 0;
+    if (x > t.x && x < t.x + t.w - 1 && y > t.y && y < t.y + t.h - 1) world.idx[p] = VOID;
+  }
+  for (const cell of pane.cells) {
+    const dx = cell.seed.x - hx, dy = cell.seed.y - hy, far = Math.hypot(dx, dy) || 1, v = 38 + rnd() * 46;
+    fling(fx, cell.pixels, (dx / far) * v, (dy / far) * v - 34, 0.7 + rnd() * 0.4);
+  }
+  spawn(fx, hx, hy, { ...PRESETS.shard, rgb: GLINT, settle: false }, rnd);
+}
+
+// A ball of paint came down. Where the yard takes paint it leaves a splat that stays; the sky takes none.
+function paintLands(rock) {
+  const home = rock.tx < yard.w;   // only the first yard's sky is known; a made yard is all wall and ground
+  if (!takesPaint(home ? yard.st.surfaces.what : null, home ? yard.w : world.w, world.h, rock.tx, rock.ty)) {
+    sfx.miss(); spawn(fx, rock.tx, rock.ty, PRESETS.puff, rnd);
+    pop('НЕБО НЕ КРАСИТСЯ', rock.tx, rock.ty, 'tag');
+    return;
+  }
+  const colour = PAINTS[rock.paint];
+  stamp(world.decals, Math.round(rock.tx), Math.round(rock.ty), { paint: rock.paint, power: 1, rnd });
+  lay(world.decals, world.paint, world.w, world.h);
+  spawn(fx, rock.tx, rock.ty, { ...PRESETS.paint, rgb: css(colour.rgb), settle: false }, rnd);
+  sfx.splash();
+  impact(fx, 'dent', calm);        // a mark, not damage: the lightest answer there is
+  navigator.vibrate?.(10);
+  world.score += PAINT_POINTS; world.hits += 1; world.splats = (world.splats || 0) + 1;
+  pop(`+${PAINT_POINTS}`, rock.tx, rock.ty);
+  pop(colour.name.toUpperCase(), rock.tx, rock.ty - 12, 'tag');
 }
 
 // Nothing is left standing. From the balcony that is the end. Down in the yard there is more street.
@@ -465,7 +539,7 @@ function finish() {
   $('endScore').textContent = world.score;
   const aim = world.throws ? Math.min(100, Math.round(((world.hits - stomps) / world.throws) * 100)) : 0;   // a burst can hit several things with one throw
   $('endTitle').textContent = folk.seen ? 'ЗАМЕТИЛИ' : world.done ? 'ДВОР РАЗНЕСЁН' : 'ХВАТИТ';
-  $('endLine').textContent = `${world.time.toFixed(1)} с · комбо x${world.maxCombo} · бросков ${world.throws} · попаданий ${aim}%${me ? ` · прыжков на вещи ${stomps} · пройдено ${walked(me)} м` : ''}${folk.soaked ? ` · облито ${folk.soaked}` : ''}${folk.calls ? ` · звонков в полицию ${folk.calls}` : ''}`;
+  $('endLine').textContent = `${world.time.toFixed(1)} с · комбо x${world.maxCombo} · бросков ${world.throws} · попаданий ${aim}%${me ? ` · прыжков на вещи ${stomps} · пройдено ${walked(me)} м` : ''}${folk.soaked ? ` · облито ${folk.soaked}` : ''}${folk.calls ? ` · звонков в полицию ${folk.calls}` : ''}${world.splats ? ` · пятен краски ${world.splats}` : ''}`;
   if (me) me.down = false;
   paintView();
   $('endBest').textContent = news.best ? 'НОВЫЙ РЕКОРД' : `рекорд ${best}`;
@@ -549,8 +623,9 @@ function throwAt(at) {
   world.throws += 1;
   // a touch on what is flying is a throw at the sky: it goes where the hand sends it, and the things under it are left alone
   const up = Boolean(hitAt(sky, at.x - cam.x, at.y - cam.y));
-  throwThing(fx, world, live, hand, landing.x, landing.y, up || live.splash ? null : pick(world, landing.x, landing.y));
+  throwThing(fx, world, live, hand, landing.x, landing.y, up || live.splash || hand === 'paint' ? null : pick(world, landing.x, landing.y));
   if (up) fx.rocks[fx.rocks.length - 1].sky = true;
+  if (hand === 'paint') { fx.rocks[fx.rocks.length - 1].paint = paintN; paintN = (paintN + 1) % PAINTS.length; paintHand(); }
   if (filter === 'alcohol') fresh(drink);
   sfx.throw();
 }
@@ -631,8 +706,11 @@ async function share(picture) {
   if (!result || !world) return;
   const text = shareText({ ...result, url: /^https:/.test(location.href) ? location.href.split(/[?#]/)[0] : '' });
   try {
+    // Inside the Android app the page has neither a share sheet nor a download of its own: the app is asked.
+    const app = window.DvorApp;
     if (picture) {
       const card = postcard(world, 'ДВОР-8', text.split('\n')[2]);
+      if (app?.sharePicture(card.toDataURL('image/png').split(',')[1], `dvor-8-${result.day}.png`, text)) { $('shared').textContent = 'картинка сохранена в галерею: Pictures/DVOR-8'; return; }
       const blob = await new Promise((done) => card.toBlob(done, 'image/png'));
       const file = new File([blob], `dvor-8-${result.day}.png`, { type: 'image/png' });
       if (navigator.canShare?.({ files: [file] })) { await navigator.share({ text, files: [file] }); return; }
@@ -642,6 +720,7 @@ async function share(picture) {
       $('shared').textContent = 'картинка сохранена в загрузки';
       return;
     }
+    if (app?.shareText(text)) return;
     if (navigator.share) { await navigator.share({ text }); return; }
     if (navigator.clipboard) { await navigator.clipboard.writeText(text); $('shared').textContent = 'строка скопирована — вставь её куда хочешь'; return; }
     $('shared').textContent = copy(text) ? 'строка скопирована — вставь её куда хочешь' : text;
@@ -718,7 +797,7 @@ for (const [id, m] of Object.entries(MODES)) {
   $('filters').append(button);
 }
 
-// WHAT YOU THROW. Five things, each with its own flight, and each one says why it is in the palette rather
+// WHAT YOU THROW. Six things, each with its own flight, and each one says why it is in the palette rather
 // than being a second stone of a different colour. The panel is a <details>, so it folds away and the player
 // can keep the whole of the yard on a phone screen.
 for (const id of THROW_ORDER) {
@@ -768,7 +847,7 @@ if (newsOn) loadNews();
 if (visit(album, today)) keep();
 paintKeep();
 // The model is fetched while the player is still reading the title, so the first photograph does not wait for it.
-// For tools/folk-check.mjs only: a script cannot see who is where, so with ?debug in the address it is told.
-if (/[?&]debug\b/.test(location.search)) window.dvor8 = { folk: () => folk, cam: () => cam };
+// For tools/folk-check.mjs and tools/paint-check.mjs only: a script cannot see who is where, so with ?debug in the address it is told.
+if (/[?&]debug\b/.test(location.search)) window.dvor8 = { folk: () => folk, cam: () => cam, world: () => world };
 loadDetector().then(() => note('готов искать вещи на снимке')).catch((error) => note(`детектор не запустился (${error.message}) — работает только демо`));
 requestAnimationFrame(frame);

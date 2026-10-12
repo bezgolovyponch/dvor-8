@@ -18,12 +18,18 @@ export function standing(world, x, y) {
   return id >= 0 && !world.regions[id].gone ? world.regions[id] : null;
 }
 
+// What is in the way of a body, or under its feet. A thing on a wall (`flat`: a window) is neither.
+export function solid(world, x, y) {
+  const r = standing(world, x, y);
+  return r && !r.flat ? r : null;
+}
+
 // The nearest free spot to (x, y): nobody starts inside a car.
 export function freeSpot(world, x, y, top = 0) {
   for (let r = 0; r < 80; r += 2) {
     for (let a = 0; a < 16; a += 1) {
       const px = x + Math.cos((a / 16) * Math.PI * 2) * r, py = y + Math.sin((a / 16) * Math.PI * 2) * r;
-      if (px >= 2 && px <= world.w - 3 && py >= top && py <= world.h - 2 && !standing(world, px, py)) return { x: px, y: py };
+      if (px >= 2 && px <= world.w - 3 && py >= top && py <= world.h - 2 && !solid(world, px, py)) return { x: px, y: py };
     }
   }
   return { x, y };
@@ -56,9 +62,9 @@ export function stepWalker(world, me, input, dt, { top = 0, stagger = 0 } = {}) 
   }
   const over = me.z > CLEAR;
   const nx = Math.max(2, Math.min(world.w - 3, me.x + vx * dt));
-  if (over || !standing(world, nx, me.y)) me.x = nx; else out.blocked = true;
+  if (over || !solid(world, nx, me.y)) me.x = nx; else out.blocked = true;
   const ny = Math.max(top, Math.min(world.h - 2, me.y + vy * dt));
-  if (over || !standing(world, me.x, ny)) me.y = ny; else out.blocked = true;
+  if (over || !solid(world, me.x, ny)) me.y = ny; else out.blocked = true;
   me.far = Math.max(me.far, me.x);
 
   if (me.z === 0 && me.vz === 0) {
@@ -69,7 +75,7 @@ export function stepWalker(world, me, input, dt, { top = 0, stagger = 0 } = {}) 
     me.vz -= FALL * dt;
     if (me.z <= 0) {
       me.z = 0; me.vz = 0;
-      const under = standing(world, me.x, me.y);
+      const under = solid(world, me.x, me.y);
       if (under) { out.stomped = under; me.vz = BOUNCE; me.z = 0.01; } else { out.landed = true; me.land = 0.16; }
     }
   }

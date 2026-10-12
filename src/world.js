@@ -5,6 +5,7 @@
 
 import { OUTLINE, VOID, scorchMap } from './palette.js';
 import { mulberry32 } from './rng.js';
+import { makeDecals } from './decal.js';
 
 export const NEAR = 7;             // a tap this close to a thing counts as a tap on it: a finger is not a pixel
 export const DEBRIS_MAX = 220;     // pieces a broken thing throws; more than this is noise, not impact
@@ -24,6 +25,7 @@ export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1 
     idx: picture, owner,
     regions: regions.map((r) => ({ ...r, hits: 0, gone: false, seen: false })),
     rubble: new Uint8Array(w * h).fill(255),   // what has fallen and stayed, as palette indices
+    decals: makeDecals(), paint: new Uint8Array(w * h),   // the colour thrown at the yard, and the layer it is drawn from
     score: 0, combo: 0, comboLeft: 0, comboWindow: 2.5, maxCombo: 0,
     throws: 0, hits: 0, broken: 0, strikes: 0, time: 0, done: regions.length === 0,
   };

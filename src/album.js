@@ -17,7 +17,7 @@ export const SIGN = {
   car: '🚗', truck: '🚚', bus: '🚌', motorcycle: '🏍', bicycle: '🚲', bench: '🪑', 'potted plant': '🪴', 'fire hydrant': '🧯',
   'stop sign': '🛑', 'parking meter': '🅿', 'traffic light': '🚦', chair: '💺', umbrella: '☂', boat: '⛵', train: '🚆',
   'dining table': '🍽', suitcase: '🧳', backpack: '🎒', 'sports ball': '⚽', skateboard: '🛹', kite: '🪁', bottle: '🍾',
-  vase: '🏺', tv: '📺', couch: '🛋',
+  vase: '🏺', tv: '📺', couch: '🛋', window: '🪟',
 };
 export const SHARE_MAX = 14;   // things shown in a shared line: the most one yard can hold
 

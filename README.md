@@ -6,6 +6,21 @@ benches and bicycles in it are found and named, and you take them apart.
 **Web first.** No build step, no account, no key. The photograph never leaves the phone: the things in it
 are found by a detector running on the phone itself.
 
+## Android app
+
+**[Download dvor-8-0.4.0.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.4.0/dvor-8-0.4.0.apk)** (20 MB, Android 8 and later).
+
+The repository is private, so the link works for a browser signed in to GitHub with access to it. On the
+phone: open the file, allow installing from that source when Android asks, install. The app is the same game
+with its files inside the package: it plays with no Wi-Fi and no computer. Only the headlines go to the
+network, and **НОВОСТИ** turns that off.
+
+    sh android/build.sh      # builds android/out/dvor-8-<version>.apk; needs a JDK and the Android SDK
+
+`android/` holds the whole wrapper: one activity that shows the page, hands a photograph in from the camera
+or the gallery, and hands the line or the card out to the share sheet. It is signed with a key kept at
+`~/.android/dvor8.keystore`; a phone installs an update only over a build signed with the same key.
+
 ## Run it
 
     python3 -m http.server 4310 --bind 127.0.0.1        # this computer: http://127.0.0.1:4310/
@@ -33,6 +48,8 @@ The first load fetches about 20 MB (the detector and its model) from your comput
 | **+ СНИМОК** | add a photograph: it becomes the exact next yard on the street, up to nine |
 | **ГЛОТОК** (alcohol only) | drink from the bottle: a wider burst, a worse hand, and it wears off (E) |
 | **НОВОСТИ** | on by default: a plane with a banner and an airship with a running board carry the day's real headlines over the yard. Tap one to throw at it: the next headline comes sooner. Off: the sky is empty and the game makes no request |
+| tap a window | found in the walls by eye, not by the detector: the first stone cracks it, the second breaks it into shards that fly from where the stone landed |
+| **КРАСКА** in the hand | a ball of colour, a new one each throw. The splat stays where it landed — wall, car, ground — and is on the card you send. It breaks nothing. The sky takes none |
 | tap a person | a ball of water, whatever is in the hand; nobody can be harmed. They look up: «!» |
 | **СПРЯТАТЬСЯ** / **ВЫГЛЯНУТЬ** (H) | hidden, nobody sees you and you cannot throw. Whoever is looking loses you («?») and leaves |
 | **ОПАСНОСТЬ** | climbs while someone looks at you in the open. Five marks: seen, and the run ends as «ЗАМЕТИЛИ». What the album holds is kept |
@@ -51,15 +68,17 @@ Each filter is a way to play:
 | **ДЕПРЕССИЯ** | brick | wrecks anything in one throw, slow to throw again | only a small circle round your finger — drag to look, tap to throw |
 
 It recognises cars, trucks, buses, motorcycles, bicycles, benches, chairs, potted plants and a few dozen
-other everyday things. It does not know bins, swings or trees. People and animals in the photograph are never targets. The people the game draws walking through the yard can only be soaked.
+other everyday things. It does not know bins, swings or trees. Windows are not the detector's: they are found
+from the picture as dark openings in a brighter wall, and that is a guess (see below). People and animals in the photograph are never targets. The people the game draws walking through the yard can only be soaked.
 
 ## Test
 
-    node test.mjs                                                  # 160 checks, no browser
+    node test.mjs                                                  # 221 checks, no browser
     node --experimental-websocket tools/check.mjs out/ a.jpg       # plays the real page in headless Chrome
     node --experimental-websocket tools/walk-check.mjs out/ a.jpg  # the same for walking, the street, the bottle, the album
     node --experimental-websocket tools/news-check.mjs out/        # the plane, the airship, a throw at each; needs the network
     node --experimental-websocket tools/folk-check.mjs out/        # the people: soak, hide, the call, the police, seen
+    node --experimental-websocket tools/paint-check.mjs out/ a.jpg # a window cracked and broken, a wall painted, the sky refusing
 
 The first asserts behaviour: a red car stays red, people are never targets, a tap hits what was under it,
 every mode plays differently and says why, every part has a written reason. The second runs the detector
@@ -85,6 +104,12 @@ is fun.**
     src/news.js             the day's headlines (Wikipedia, «Текущие события»), or the yard's own
     src/sky.js              the plane and the airship that carry them, and what a hit does to each
     src/folk.js             the people passing through, who has seen you, and the police
+    src/frame.js            the windows in the walls, found from the picture; and where paint sticks
+    src/glass.js            how a window breaks: two hits, shards small where the stone landed
+    src/decal.js            the colour thrown at the yard, kept
+    src/parts.js            the pieces that fly: glass, paint, a miss — one list, capped
+    src/materials.js, throwables.js   what a surface is drawn as; what is in the hand
+    android/                the Android app: a window onto the same page, and its build script
     src/font.js             5×7 letters, Russian and Latin, for words inside the picture
     src/audio.js, demo.js, rng.js, main.js
     vendor/mediapipe/       the detector runtime and model (Apache 2.0), pinned
@@ -97,11 +122,14 @@ is fun.**
     docs/pyramid.html       what stands on what
     brief.md, game-skeleton/, standards/   the intake and earlier material, kept for the record
 
-**This build is `v0.3.0` plus the news over the yard** (not yet tagged). `v0.3.0`: walking, the street, the bottle, the album. Before it, `v0.2.0` (also tagged `mvp-2-real-objects`). The earlier build is `mvp-1-miami` (neon
+**This build is `v0.4.0`**: windows that break, paint that stays, and the Android app. Since `v0.3.0` (walking, the street, the bottle, the album) it also gained the news over the yard, the people and the police, six things to throw, and the ink and material layers. Before it, `v0.2.0` (also tagged `mvp-2-real-objects`). The earlier build is `mvp-1-miami` (neon
 heat-map, tone patches, model-naming cascade).
 
 ## What this is not yet
 
+- **The Android app has not been opened on a real phone.** It was run in an emulator only (Android 14, WebView 113): the detector loaded, the drawn yard played, a window was cracked and broken, and a photograph picked from the gallery was searched in 3.2 s and played. **СНЯТЬ ДВОР** (the camera hand-off) and both share buttons were not tried even there, and nothing says how long the search takes on a phone.
+- **Windows are a guess.** On the two test photographs: on the first, three boxes — two on dark openings in the wall behind the car, one small one at the top edge that may not be a window; on the second, where the real windows are two or three pixels across, none of them and one false box in the branches of a tree. A window in shadow or behind branches is missed.
+- **Paint and glass have been thrown by a script only.** Whether a splat reads as paint at this size, and whether the shards read as glass, needs a person looking at a phone.
 - **Not played by anyone in this form.** The stick and the buttons have only been driven by a script.
 - **Untimed on a phone.** The search takes 1.6–1.8 s on a Mac; a phone will be slower.
 - **Tried on street-level photographs only.** From a high balcony cars are small; slicing is there for

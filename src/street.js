@@ -119,11 +119,12 @@ export function extend(world, yard) {
   }
   const part = makeWorld({ ...yard, seed: world.seed });   // the new yard with its outlines drawn
   const x0 = world.w, W = x0 + yard.w, h = world.h, first = world.regions.length;
-  const idx = new Uint8Array(W * h), owner = new Int16Array(W * h).fill(-1), rubble = new Uint8Array(W * h).fill(255);
+  const idx = new Uint8Array(W * h), owner = new Int16Array(W * h).fill(-1), rubble = new Uint8Array(W * h).fill(255), paint = new Uint8Array(W * h);
   for (let y = 0; y < h; y += 1) {
     idx.set(world.idx.subarray(y * x0, y * x0 + x0), y * W);
     owner.set(world.owner.subarray(y * x0, y * x0 + x0), y * W);
     rubble.set(world.rubble.subarray(y * x0, y * x0 + x0), y * W);
+    paint.set(world.paint.subarray(y * x0, y * x0 + x0), y * W);
     for (let x = 0; x < yard.w; x += 1) {
       const v = part.idx[y * yard.w + x], o = part.owner[y * yard.w + x];
       idx[y * W + x0 + x] = v < COLOURS ? v + base : v;
@@ -135,15 +136,15 @@ export function extend(world, yard) {
     world.regions.push({ ...r, id: r.id + first, x: r.x + x0, cx: r.cx + x0, seen: true,
       pixels: r.pixels.map((p) => ((p / yard.w) | 0) * W + x0 + (p % yard.w)) });
   }
-  Object.assign(world, { idx, owner, rubble, w: W });
+  Object.assign(world, { idx, owner, rubble, paint, w: W });
   world.yards.push({ x: x0, w: yard.w, base, made: yard.made, palette: yard.palette });
   if (part.regions.length) world.done = false;
   return true;
 }
 
-// How far up the picture a walker may go: just above the highest thing, because everything that can be
-// hit must also be reachable on foot — and no further, because above the things is usually wall and sky.
+// How far up the picture a walker may go: just above the highest thing standing in the yard, because
+// everything that stands there must also be reachable on foot — and no further, because above the things is usually wall and sky.
 export function bandTop(world) {
-  const top = world.regions.reduce((m, r) => Math.min(m, r.y), world.h);
+  const top = world.regions.reduce((m, r) => (r.flat ? m : Math.min(m, r.y)), world.h);   // a window is on a wall, not in the yard
   return Math.max(14, Math.min(Math.round(world.h * 0.6), top - 8));
 }

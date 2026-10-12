@@ -1,4 +1,4 @@
-// What is in your hand. Four things you can pick up, each flying and landing its own way.
+// What is in your hand. Six things you can pick up, each flying and landing its own way.
 //
 // WHY THIS IS SEPARATE FROM THE MODES. It used to be one thing per mode: the mode WAS the throwable. That
 // coupled two decisions that have nothing to do with each other — how you SEE (the mode's focus, its vision,
@@ -43,9 +43,14 @@ export const THROWABLES = {
     flight: 0.42, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 58, sky: true,
     why: 'The one thing you throw AT PEOPLE and never at the yard — a ball of water, which is what a balcony is actually for. It carries no damage to property, so it is the honest answer to someone standing where you cannot reach them.',
   },
+  paint: {
+    label: 'краска', hint: 'пятно остаётся на стене · ничего не ломает',
+    flight: 0.24, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 34, sky: false,
+    why: 'The one thing that ADDS to the yard instead of taking from it: a ball of colour that stays where it landed, on a wall, a car or the ground, and is still there on the card you send. It breaks nothing, so it is how you sign a yard you have not wrecked.',
+  },
 };
 
-export const ORDER = ['stone', 'brick', 'slipper', 'bottle', 'water'];
+export const ORDER = ['stone', 'brick', 'slipper', 'bottle', 'water', 'paint'];
 
 // The throwable's own numbers, with the mode's vision left alone. A mode may still sharpen the aim or add
 // reach — that is its business — but it no longer decides what is in the hand.

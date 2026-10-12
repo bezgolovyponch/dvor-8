@@ -15,6 +15,8 @@ export const TARGETS = {
   'dining table': { ru: 'стол', hp: 2 }, suitcase: { ru: 'чемодан', hp: 1 }, backpack: { ru: 'рюкзак', hp: 1 },
   'sports ball': { ru: 'мяч', hp: 1 }, skateboard: { ru: 'скейт', hp: 1 }, kite: { ru: 'змей', hp: 1 },
   bottle: { ru: 'бутылка', hp: 1 }, vase: { ru: 'ваза', hp: 1 }, tv: { ru: 'телевизор', hp: 1 }, couch: { ru: 'диван', hp: 2 },
+  // Not one of the detector's: found from the picture itself by frame.js, and it says so there.
+  window: { ru: 'окно', hp: 2 },
 };
 export const MAX_TARGETS = 14;
 export const MIN_SCORE = 0.4;    // below this the detector is guessing: a "train" in a courtyard

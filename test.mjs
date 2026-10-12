@@ -27,6 +27,12 @@ import { plain, glyph, textWidth, ADVANCE, GLYPH_H } from './src/font.js';
 import { headline, headlines, yardNews, feedUrl, LINE_MAX, LINES_MAX } from './src/news.js';
 import { makeSky, clearSky, stepSky, boxes, hitAt, knock, SKY_POINTS, GAP, GAP_HIT, FIRST, SHIP } from './src/sky.js';
 import { makeFolk, stepFolk, personAt, boxOf, soak, threw, stars, watchers, KINDS as FOLK, ORDER, STARS, FIRST_IN, MAX_FOLK, GIVE_UP, JOLT, CALL_TIME, POLICE_IN, SWEEPS, TURN } from './src/folk.js';
+import { findWindows, addWindows, takesPaint, WINDOW, WINDOWS_MAX, SMALLEST } from './src/frame.js';
+import { makeWindow, hitWindow, shards, GLASS_HP, STAGES } from './src/glass.js';
+import { makeDecals, stamp, pixelsOf, lay, clear as clearDecals, PAINTS, DECAL_MAX, COVER } from './src/decal.js';
+import { spawn, fling, PRESETS, MAX_LIVE } from './src/parts.js';
+import { MATERIALS } from './src/materials.js';
+import { solid } from './src/walk.js';
 import { readFileSync, readdirSync } from 'node:fs';
 
 let pass = 0, fail = 0;
@@ -123,7 +129,7 @@ check('every mode says how to use it and why it exists', ids.every((id) => MODES
 check('every mode but sober changes the FOCUS, which is now the only thing a mode decides',
   ids.filter((id) => id !== 'sober').every((id) => MODES[id].focus && MODES[id].focus.radius >= 0) && MODES.sober.focus === null);
 
-section('the hand: five things to throw, each flying its own way');
+section('the hand: six things to throw, each flying its own way');
 const tids = Object.keys(THROWABLES);
 check('every throwable says what it is and why it exists', tids.every((id) => THROWABLES[id].label && THROWABLES[id].hint && THROWABLES[id].why.length > 40));
 const tsig = (t) => [t.flight, t.damage, t.scatter, t.splash, t.chain, t.cooldown].join();
@@ -664,6 +670,85 @@ section('the people: nobody is harmed, and being seen is the danger');
   check('water on the police only makes them look more', wetCop.people[0].sweeps === s0 + 1 && wetCop.people[0].state === 'alarm');
   const longest = Math.max(...ORDER.map((k) => FOLK[k].rate * FOLK[k].look));
   check('no single passer-by\'s look ends a run on its own: there is always time to hide', longest < 1 && Object.values(FOLK).every((k) => k.alarm >= 0.3), longest.toFixed(2));
+}
+
+// ---- windows and paint -------------------------------------------------------------------------------
+section('windows and paint: glass breaks, colour stays');
+{
+  const st = stylise(DEMO.rgba, W, H), seg = toRegions(DEMO.dets, DEMO.rgba, W, H), before = seg.regions.length;
+  const found = findWindows({ rgba: st.smooth, w: W, h: H, what: st.surfaces.what, owner: seg.owner });
+  const SKY = MATERIALS.indexOf('sky');
+  check('the drawn yard has dark windows in a bright wall, and they are found', found.length >= 3 && found.length <= WINDOWS_MAX, `${found.length} found`);
+  check('a window is big enough for a finger and none overlaps another', found.every((f) => f.w >= SMALLEST && f.h >= SMALLEST)
+    && found.every((a, i) => found.every((b, j) => i === j || a.x >= b.x + b.w || b.x >= a.x + a.w || a.y >= b.y + b.h || b.y >= a.y + a.h)));
+  check('nothing in the sky is a window, and nothing a found thing already owns', found.every((f) => {
+    for (let y = f.y; y < f.y + f.h; y += 1) for (let x = f.x; x < f.x + f.w; x += 1) if (st.surfaces.what[y * W + x] === SKY || seg.owner[y * W + x] >= 0) return false;
+    return true;
+  }));
+  const flatWall = new Uint8ClampedArray(N * 4).fill(180);
+  check('a bare wall has no windows: none are invented', findWindows({ rgba: flatWall, w: W, h: H }).length === 0);
+  const big = new Uint8ClampedArray(W * 3 * H * 3 * 4).fill(190);
+  for (let y = 90; y < 150; y += 1) for (let x = 120; x < 165; x += 1) big.fill(40, (y * W * 3 + x) * 4, (y * W * 3 + x) * 4 + 3);
+  const scaled = findWindows({ rgba: big, w: W * 3, h: H * 3, unit: 3, gw: W, gh: H });
+  check('searched at three pixels to one, a window comes back in the game\'s own pixels', scaled.length === 1 && Math.abs(scaled[0].x - 40) <= 1 && Math.abs(scaled[0].y - 30) <= 1 && Math.abs(scaled[0].w - 15) <= 1 && Math.abs(scaled[0].h - 20) <= 1, JSON.stringify(scaled[0] && [scaled[0].x, scaled[0].y, scaled[0].w, scaled[0].h]));
+  addWindows(found, seg.regions, seg.owner, W);
+  const panes = seg.regions.filter((r) => r.kind === WINDOW);
+  check('windows join the yard\'s things as things of their own, two hits each', panes.length === found.length && seg.regions.length === before + found.length && panes.every((r) => r.hp === GLASS_HP && r.flat && TARGETS[r.kind] && SIGN[r.kind] && r.pixels.every((p) => seg.owner[p] === r.id)));
+  const w = makeWorld({ w: W, h: H, photo: DEMO.rgba, idx: st.idx, palette: st.palette, ...seg, seed: 8 });
+  const pane = w.regions.find((r) => r.kind === WINDOW);
+  check('a tap on a window picks the window', pick(w, pane.cx, pane.cy) === pane);
+  check('a window is on the wall: nobody walks into it, and the walker\'s band ignores it', solid(w, pane.cx, pane.cy) === null && standing(w, pane.cx, pane.cy) === pane
+    && bandTop(w) === bandTop({ ...w, regions: w.regions.filter((r) => !r.flat) }));
+  const glass = makeWindow(pane, W, mulberry32(3));
+  const first = hitWindow(glass, pane.x + 2, pane.y + 2), firstStrike = strike(w, pane, pane.x + 2, pane.y + 2);
+  check('one stone cracks it, and the rules agree', !first.broke && first.stage === 1 && firstStrike.kind === 'crack' && !pane.gone);
+  const cells = (hitWindow(glass, pane.x + 3, pane.y + 3), shards(glass));
+  const second = strike(w, pane, pane.x + 3, pane.y + 3);
+  check('the second breaks it, in the rules and in the glass alike', glass.gone && glass.stage === STAGES && second.kind === 'break' && pane.gone);
+  check('the shards are the whole pane, each pixel in exactly one', cells.length >= 3 && cells.reduce((a, c) => a + c.pixels.length, 0) === pane.pixels.length && new Set(cells.flatMap((c) => [...c.pixels])).size === pane.pixels.length, `${cells.length} shards`);
+  const near = (c) => Math.hypot(c.seed.x - (pane.x + 2.5), c.seed.y - (pane.y + 2.5)) < Math.max(pane.w, pane.h) * 0.4;
+  const size = (list) => list.reduce((a, c) => a + c.pixels.length, 0) / Math.max(1, list.length);
+  check('shards are smaller where the stone landed', cells.some(near) && size(cells.filter(near)) < size(cells.filter((c) => !near(c))), `${size(cells.filter(near)).toFixed(0)} px near, ${size(cells.filter((c) => !near(c))).toFixed(0)} px far`);
+  check('a broken window takes no more hits', hitWindow(glass, pane.cx, pane.cy).broke === false && strike(w, pane, pane.cx, pane.cy) === null);
+
+  check('paint is a thing in the hand that harms nothing', THROWABLES.paint.damage === 0 && THROWABLES.paint.splash === 0 && THROW_ORDER.includes('paint'));
+  check('every paint has a name and a colour of its own', PAINTS.length >= 4 && new Set(PAINTS.map((p) => p.name)).size === PAINTS.length && new Set(PAINTS.map((p) => p.rgb.join())).size === PAINTS.length);
+  const decals = makeDecals(), layer = new Uint8Array(N);
+  const d = stamp(decals, 60, 100, { paint: 2, power: 1, rnd: mulberry32(5) });
+  lay(decals, layer, W, H);
+  check('a splat stays where it landed, in its own colour', layer[100 * W + 60] === 3 && pixelsOf(d).length > 20 && COVER > 0.5 && COVER < 1);
+  const again = makeDecals(); stamp(again, 60, 100, { paint: 2, power: 1, rnd: mulberry32(5) });
+  check('the same throw leaves the same splat', JSON.stringify(pixelsOf(again.list[0])) === JSON.stringify(pixelsOf(d)));
+  check('a splat is spray and not a disc: drops land outside the core', pixelsOf(d).some((p) => Math.hypot(p.x - 60, p.y - 100) > d.w / 2 + 1));
+  stamp(decals, 61, 100, { paint: 0, power: 1, rnd: mulberry32(6) });
+  lay(decals, layer, W, H);
+  check('a later splat lies over an earlier one', layer[100 * W + 61] === 1);
+  for (let i = 0; i < DECAL_MAX + 10; i += 1) stamp(decals, 150, 200, { paint: 1, power: 0.4, rnd: mulberry32(i + 9) });
+  lay(decals, layer, W, H);
+  check('the wall holds a fixed number of splats: the oldest leave it', decals.list.length === DECAL_MAX && layer[100 * W + 60] === 0 && layer[200 * W + 150] === 2);
+  clearDecals(decals); lay(decals, layer, W, H);
+  check('a clean yard is clean', layer.every((v) => v === 0));
+  check('the sky takes no paint, the wall and the ground do', !takesPaint(st.surfaces.what, W, H, 20, 5) && takesPaint(st.surfaces.what, W, H, 20, 120) && takesPaint(st.surfaces.what, W, H, 20, 240) && !takesPaint(null, W, H, -3, 9));
+  check('a new world is unpainted, and the street carries the paint along when it grows', (() => {
+    const s2 = stylise(DEMO.rgba, W, H), g2 = toRegions(DEMO.dets, DEMO.rgba, W, H);
+    const world = makeWorld({ w: W, h: H, photo: DEMO.rgba, idx: s2.idx, palette: s2.palette, ...g2, seed: 8 });
+    if (!world.paint.every((v) => v === 0)) return false;
+    stamp(world.decals, 60, 100, { paint: 4, rnd: mulberry32(1) }); lay(world.decals, world.paint, world.w, world.h);
+    extend(world, grow(yardFrom({ w: W, h: H, idx: s2.idx, palette: s2.palette, ...g2 }), mulberry32(2)));
+    return world.w === W * 2 && world.paint.length === world.w * H && world.paint[100 * world.w + 60] === 5;
+  })());
+
+  const fxp = makeFx(w);
+  const made = spawn(fxp, 50, 50, PRESETS.shard, mulberry32(1));
+  check('pieces go into the game\'s one particle list', made > 0 && fxp.particles.length === made && fxp.particles.every((p) => Number.isFinite(p.vx) && p.life > 0));
+  for (let i = 0; i < 60; i += 1) spawn(fxp, 50, 50, PRESETS.shard, mulberry32(i));
+  check('and never more than a phone can draw', fxp.particles.length === MAX_LIVE && spawn(fxp, 50, 50, PRESETS.dust, mulberry32(2)) === 0);
+  const names = Object.keys(PRESETS), sig = (p) => [p.count, p.speed, p.cone.toFixed(2), p.life].join('/');
+  check('no two kinds of piece fly the same way', new Set(names.map((k) => sig(PRESETS[k]))).size === names.length, names.join(' '));
+  const one = makeFx(w), piece = Array.from({ length: 30 }, (_, i) => ({ x: 40 + (i % 6), y: 40 + ((i / 6) | 0), rgb: '#fff' }));
+  check('a shard leaves as one piece: every pixel of it at the same speed', fling(one, piece, 30, -20) === 30 && one.particles.every((p) => p.vx === 30 && p.vy === -20));
+  stepFx(one, w, 0.016);
+  check('coloured pieces never settle into the rubble', (() => { for (let i = 0; i < 200; i += 1) stepFx(one, w, 0.016); return one.particles.length === 0 && w.rubble.every((v) => v === 255); })());
 }
 
 // ---- nothing in vain ---------------------------------------------------------------------------------
