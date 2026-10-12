@@ -18,14 +18,14 @@ Four sections, in that order. §5 is the requested output — the structure with
 
 | Layer | Command | Result |
 |---|---|---|
-| Unit + integration | `node test.mjs` | **161 PASS, 0 FAIL** |
+| Unit + integration | `node test.mjs` | **160 PASS, 0 FAIL** |
 | Real browser playthrough | `tools/check.mjs` on a real photograph | 4 modes + 1 photo, **0 page errors** |
 | The walk and the street | `tools/walk-check.mjs` | passed, 0 errors |
 | The people | `tools/folk-check.mjs` | full call→police→caught cycle, 0 errors |
 | The sky and the news | `tools/news-check.mjs` | passed, 0 errors |
 | The monetisation playground | `tools/monetisation-check.mjs` | **26 PASS, 0 FAIL** |
 
-**161 + 26 = 187 automated checks, all passing.** Every module carries a written reason, and that is itself
+**160 + 26 = 186 automated checks, all passing.** Every module carries a written reason, and that is itself
 tested. This is a genuinely well-instrumented small project.
 
 ## 1.2 The playthrough, read back
@@ -212,7 +212,7 @@ Construction materials are verified modules from real products. Each entry gives
 | The emoji share line | Wordle's grid |
 | The carrier + ranged hit + payload pattern in the sky | Animal Crossing balloons |
 | Monotonic progress, nothing losable between runs | Hades' stated intent; endowed progress 34% vs 19% |
-| The 161-check instrumented build itself | This audit's playthrough |
+| The 160-check instrumented build itself | This audit's playthrough |
 
 ## 3.3 Do not claim
 
