@@ -7,7 +7,7 @@
 // day's news from news.js. frame.js finds the windows in the walls, glass.js says how one breaks, decal.js
 // keeps the colour thrown at the yard, parts.js throws the pieces. This file wires them to the page and the finger.
 
-import { stylise } from './stylise.js';
+import { stylise, styliseFlat } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { demoYard } from './demo.js';
@@ -197,7 +197,7 @@ function withWindows(seg, st, w, h, big) {
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
 function build(rgba, w, h, dets, big = null) {
-  const st = stylise(rgba, w, h);
+  const st = styliseFlat(rgba, w, h);
   const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big);
   if (!regions.length) return false;
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
@@ -318,13 +318,33 @@ async function decode(file, size = null) {
     el.src = url;
   }).finally(() => setTimeout(() => URL.revokeObjectURL(url), 1000));
   const iw = image.naturalWidth, ih = image.naturalHeight;
-  const [w, h] = size || (ih >= iw ? [SHORT, LONG] : [LONG, SHORT]);
+  // THE PHOTOGRAPH DECIDES THE SHAPE OF THE LEVEL.
+  //
+  // This used to force every photograph into one of two frames (SHORT x LONG or LONG x SHORT) and COVER-crop
+  // it to fit, which threw away the edges of anything that was not that shape: a 9:16 phone photo lost its
+  // sides, a 16:9 photo lost its top and bottom. The creator asked for the level to keep the photograph's own
+  // aspect ratio, so the game's buffer is now derived from the image, at the same pixel budget as before.
+  // The rule is `object-fit: contain` against a SHORT x LONG frame, stated once so it cannot drift:
+  //   scale so that the LONGER side is LONG — unless that would make the shorter side smaller than SHORT,
+  //   in which case scale so the SHORTER side is SHORT instead.
+  // The canvas then has exactly the photograph's aspect ratio and never exceeds the frame in either
+  // direction. My first version derived the size from a fixed pixel BUDGET with two ad-hoc clamps; on a 3:2
+  // photograph it produced 272x181, which is 51% more pixels than intended and would have made the flat
+  // pipeline 1.5x slower for no reason. Measured, not guessed: 1920x1280 -> 256x171, and
+  // 1600x1200 -> 256x192.
+  const [w, h] = size || (() => {
+    const k = Math.min(LONG / Math.max(iw, ih), SHORT / Math.min(iw, ih));
+    return [Math.max(32, Math.round(iw * k)), Math.max(32, Math.round(ih * k))];
+  })();
   // One crop, two sizes: the detector searches the large one, the game shows the small one, and because
   // they are the same crop a box found in one is the same box in the other.
   const fit = (cw, ch) => {
     const c = document.createElement('canvas');
     c.width = cw; c.height = ch;
-    const x = c.getContext('2d'), s = Math.max(cw / iw, ch / ih);
+    const x = c.getContext('2d');
+    // COVER when the target is a different shape (the detector wants a square-ish search image), but the
+    // game's own buffer is the photograph's aspect ratio now, so this is a no-op there and nothing is cropped.
+    const s = Math.max(cw / iw, ch / ih);
     x.imageSmoothingQuality = 'high';
     x.drawImage(image, (cw - iw * s) / 2, (ch - ih * s) / 2, iw * s, ih * s);
     return c;
@@ -364,7 +384,7 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
-  const st = stylise(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big) });
+  const st = styliseFlat(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);

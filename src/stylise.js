@@ -44,6 +44,7 @@
 
 import { grade, buildPalette, nearest, luma, COLOURS, OUTLINE, SIZE } from './palette.js';
 import { skyAndGround, patternAtlas, offsetAt } from './materials.js';
+import { render as renderFlat, RAMPS, STEPS } from './flat.js';
 
 // WHY eps IS 0.001 AND NOT 0.01. The first shipped version used 0.01 and the creator's verdict was that
 // the picture was blurred with no style. That was correct, and the mechanism is the ratio var/(var+eps):
@@ -185,6 +186,24 @@ export function inkOver(idx, src, w, h, palette, strength = INK) {
   }
   idx.inkDrawn = drawn;
   return idx;
+}
+
+/**
+ * THE PHOTOGRAPH -> THE SCENE, by the flat route. This is what the game uses.
+ *
+ * It replaces quantising the photograph's own pixels, which is the approach that made every yard look like a
+ * different game and made surfaces indistinct — see the note at the top of flat.js. The flat route segments
+ * the photograph into regions, paints each region ONE colour from a fixed palette of hue-shifted ramps, draws
+ * the region borders, and absorbs orphan specks.
+ *
+ * The palette is deliberately small. Six ramps of four tones is twenty-four colours plus the outline and the
+ * void, against the twenty-eight a median cut of the photograph would produce. Fewer colours is the point:
+ * the style comes from the fixed STRUCTURE, and a photograph-derived palette is what makes two yards look
+ * like two products.
+ */
+export function styliseFlat(rgba, w, h, opts = {}) {
+  const st = renderFlat(rgba, w, h, opts);
+  return { idx: st.idx, palette: st.palette, smooth: rgba, surfaces: null, ink: null, regions: st.regions, outlinePixels: st.outlinePixels, style: 'flat' };
 }
 
 export function stylise(rgba, w, h) {

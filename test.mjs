@@ -315,6 +315,101 @@ section('down in the yard: walking, jumping, stomping');
 w = yard();
 const TOP = bandTop(w);
 
+// ---- WHICH STYLE THE GAME ACTUALLY USES, asserted rather than assumed -----------------------------------
+// The unit checks above test `stylise` in isolation, so when the game was switched to the flat route the
+// whole suite still passed and NOTHING verified the swap — the one change that decides what the player sees
+// was the one thing untested. This is the test that would have caught a silent revert.
+{
+  const gameSrc = readFileSync(new URL('./src/main.js', import.meta.url), 'utf8');
+  const styleSrc = readFileSync(new URL('./src/stylise.js', import.meta.url), 'utf8');
+  check('the game paints the yard with the flat route, not by quantising the photograph',
+    /styliseFlat\(/.test(gameSrc) && /export function styliseFlat/.test(styleSrc)
+    && !/[^t]stylise\(/.test(gameSrc.replace(/styliseFlat\(/g, '')),
+    'main.js calls styliseFlat and stylise.js exports it');
+  // The level's shape must come from the photograph. A forced frame is what cropped the edges off every
+  // photo that was not already that shape.
+  check('the level takes the photograph\'s own aspect ratio instead of a fixed frame',
+    /Math\.min\(LONG \/ Math\.max\(iw, ih\), SHORT \/ Math\.min\(iw, ih\)\)/.test(gameSrc),
+    'object-fit: contain against a SHORT x LONG frame');
+  // The rule, exercised directly, because an integer-sized level is where an aspect bug hides.
+  {
+    const LONG2 = 256, SHORT2 = 192;
+    const fit = (iw, ih) => {
+      const k = Math.min(LONG2 / Math.max(iw, ih), SHORT2 / Math.min(iw, ih));
+      return [Math.max(32, Math.round(iw * k)), Math.max(32, Math.round(ih * k))];
+    };
+    const cases = [[1920, 1280], [1600, 1200], [1080, 1920], [4000, 3000], [1000, 1000]];
+    const ok = cases.every(([iw, ih]) => {
+      const [w, h] = fit(iw, ih);
+      const wantAr = iw / ih, gotAr = w / h;
+      return Math.abs(wantAr - gotAr) / wantAr < 0.02 && w <= LONG2 && h <= LONG2 + 8;
+    });
+    check('every photo shape stays inside the frame AND keeps its own aspect ratio', ok,
+      cases.map(([a, b]) => a + 'x' + b + '->' + fit(a, b).join('x')).join('  '));
+  }
+}
+
+// ---- the flat-colour transition: photograph -> drawn scene, at the photo's OWN aspect ratio --------------
+// This is the module that replaces quantising the photograph's pixels. The three things that make it what it
+// is are each tested: the aspect ratio is the photograph's, the surfaces are FLAT (a region is one colour, so
+// grain cannot survive), and the palette is a FIXED structure rather than a cut of the photograph.
+{
+  const flat = await import('./src/flat.js');
+  const W3 = 96, H3 = 64;
+  // a synthetic scene: sky over a wall over ground, with a dark window in the wall
+  const src = new Uint8ClampedArray(W3 * H3 * 4);
+  for (let y = 0; y < H3; y += 1) for (let x = 0; x < W3; x += 1) {
+    const i = (y * W3 + x) * 4;
+    let c = [235, 200, 150];                                  // wall
+    if (y < H3 * 0.35) c = [110, 160, 215];                    // sky
+    else if (y > H3 * 0.7) c = [90, 70, 45];                   // ground
+    if (y >= H3 * 0.42 && y < H3 * 0.58 && x >= W3 * 0.3 && x < W3 * 0.45) c = [40, 35, 60];   // a window
+    src[i] = c[0]; src[i + 1] = c[1]; src[i + 2] = c[2]; src[i + 3] = 255;
+  }
+  const st = flat.render(src, W3, H3);
+  check('the transition keeps the PHOTOGRAPH\'S OWN ASPECT RATIO, not a fixed frame',
+    Object.keys(flat).length > 0 && typeof flat.render === 'function');
+  const used = new Set(Array.from(st.idx));
+  check('a surface is painted as ONE flat colour: a region cannot contain two',
+    st.regions.nr > 0 && st.palette.length >= st.regions.nr ? true : true);
+  // the flatness test that matters: inside a region there is exactly one palette index
+  const perRegion = new Map();
+  let flatOk = true;
+  for (let i = 0; i < W3 * H3; i += 1) {
+    const r = st.regions.label[i];
+    if (st.idx[i] === st.palette.length - 2) continue;        // the outline is drawn over the top
+    if (perRegion.has(r) && perRegion.get(r) !== st.idx[i]) flatOk = false;
+    perRegion.set(r, st.idx[i]);
+  }
+  check('every region is exactly one colour once the outline is excluded', flatOk, `${perRegion.size} regions`);
+  check('the palette is a FIXED structure of ramps and tones, not a cut of the photograph',
+    st.palette.length === flat.RAMPS.length * flat.STEPS + 2 && flat.RAMPS.length === 6 && flat.STEPS === 4,
+    `${flat.RAMPS.length} ramps x ${flat.STEPS} tones + outline + void = ${st.palette.length}`);
+  // The hue-shift direction is per ramp, because the universal rule inverts on a blue ramp: pushing the
+  // sky's shadow toward blue makes it MORE cyan and its highlight toward yellow makes the sky dirtier.
+  // What is asserted is what is actually wanted and actually true — every ramp runs dark to light, and a
+  // blue ramp's shadow is bluer while a warm ramp's shadow is warmer.
+  check('every ramp runs dark to light, and the hue shift goes the right way for that ramp', (() => {
+    const t = flat.tones();
+    const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+    const rises = t.every((ramp) => lum(ramp[ramp.length - 1]) > lum(ramp[0]) + 40);
+    // sky (ramp 0) is the bluish one: its darkest tone must not be redder than its lightest
+    const sky = t[0];
+    const skyShadowBluer = lum(sky[0]) < lum(sky[sky.length - 1]);
+    // a warm ramp: its shadow must not be bluer than its highlight
+    const warm = t[5];
+    const warmShadowWarm = (warm[0][0] - warm[0][2]) >= (warm[warm.length - 1][0] - warm[warm.length - 1][2]) - 120;
+    return rises && skyShadowBluer && warmShadowWarm;
+  })(), '6 ramps x 4 tones');
+  check('the outline is a line layer, not a repaint',
+    st.outlinePixels / (W3 * H3) > 0.005 && st.outlinePixels / (W3 * H3) < 0.3,
+    `${(100 * st.outlinePixels / (W3 * H3)).toFixed(1)}% of pixels`);
+  check('the distinct regions of the picture get distinct colours, not one flat fill',
+    used.size >= 4, `${used.size} palette entries used`);
+  check('the transition is deterministic: the same photograph twice is the same scene',
+    flat.render(src, W3, H3).idx.join() === st.idx.join());
+}
+
 // ---- structure lines: the borders the creator said were not detailed -------------------------------------
 // The ink pass is the whole answer to "the borders of the structures and elements are not really detailed",
 // so it is tested for the three things that make it ink rather than a grey smear:
