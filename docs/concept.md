@@ -22,8 +22,8 @@ it is there is removed, not kept "for later". This is checked, not hoped for:
 | `palette.js` | Lets one picture be seen four ways at no cost: a mode's look is a different table. |
 | `modes.js` | Makes each filter a different way to play, so choosing one is a decision and not a decoration. |
 | `world.js` | What a hit does: dent, crack, wreck, combo, score. The rules, with no drawing in them. |
-| `fx.js` | Makes a hit felt: pause, kick, flash, pieces, wreckage that stays. Without it a wreck is a pixel swap. |
-| `view.js` | The lean and sway that give each mode its body — and the way back from a finger to a pixel, so aim stays true. |
+| `fx.js` | Makes a hit felt: pause, kick, flash, pieces, wreckage that stays — and makes the three kinds of hit felt *differently*, so the player can feel progress toward a break. The shake is Eiserloh's trauma model (trauma accumulates, decays linearly, offset is the cube) rather than an invented decay. Without it a wreck is a pixel swap. |
+| `view.js` | The lean and sway that give each mode its body, the duck that puts the player behind the rail (symmetric, so hiding and standing up cost the same), and the way back from a finger to a pixel, so aim stays true. |
 | `render.js` | Shows all of the above, including what is out of focus and what is in the hand. |
 | `audio.js` | A run of hits is *heard* as a run: pitch rises with the combo. |
 | `demo.js` | A yard for a desk with no balcony, and a fixed one for the tests. |

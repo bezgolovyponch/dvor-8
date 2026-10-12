@@ -12,9 +12,9 @@ import { stylise } from './src/stylise.js';
 import { TARGETS, tilesFor, merge, toRegions, MAX_TARGETS, MIN_SCORE } from './src/objects.js';
 import { demoYard } from './src/demo.js';
 import { makeWorld, pick, strike, tick, left, DEBRIS_MAX } from './src/world.js';
-import { makeFx, throwThing, impact, burst, stepFx, shakeOffset, HIT_PAUSE, BREAK_PAUSE, SHAKE_MAX } from './src/fx.js';
+import { shakeFor, TRAUMA_DECAY, TRAUMA_POW, TRAUMA_DENT, TRAUMA_BREAK, makeFx, throwThing, impact, burst, stepFx, shakeOffset, HIT_PAUSE, BREAK_PAUSE, SHAKE_MAX } from './src/fx.js';
 import { MODES, aimWith, splashTargets, chainNext, inFocus } from './src/modes.js';
-import { viewMotion, clientToWorld, worldToClient, LONG, SHORT, SCAN_TIME } from './src/view.js';
+import { stepDuck, viewMotion, clientToWorld, worldToClient, LONG, SHORT, SCAN_TIME } from './src/view.js';
 import { mulberry32 } from './src/rng.js';
 import { yardFrom, cleared, grow, extend, edgeOf, room, bandTop, MAX_STREET } from './src/street.js';
 import { makeWalker, stepWalker, standing, walked, JUMP, FALL, CLEAR } from './src/walk.js';
@@ -177,6 +177,30 @@ check('many wrecks at once do not shake the picture off the screen', fx.shake <=
 fx = makeFx(w); impact(fx, 'break', true);
 check('with reduced motion asked for, nothing shakes and nothing tilts', fx.shake === 0 && viewMotion('alcohol', 3, true).angle === 0);
 
+// ---- feedback that scales with what happened ---------------------------------------------------------
+// A dent and a full wreck used to give the player the same punch, which in a game about hitting things is
+// the most expensive kind of sameness: you cannot feel progress toward a break. These three checks hold
+// the three kinds apart on every channel.
+{
+  const f = (kind) => { const x = makeFx(w); impact(x, kind); return { pause: x.freeze, flash: x.flash, shake: x.shake, ring: x.lastRing }; };
+  const dent = f('dent'), crack = f('crack'), broke = f('break');
+  check('a dent, a crack and a break are felt differently on every channel',
+    dent.pause < crack.pause && crack.pause < broke.pause
+    && dent.flash < crack.flash && crack.flash < broke.flash
+    && dent.shake < crack.shake && crack.shake < broke.shake
+    && dent.ring < crack.ring && crack.ring < broke.ring,
+    `pause ${dent.pause}/${crack.pause}/${broke.pause} · flash ${dent.flash}/${crack.flash}/${broke.flash} · shake ${dent.shake}/${crack.shake}/${broke.shake}`);
+  check('an unknown kind falls back to the quietest feedback rather than the loudest',
+    (() => { const x = makeFx(w); impact(x, 'nonsense'); return x.flash === dent.flash && x.shake === dent.shake; })());
+  check('the throw ring carries the hit kind, so the mark and the feedback agree', (() => {
+    const x = makeFx(w);
+    impact(x, 'break');
+    throwThing(x, w, MODES.sober, 'sober', 40, 40, null);
+    return x.rings[0].r === broke.ring && broke.ring > 1;
+  })());
+}
+
+
 // ---- the view ----------------------------------------------------------------------------------------
 section('the view');
 const rect = { left: 30, top: 80, width: 300, height: 400 };
@@ -241,6 +265,74 @@ check('a street has an end: nine photographs, and no more yards than a phone can
 section('down in the yard: walking, jumping, stomping');
 w = yard();
 const TOP = bandTop(w);
+
+// ---- the sourced shake model ---------------------------------------------------------------------------
+// Eiserloh (GDC 2016): trauma accumulates, decays LINEARLY, and shake is trauma^POW. These checks hold the
+// three properties that make it a model rather than a decay constant, because each one is easy to lose in a
+// later edit and each one changes how a run of hits feels.
+{
+  check('shake is the cube of trauma, as the deck\'s own worked figures show',
+    Math.abs(shakeFor(0.3) - 7 * 0.3 ** 3) < 1e-9 && Math.abs(shakeFor(0.9) - 7 * 0.9 ** 3) < 1e-9,
+    `0.3 -> ${shakeFor(0.3).toFixed(2)} px, 0.9 -> ${shakeFor(0.9).toFixed(2)} px`);
+  check('the curve is steep, which is what makes accumulated hits escalate',
+    shakeFor(0.9) / Math.max(1e-9, shakeFor(0.3)) > 20,
+    `${(shakeFor(0.9) / shakeFor(0.3)).toFixed(0)}x from trauma 0.3 to 0.9`);
+  check('shake never exceeds the stated maximum', [0.5, 0.9, 1, 1.5].every((t) => shakeFor(t) <= SHAKE_MAX));
+  check('trauma accumulates: three dents reach further than one dent', (() => {
+    const x = makeFx(w);
+    impact(x, 'dent'); const one = x.shake;
+    impact(x, 'dent'); impact(x, 'dent'); const three = x.shake;
+    return three > one * 5;
+  })(), `${TRAUMA_DENT} x3 -> ${(0.3 * 3).toFixed(1)} trauma`);
+  check('trauma decays linearly once the freeze is over, so a jolt has a defined end', (() => {
+    const x = makeFx(w); impact(x, 'break');
+    stepFx(x, w, BREAK_PAUSE + 1 / 60);            // a freeze holds everything still, decay included
+    const t0 = x.trauma;
+    stepFx(x, w, 0.2);
+    const a = x.trauma;
+    stepFx(x, w, 0.2);
+    const b = x.trauma;
+    return t0 > a && a > b && Math.abs((t0 - a) - (a - b)) < 1e-9;
+  })(), `decay ${TRAUMA_DECAY}/s, and the freeze really does pause it`);
+  check('a fully decayed shake is exactly zero, not a small residue', (() => {
+    const x = makeFx(w); impact(x, 'break');
+    for (let i = 0; i < 200; i += 1) stepFx(x, w, 1 / 60);
+    return x.shake === 0 && x.trauma === 0;
+  })());
+  check('the camera is driven by smooth noise, not a random offset per frame',
+    (() => { const a = shakeOffset({ clock: 0.1, shake: 3 }), b = shakeOffset({ clock: 0.1001, shake: 3 });
+      return Math.abs(a.x - b.x) <= 1 && Math.abs(a.y - b.y) <= 1; })());
+}
+
+// ---- hiding is something you can see ------------------------------------------------------------------
+{
+  const x = makeFx(w); x.lastRing = 1;
+  check('the duck eases in and out over the same span, so hiding and standing up cost the same',
+    (() => {
+      const run = (hidden) => { let v = hidden ? 0 : 1; for (let i = 0; i < 11; i += 1) v = stepDuck(v, hidden, 1 / 60); return v; };
+      return run(true) === 1 && run(false) === 0;
+    })(), `0.18 s either way`);
+  check('the duck is clamped, so a long frame cannot overshoot it', (() => {
+    let v = 0; for (let i = 0; i < 40; i += 1) v = stepDuck(v, true, 0.05);
+    return v === 1 && stepDuck(0, false, 0.05) === 0;
+  })());
+  check('a body squashes on landing and stretches on take-off, by exactly one pixel',
+    (() => { const bw = (sq) => 7 + (sq < 0 ? 1 : 0) - (sq > 0 ? 1 : 0); const bh = (sq) => 13 - (sq < 0 ? 1 : 0) + (sq > 0 ? 1 : 0);
+      return bw(-1) > bw(0) && bh(-1) < bh(0) && bw(1) < bw(0) && bh(1) > bh(0); })());
+}
+{
+  // the landing flag lives on the walker, so a replay is exact and the drawing has something to read
+  const me2 = makeWalker(w, w.w / 2, TOP + 40, TOP);
+  check('a walker starts with no landing to show', me2.land === 0);
+  let seenLand = 0;
+  const jump = stepWalker(w, me2, { x: 0, y: 0, jump: true }, 1 / 60, { top: TOP });
+  check('a jump is answered in the frame it is asked for', jump.jumped === true && me2.vz > 0);
+  for (let i = 0; i < 200 && me2.z > 0; i += 1) stepWalker(w, me2, { x: 0, y: 0 }, 1 / 60, { top: TOP });
+  seenLand = me2.land;
+  check('when the jump ends the body carries a landing to animate', seenLand > 0, `${seenLand.toFixed(3)} s`);
+  for (let i = 0; i < 30; i += 1) stepWalker(w, me2, { x: 0, y: 0 }, 1 / 60, { top: TOP });
+  check('and the landing runs out on its own', me2.land === 0);
+}
 check('a walker may go as high as the highest thing and no higher: all that can be hit can be reached', TOP <= Math.min(...w.regions.map((r) => r.y)) && TOP >= 14, `from row ${TOP}`);
 let me = makeWalker(w, byKind(w, 'car').cx, byKind(w, 'car').cy, TOP);
 check('nobody starts inside a car', !standing(w, me.x, me.y));

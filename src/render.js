@@ -14,31 +14,94 @@ export function makeBuffer(w, h) {
 }
 
 // What is in the hand, as a handful of pixels. `spin` turns it in flight.
+//
+// The rule each one follows: a dark ink outline, one body colour, one lit face and one shadow, plus a
+// single identifying detail that survives being six pixels across. At this size the outline is what makes
+// a thing readable against a busy photograph, and the lit face is what makes it read as solid rather than
+// as a sticker. `spin` swaps the silhouette on alternate frames for the things that tumble.
 const THINGS = {
-  sober: (c, x, y) => { c.fillStyle = '#2a2233'; c.fillRect(x - 2, y - 1, 4, 4); c.fillStyle = '#e8e4f0'; c.fillRect(x - 2, y - 2, 3, 3); },
-  weed: (c, x, y, spin) => { c.fillStyle = '#ff6fa8'; if (spin) c.fillRect(x - 1, y - 3, 3, 6); else c.fillRect(x - 3, y - 1, 6, 3); c.fillStyle = '#fff'; c.fillRect(x - 1, y - 1, 2, 2); },
-  alcohol: (c, x, y, spin) => { c.fillStyle = '#35d07f'; if (spin) { c.fillRect(x - 3, y - 1, 5, 3); c.fillRect(x + 2, y, 2, 1); } else { c.fillRect(x - 1, y - 2, 3, 5); c.fillRect(x, y - 4, 1, 2); } c.fillStyle = '#d7ffe9'; c.fillRect(x - 1, y - 1, 1, 1); },
-  water: (c, x, y, spin) => { c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 3, 6, 6); c.fillStyle = '#3f8cf0'; c.fillRect(x - 2, y - 2, 4, 4); c.fillStyle = '#d7f4ff'; c.fillRect(x - 2 + (spin ? 2 : 0), y - 2, 2, 1); },
-  depression: (c, x, y) => { c.fillStyle = '#3a1410'; c.fillRect(x - 3, y - 1, 7, 4); c.fillStyle = '#b5482f'; c.fillRect(x - 3, y - 2, 6, 3); c.fillStyle = '#7a2c1c'; c.fillRect(x - 3, y - 1, 6, 1); },
+  // a stone: chipped, lighter on top, and it does not tumble
+  sober: (c, x, y) => {
+    c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 2, 6, 5);
+    c.fillStyle = '#3a3040'; c.fillRect(x - 2, y - 1, 4, 3);
+    c.fillStyle = '#8b8095'; c.fillRect(x - 2, y - 2, 3, 2);
+    c.fillStyle = '#e8e4f0'; c.fillRect(x - 2, y - 2, 2, 1);
+  },
+  // a slipper: flat, floppy, and it flips end over end
+  weed: (c, x, y, spin) => {
+    if (spin) {
+      c.fillStyle = '#0b0018'; c.fillRect(x - 2, y - 4, 4, 8);
+      c.fillStyle = '#ff6fa8'; c.fillRect(x - 1, y - 3, 2, 6);
+      c.fillStyle = '#fff'; c.fillRect(x - 1, y - 3, 2, 2);
+    } else {
+      c.fillStyle = '#0b0018'; c.fillRect(x - 4, y - 2, 8, 5);
+      c.fillStyle = '#ff6fa8'; c.fillRect(x - 3, y - 1, 6, 3);
+      c.fillStyle = '#c94a80'; c.fillRect(x - 3, y + 1, 6, 1);
+      c.fillStyle = '#fff'; c.fillRect(x - 1, y - 1, 3, 2);
+    }
+  },
+  // a bottle: neck, shoulder, body, one lit edge down the glass
+  alcohol: (c, x, y, spin) => {
+    if (spin) {
+      c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 2, 7, 4);
+      c.fillStyle = '#1f7a4c'; c.fillRect(x - 2, y - 1, 5, 2);
+      c.fillStyle = '#35d07f'; c.fillRect(x + 1, y - 1, 2, 2);
+      c.fillStyle = '#ffd23f'; c.fillRect(x - 1, y - 3, 2, 1);
+    } else {
+      c.fillStyle = '#0b0018'; c.fillRect(x - 2, y - 3, 4, 6); c.fillRect(x - 1, y - 6, 2, 3);
+      c.fillStyle = '#1f7a4c'; c.fillRect(x - 1, y - 2, 2, 4); c.fillRect(x - 1, y - 5, 2, 3);
+      c.fillStyle = '#35d07f'; c.fillRect(x - 1, y - 2, 1, 4);
+      c.fillStyle = '#ffd23f'; c.fillRect(x - 1, y - 6, 2, 1);
+      c.fillStyle = '#d7ffe9'; c.fillRect(x, y - 1, 1, 2);
+    }
+  },
+  // a ball of water: it wobbles, and the highlight moves around it
+  water: (c, x, y, spin) => {
+    c.fillStyle = '#0b0018'; c.fillRect(x - 3, y - 3, 7, 7);
+    c.fillStyle = '#2f6fd0'; c.fillRect(x - 2, y - 2, 5, 5);
+    c.fillStyle = '#3f8cf0'; c.fillRect(x - 2, y - 2, 4, 4);
+    c.fillStyle = '#d7f4ff'; c.fillRect(x - 2 + (spin ? 2 : 0), y - 2 + (spin ? 1 : 0), 2, 1);
+    c.fillStyle = '#1b4a94'; c.fillRect(x - 2, y + 2, 4, 1);
+  },
+  // a brick: heavy, chipped at one end, and it does not tumble either
+  depression: (c, x, y) => {
+    c.fillStyle = '#0b0018'; c.fillRect(x - 4, y - 2, 9, 5);
+    c.fillStyle = '#b5482f'; c.fillRect(x - 3, y - 1, 7, 3);
+    c.fillStyle = '#d4664a'; c.fillRect(x - 3, y - 1, 7, 1);
+    c.fillStyle = '#7a2c1c'; c.fillRect(x + 1, y, 3, 2);
+    c.fillStyle = '#3a1410'; c.fillRect(x + 3, y - 1, 1, 3);
+    c.fillStyle = '#e08a70'; c.fillRect(x - 3, y - 2, 3, 1);
+  },
 };
 
 // Whoever walks the yard: a dozen pixels, drawn the way an 8-bit console would. The shadow stays on the
 // ground when the body leaves it, which is what makes a jump read as a jump on a flat picture.
-function person(c, me, seconds) {
+//
+// `squash` is the one animation principle applied here deliberately. The body is 7 px wide and 13 px
+// tall, so a landing widens it by one and shortens it by one, and a take-off does the opposite. At this
+// scale one pixel of deformation IS the effect; a larger factor reads as a glitch rather than as weight.
+// `hideT` sinks the body down behind the rail as you duck, so that hiding is something you can SEE happen
+// instead of a state the HUD merely announces.
+function person(c, me, seconds, squash = 0, hideT = 0) {
   const x = Math.round(me.x), y = Math.round(me.y), by = Math.round(me.y - me.z), air = me.z > 0;
   const shade = Math.max(3, 7 - Math.round(me.z / 5));
+  const sink = Math.round(hideT * 9);                            // 0 in the open, 9 px down when fully hidden
+  const bw = 7 + (squash < 0 ? 1 : 0) - (squash > 0 ? 1 : 0);    // wider on landing, narrower on take-off
+  const bh = 13 - (squash < 0 ? 1 : 0) + (squash > 0 ? 1 : 0);
+  const top = by - bh + sink;
+
   c.fillStyle = 'rgba(11,0,24,.6)';
   c.fillRect(x - (shade >> 1), y, shade, 2);
-  c.fillStyle = '#0b0018'; c.fillRect(x - 3, by - 13, 7, 13);
-  c.fillStyle = '#2a2233'; c.fillRect(x - 2, by - 12, 5, 1);
-  c.fillStyle = '#ffd9a8'; c.fillRect(x - 2, by - 11, 5, 3);
-  c.fillStyle = '#0b0018'; c.fillRect(x + me.face, by - 10, 1, 1);
-  c.fillStyle = '#f0286e'; c.fillRect(x - 2, by - 8, 5, 4);
+  c.fillStyle = '#0b0018'; c.fillRect(x - 3, top, bw, bh);
+  c.fillStyle = '#2a2233'; c.fillRect(x - 2, top + 1, bw - 2, 1);
+  c.fillStyle = '#ffd9a8'; c.fillRect(x - 2, top + 2, 5, 3);
+  c.fillStyle = '#0b0018'; c.fillRect(x + me.face, top + 3, 1, 1);
+  c.fillStyle = '#f0286e'; c.fillRect(x - 2, top + 5, 5, 4);
   c.fillStyle = '#3fe0f0';
   const stride = air ? 1 : Math.floor(me.step) % 2;
-  c.fillRect(x - 2, by - 4, 2, air ? 2 : stride ? 3 : 4);
-  c.fillRect(x + 1, by - 4, 2, air ? 2 : stride ? 4 : 3);
-  if (air && Math.floor(seconds * 16) % 2) { c.fillStyle = '#ffd23f'; c.fillRect(x - 3, by - 9, 1, 2); c.fillRect(x + 3, by - 9, 1, 2); }   // arms up
+  c.fillRect(x - 2, by - 4 + sink, 2, air ? 2 : stride ? 3 : 4);
+  c.fillRect(x + 1, by - 4 + sink, 2, air ? 2 : stride ? 4 : 3);
+  if (air && Math.floor(seconds * 16) % 2) { c.fillStyle = '#ffd23f'; c.fillRect(x - 3, top + 4, 1, 2); c.fillRect(x + 3, top + 4, 1, 2); }   // arms up
 }
 
 // The bottle in the hand, in the corner of the view, as full as it is. At the mouth it is lifted and
@@ -123,8 +186,21 @@ const DRESS = {
   cop: { coat: '#3b6cff', legs: '#12052e', hair: '#12052e' },
   courier: { coat: GOLD, legs: '#2a2233', hair: '#f0286e' },
 };
+// Two passers-by of the same kind used to be pixel-identical, which made a queue of walkers read as one
+// walker drawn three times. The coat stays the kind's own colour — that colour is how the player tells a
+// cop from a courier at a glance, and it is not negotiable — but three things vary per person: a frame of
+// height, a shoulder colour taken from the dress, and whether they wear a hat. Everything is derived from
+// `p.phase`, which already exists and is deterministic, so nothing has to be stored and a replay is exact.
+function look(p, d) {
+  const h = (p.phase || 0) * 2654435761 % 1000 / 1000;       // 0..1, stable for the life of the person
+  const tall = h > 0.66 ? 1 : h < 0.33 ? -1 : 0;
+  const hat = (p.phase || 0) % 1 > 0.5;
+  const trim = [d.coat, d.hair, PALE, CYAN][Math.floor(h * 4) % 4];
+  return { tall, hat, trim };
+}
 function passer(c, p, seconds, hidden) {
   const d = DRESS[p.kind], still = p.state === 'alarm' || p.state === 'look';
+  const { tall, hat, trim } = look(p, d);
   const sway = p.kind === 'drunk' && !still ? Math.round(Math.sin(p.t * 3 + p.phase)) : 0;
   const x = Math.round(p.x) + sway, y = Math.round(p.y), up = p.state === 'look' ? 1 : 0;
   const stride = still ? 0 : Math.floor((p.t + p.phase) * (p.state === 'flee' ? 14 : 7)) % 2;
@@ -136,14 +212,22 @@ function passer(c, p, seconds, hidden) {
     rects(c, INK, [[x - p.dir * 5 - 2, y - 15, 6, 7]]); rects(c, '#ff9a2e', [[x - p.dir * 5 - 1, y - 14, 4, 5]]);
   }
   const by = p.kind === 'courier' ? y - 3 : y;
-  rects(c, INK, [[x - 3, by - 13 - up, 7, 13 + up]]);
+  // `tall` is the per-person height in pixels: one shorter, one taller, one the stock size. It shifts the
+  // head and the coat, never the feet, so nobody floats above their own shadow.
+  const bh = 13 + tall + up;
+  rects(c, INK, [[x - 3, by - bh, 7, bh]]);
   if (p.kind === 'lady') rects(c, INK, [[x - 4, by - 7, 9, 5]]);
-  rects(c, d.hair, [[x - 2, by - 12 - up, 5, 1]]);
-  rects(c, '#ffd9a8', [[x - 2, by - 11 - up, 5, 3]]);
-  if (up) rects(c, INK, [[x - 1, by - 11 - up, 1, 1], [x + 1, by - 11 - up, 1, 1]]);   // both eyes: the face is turned up at you
-  else rects(c, INK, [[x + p.dir, by - 10, 1, 1]]);
-  if (p.kind === 'cop') rects(c, GOLD, [[x, by - 12 - up, 1, 1]]);
-  rects(c, d.coat, p.kind === 'lady' ? [[x - 2, by - 8, 5, 3], [x - 3, by - 6, 7, 3]] : [[x - 2, by - 8, 5, 4]]);
+  rects(c, d.hair, [[x - 2, by - bh + 1, 5, 1]]);
+  rects(c, '#ffd9a8', [[x - 2, by - bh + 2, 5, 3]]);
+  if (up) rects(c, INK, [[x - 1, by - bh + 2, 1, 1], [x + 1, by - bh + 2, 1, 1]]);   // both eyes: the face is turned up at you
+  else rects(c, INK, [[x + p.dir, by - bh + 3, 1, 1]]);
+  // a hat, on about half of them, in a colour drawn from the dress: it breaks the silhouette of a queue
+  // without ever touching the coat colour that identifies the kind
+  if (hat) { rects(c, INK, [[x - 3, by - bh - 2, 7, 2]]); rects(c, trim, [[x - 2, by - bh - 1, 5, 1]]); }
+  if (p.kind === 'cop') rects(c, GOLD, [[x, by - bh + 1, 1, 1]]);
+  const coatY = by - (bh - 5);
+  rects(c, d.coat, p.kind === 'lady' ? [[x - 2, coatY, 5, 3], [x - 3, coatY + 2, 7, 3]] : [[x - 2, coatY, 5, 4]]);
+  rects(c, trim, [[x - 2, coatY, 5, 1]]);   // the trim row: one line that varies per person
   if (p.kind !== 'courier') rects(c, d.legs, [[x - 2, by - (p.kind === 'lady' ? 3 : 4), 2, (p.kind === 'lady' ? 2 : 3) + stride], [x + 1, by - (p.kind === 'lady' ? 3 : 4), 2, (p.kind === 'lady' ? 3 : 4) - stride]]);
   if (p.kind === 'drunk') rects(c, '#ffb347', [[x + 3 * p.dir, by - 7, 1, 3]]);
   if (p.kind === 'lady') rects(c, PINK, [[x - 4 * p.dir, by - 5, 2, 3]]);
@@ -155,20 +239,30 @@ function passer(c, p, seconds, hidden) {
   write(c, mark, mx, my, p.state === 'look' ? (hidden ? CYAN : PINK) : GOLD);
 }
 
-// Hidden: the balcony's rail is between you and the yard. The yard can still be watched through it,
-// which is the point — you wait for the look to pass — but nothing can be thrown.
-function rail(c, w, h) {
-  rects(c, 'rgba(11,0,24,.45)', [[0, 0, w, h]]);
+// Hidden: the balcony's rail comes up between you and the yard, and a gap in the planks is what you look
+// through. The gap opens as the duck completes, so hiding is a movement you watch rather than a state the
+// HUD announces. The yard stays fully readable through the gap — you are waiting for a look to pass, not
+// losing the picture — and the drop in brightness is what tells you that you are covered.
+function rail(c, w, h, hideT = 1) {
   const top = h - Math.round(h * 0.2);
+  const gapW = Math.round(46 + hideT * 82);            // 46 px as you start to duck, 128 px when covered
+  const gx = Math.round((w - gapW) / 2);
+  const gh = Math.round(10 + hideT * 5);
+  rects(c, 'rgba(11,0,24,.45)', [[0, 0, w, h]]);
   rects(c, INK, [[0, top, w, h - top]]);
   rects(c, CYAN, [[0, top, w, 2]]);
-  for (let x = 4; x < w; x += 10) rects(c, '#12052e', [[x, top + 2, 4, h - top - 2]]);
+  for (let x = 4; x < w; x += 10) {
+    if (x + 4 > gx && x < gx + gapW) continue;         // the gap: no plank here
+    rects(c, '#12052e', [[x, top + 2, 4, h - top - 2]]);
+  }
+  // the rim of the gap, lit, because a hole you look through should read as a hole
+  rects(c, '#2b1050', [[gx, top, 2, gh], [gx + gapW - 2, top, 2, gh]]);
   write(c, 'СПРЯТАН', Math.round((w - textWidth('СПРЯТАН')) / 2), top + 6, PALE);
 }
 
 // scanY: null once the scan is over; before that, everything below it is still the photograph.
 // cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
-export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null }) {
+export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0 }) {
   const pal = lookThrough(world.palette, filter, seconds);
   const { idx, rubble, photo, sw } = world, W = world.w, H = world.h;
   const w = cam.w, h = cam.h, cx = cam.x, cy = cam.y;
@@ -226,11 +320,22 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     for (let n = 0; n < r.hp - r.hits; n += 1) { ctx.fillStyle = '#0b0018'; ctx.fillRect(x0 + n * 4, y1 + 2, 4, 3); ctx.fillStyle = '#f0286e'; ctx.fillRect(x0 + n * 4, y1 + 2, 3, 2); }
   }
   if (folk && scanY === null) for (const p of [...folk.people].sort((a, b) => a.y - b.y)) if (p.x > cx - 12 && p.x < cx + w + 12) passer(ctx, p, seconds, folk.hidden);
-  if (me?.down) person(ctx, me, seconds);
+  if (me?.down) person(ctx, me, seconds, land > 0 ? -1 : (me.z > 0 && me.vz > 60 ? 1 : 0), hideT);
+  // Dust from under the feet when a jump ends: two frames of it, which is all a 192-px picture needs to
+  // make a landing read as a landing rather than as a teleport.
+  if (me?.down && land > 0) {
+    const lx = Math.round(me.x), ly = Math.round(me.y);
+    const spread = Math.round((1 - land) * 9);
+    ctx.fillStyle = 'rgba(11,0,24,.45)';
+    for (const dx of [-spread, -Math.round(spread / 2), Math.round(spread / 2), spread]) ctx.fillRect(lx + dx, ly - 1, 2, 2);
+  }
   for (const p of fx.particles) {
     ctx.fillStyle = p.rgb || css(pal[p.c]);
-    const s = p.life > 2.2 ? 2 : 1;
-    ctx.fillRect(p.x | 0, p.y | 0, s, s);
+    // A tumbling piece is drawn 2x1 instead of 1x1 on alternate frames. That is the whole animation, and
+    // at this scale it is enough: the eye reads the alternation as rotation.
+    const s = p.s || (p.life > 2.2 ? 2 : 1);
+    if (p.spin && Math.floor(seconds * 18 + p.x) % 2) ctx.fillRect(p.x | 0, p.y | 0, s, 1);
+    else ctx.fillRect(p.x | 0, p.y | 0, s, s);
   }
   for (const r of fx.rocks) {
     const t = Math.min(1, r.t / r.dur);
@@ -238,10 +343,14 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     const x = Math.round(r.x0 + (r.tx - r.x0) * t), y = Math.round(r.y0 + (r.ty - r.y0) * t - arc);
     (THINGS[r.kind] || THINGS.sober)(ctx, x, y, Math.floor(seconds * 14) % 2 === 0);
   }
+  // The ring is the "you connected" mark, and its reach is scaled by what kind of hit it was: a dent
+  // barely shows, a break throws the ring out past the thing. The colour carries the same information,
+  // so the two channels agree instead of fighting.
   for (const ring of fx.rings) {
-    const rad = Math.round(2 + ring.t * 44);
-    ctx.strokeStyle = '#3fe0f0';
-    ctx.lineWidth = 1;
+    const reach = ring.r || 1;
+    const rad = Math.round(2 + ring.t * 44 * reach);
+    ctx.strokeStyle = reach > 1 ? '#ffd23f' : reach > 0.7 ? '#ff9ad0' : '#3fe0f0';
+    ctx.lineWidth = reach > 1 ? 2 : 1;
     ctx.strokeRect(Math.round(ring.x) - rad + 0.5, Math.round(ring.y) - rad + 0.5, rad * 2, rad * 2);
   }
   if (scanY !== null) {
@@ -257,7 +366,7 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     if (flier.kind === 'plane') plane(ctx, flier, w, seconds); else ship(ctx, flier, seconds);
     ctx.restore();
   }
-  if (folk?.hidden && scanY === null) rail(ctx, w, h);
+  if (folk?.hidden && scanY === null) rail(ctx, w, h, hideT);
   if (drink && scanY === null) bottle(ctx, w, h, drink.full, drink.busy);
   if (fx.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${(fx.flash * 0.5).toFixed(3)})`;

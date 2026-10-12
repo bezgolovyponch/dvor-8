@@ -31,7 +31,9 @@ export function freeSpot(world, x, y, top = 0) {
 
 export function makeWalker(world, x, y, top = 0) {
   const at = freeSpot(world, x, y, top);
-  return { x: at.x, y: at.y, z: 0, vz: 0, face: 1, step: 0, t: 0, far: at.x, start: at.x, down: true };
+  // `land` counts down over 0.16 s after a jump ends, so the drawing can squash the body and kick up
+  // dust. It lives on the walker rather than in the fx pool because it is a property of the body.
+  return { x: at.x, y: at.y, z: 0, vz: 0, face: 1, step: 0, t: 0, far: at.x, start: at.x, down: true, land: 0 };
 }
 
 // One step of time. `input` is { x, y } in −1…1 and `jump`. `stagger` is extra, unasked-for drift in
@@ -40,6 +42,7 @@ export function makeWalker(world, x, y, top = 0) {
 export function stepWalker(world, me, input, dt, { top = 0, stagger = 0 } = {}) {
   const out = { jumped: false, landed: false, stomped: null, blocked: false };
   me.t += dt;
+  if (me.land > 0) me.land = Math.max(0, me.land - dt);
   let vx = input.x, vy = input.y;
   const len = Math.hypot(vx, vy);
   if (len > 1) { vx /= len; vy /= len; }
@@ -67,7 +70,7 @@ export function stepWalker(world, me, input, dt, { top = 0, stagger = 0 } = {}) 
     if (me.z <= 0) {
       me.z = 0; me.vz = 0;
       const under = standing(world, me.x, me.y);
-      if (under) { out.stomped = under; me.vz = BOUNCE; me.z = 0.01; } else out.landed = true;
+      if (under) { out.stomped = under; me.vz = BOUNCE; me.z = 0.01; } else { out.landed = true; me.land = 0.16; }
     }
   }
   return out;

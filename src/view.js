@@ -56,3 +56,16 @@ export function worldToClient(x, y, rect, angle, shift, w, h) {
   const c = Math.cos(angle), s = Math.sin(angle);
   return { x: ux * c - uy * s + rect.left + rect.width / 2, y: ux * s + uy * c + rect.top + rect.height / 2 };
 }
+
+// The duck: how far behind the balcony rail the player is, 0 in the open and 1 fully covered.
+//
+// It is a pure function of the previous value, the target and the frame time, so the drawing, the game and
+// the test all read the same number. The span is symmetric on purpose — hiding and standing up cost the
+// same, because the people system is built on watching a look arrive and waiting it out, and an instant
+// duck with a slow rise would make the defensive action feel like a trap.
+export const DUCK_SECONDS = 0.18;
+
+export function stepDuck(prev, hidden, dt) {
+  const raw = prev + (dt / DUCK_SECONDS) * (hidden ? 1 : -1);
+  return Math.max(0, Math.min(1, raw));
+}

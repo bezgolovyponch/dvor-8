@@ -13,7 +13,7 @@ import { demoYard } from './demo.js';
 import { makeWorld, pick, strike, tick, left } from './world.js';
 import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js';
 import { MODES, aimWith, splashTargets, chainNext } from './modes.js';
-import { viewMotion, clientToWorld, cameraFor, LONG, SHORT, SCAN_TIME } from './view.js';
+import { viewMotion, clientToWorld, cameraFor, stepDuck, LONG, SHORT, SCAN_TIME } from './view.js';
 import { yardFrom, grow, extend, edgeOf, room, bandTop } from './street.js';
 import { makeWalker, stepWalker, walked, standing } from './walk.js';
 import { makeDrink, swig, fresh, stepDrink, level, drunkMode, stagger, SWIG_TIME } from './drink.js';
@@ -47,6 +47,10 @@ let clock = 0, scanT = 0, endIn = 0, last = performance.now();
 let motion = viewMotion(filter, 0, calm), shake = { x: 0, y: 0 };
 let shown = {}, press = null;
 let me = null;                              // whoever walks the yard; nobody until the player first goes down
+// How far through the duck we are, 0 in the open and 1 fully behind the rail. It is animated rather than
+// switched because hiding is the one defensive action the player takes, and the whole point of the
+// people system is that a look is something you watch arrive and wait out.
+let hideT = 0;
 let cam = { x: 0, y: 0, w: SHORT, h: LONG };   // the part of the street on screen
 let drink = makeDrink();
 let queue = [], like = null, grown = rnd, top = 0, ended = false, stomps = 0;   // the street still to come, and how it is made
@@ -101,9 +105,18 @@ function paintHud() {
   if (world.combo !== shown.combo) { $('combo').textContent = world.combo > 1 ? `x${world.combo}` : '—'; if (world.combo > 1) bump($('combo')); shown.combo = world.combo; }
   if (left(world) !== shown.left) { $('left').textContent = left(world); shown.left = left(world); }
   $('comboBar').style.width = `${(world.comboLeft / world.comboWindow) * 100}%`;
-  $('coolBar').style.width = mode.cooldown ? `${(1 - fx.cool / mode.cooldown) * 100}%` : '100%';
+  // Nothing in the HUD may be visible while it has nothing to say. A bar that sits full, or empty, for a
+  // whole run is not information — it is noise competing with the signals that matter. Each rule below
+  // is "hide when meaningless" and nothing else:
+  //   comboBar  the multiplier only exists above x1
+  //   coolBar   only the brick has a cooldown; in the other three modes it would sit at 100% forever
+  //   heat      danger cannot exist before the first person arrives
+  $('combo').parentElement.hidden = world.combo <= 1;
+  $('coolBar').parentElement.hidden = !mode.cooldown;
+  $('coolBar').style.width = mode.cooldown ? `${(1 - fx.cool / mode.cooldown) * 100}%` : '0';
   $('drunkBar').style.width = `${drink.drunk * 100}%`;
   const lit = stars(folk);
+  $('heat').parentElement.hidden = folk.people.length === 0 && lit === 0;
   if (lit !== shown.stars) {
     [...$('heat').children].forEach((el, n) => { el.className = n < lit ? 'on' : ''; });
     $('heat').classList.toggle('hot', lit >= 4); $('heat').setAttribute('aria-valuenow', String(lit));
@@ -147,7 +160,7 @@ function begin() {
   me = null; drink = makeDrink(); queue = [...yard.more]; like = yard.home; grown = mulberry32(daySeed(today));   // today's street
   top = bandTop(world); ended = false; stomps = 0;
   clearSky(sky, skyLines());
-  folk = makeFolk(); paintHide();
+  folk = makeFolk(); paintHide(); hideT = 0;
   paintView();
   stage = 'scan'; scanT = 0; endIn = 0; shown = {}; press = null;
   pops.replaceChildren();
@@ -198,7 +211,7 @@ function skyHit(rock) {
   if (!f) return false;
   const points = knock(sky);
   world.score += points; world.hits += 1;
-  impact(fx, 'hit', calm);
+  impact(fx, 'dent', calm);        // the banner comes away: the thing itself is unharmed
   burst(fx, Array.from({ length: 12 }, (_, n) => ({ x: rock.tx + (n % 4) * 3 - 5, y: rock.ty, c: 0, rgb: n % 3 ? '#fff6c2' : '#f0286e', floor: rock.ty + 60 })), rock.tx, rock.ty + 4, rnd, 55);
   sfx.paper();
   navigator.vibrate?.(18);
@@ -235,7 +248,7 @@ function waterLands(rock) {
   if (!p) return;
   const points = soak(folk, p);
   world.score += points; world.hits += 1;
-  impact(fx, 'hit', calm);
+  impact(fx, 'dent', calm);        // water on a person: nothing is damaged, they simply look up
   navigator.vibrate?.(15);
   pop(`+${points}`, p.x, p.y - 12);
   pop(FOLK[p.kind].ru.toUpperCase(), p.x, p.y - 26, 'tag');
@@ -433,8 +446,13 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   clock += dt;
+  hideT = stepDuck(hideT, folk.hidden, dt);
   motion = viewMotion(filter, clock, calm, drink.drunk);
-  tiltEl.style.transform = `rotate(${motion.angle}rad)`;
+  // The lean and the jolt ride the same transform: the camera's trauma contributes a rotation as well as
+  // an offset, so a break tips the picture rather than only sliding it. The pointer mapping below must use
+  // the SAME total angle, or aim drifts during a shake.
+  const totalAngle = motion.angle + (shake.angle || 0);
+  tiltEl.style.transform = `rotate(${totalAngle}rad)`;
   if (world) {
     let scanY = null;
     if (stage === 'scan') {
@@ -467,7 +485,8 @@ function frame(now) {
     else { fx.hand.x = cam.x + cam.w / 2; fx.hand.y = world.h + 4; }
     shake = shakeOffset(fx);
     draw(ctx, buf, world, fx, { filter, mode, seconds: clock, scanY, motion, shake, cam, me,
-      drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk });
+      drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk,
+      hideT, land: me?.land ?? 0 });
     paintHud();
   }
   requestAnimationFrame(frame);
@@ -475,7 +494,7 @@ function frame(now) {
 
 // ---- the finger -----------------------------------------------------------------------------------
 const toWorld = (e) => {
-  const at = clientToWorld(e.clientX, e.clientY, frameEl.getBoundingClientRect(), motion.angle,
+  const at = clientToWorld(e.clientX, e.clientY, frameEl.getBoundingClientRect(), motion.angle + (shake.angle || 0),
     { x: motion.x + shake.x, y: motion.y + shake.y }, cam.w, cam.h);
   return { x: at.x + cam.x, y: at.y + cam.y };
 };
