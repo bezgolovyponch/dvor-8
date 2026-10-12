@@ -90,8 +90,11 @@ is fun.**
     index.html, style.css   the page
     src/detect.js           the object detector, on the device
     src/objects.js          found things → fair targets and their pixels
-    src/stylise.js          photograph → 8-bit picture of the same yard
-    src/palette.js          the yard's own 28 colours, and the same through each mode
+    src/stylise.js          photograph → 8-bit picture of the same yard (docs/pixel-pipeline.md)
+    src/downscale.js        the photograph shrunk so railings and frames survive
+    src/ramps.js            the game's one palette: 28 colours in hue-shifted ramps, the same for every yard
+    src/pixelart.js         ramp mapping, clean-up and the selective outline
+    src/palette.js          the palette table, and the same through each mode
     src/modes.js            the four ways to play
     src/world.js            what a hit does
     src/fx.js               what a hit feels like

@@ -1,15 +1,15 @@
 // The palette. The yard is stored as INDICES and looked up through a table every frame, so a filter is a
 // different table, not a different picture (docs/style.md, F1 and F3).
 //
-// The table is made FROM THE PHOTOGRAPH: the 28 colours that describe this yard best, after it has been
-// graded toward the look — more contrast, more colour, purple in the shadows. A red car stays red and a
-// green tree stays green; the first version mapped brightness onto two fixed ramps and turned every yard
-// into the same heat-map, which is why nothing in it could be recognised.
+// The table itself is FIXED: the 28 hue-shifted ramp colours of ramps.js, the same for every yard, so every
+// photograph looks like the same game (docs/pixel-pipeline.md). A red car stays red because the pixel's
+// hue picks the ramp. Before 2026-10-12 the table was cut from each photograph by median cut; before that,
+// brightness was mapped onto two neon ramps, which turned every yard into the same heat-map.
 
 export const COLOURS = 28;
-// The palette is not COLOURS long. buildPalette appends the game's own ink and void colours after the
-// photograph's colours, so a pixel index runs to PALETTE_SIZE, not to COLOURS. COLOURS stays as it was —
-// it is how many colours are cut from the PHOTOGRAPH — and this is the bound for anything that walks the
+// The palette is not COLOURS long. stylise() appends the game's own ink and void colours after the
+// ramp colours, so a pixel index runs to PALETTE_SIZE, not to COLOURS. COLOURS stays as it was —
+// it is how many colours the ramps give — and this is the bound for anything that walks the
 // finished table, which is what `nearest` needs and what a test should assert against.
 export const PALETTE_SIZE = COLOURS + 2;
 export const OUTLINE = COLOURS;       // the dark line round a thing
@@ -21,7 +21,7 @@ export const SIZE = COLOURS + 2;
 export const MAX_YARDS = 9;
 export const baseOf = (yard) => (yard === 0 ? 0 : SIZE + (yard - 1) * COLOURS);
 const blockOf = (i) => (i < SIZE ? 0 : SIZE + Math.floor((i - SIZE) / COLOURS) * COLOURS);
-const OUTLINE_RGB = [11, 0, 24], VOID_RGB = [4, 0, 10];
+export const OUTLINE_RGB = [11, 0, 24], VOID_RGB = [4, 0, 10];
 
 export function toHsl([r, g, b]) {
   const [rn, gn, bn] = [r / 255, g / 255, b / 255];
@@ -52,48 +52,6 @@ export function fromHsl([h, s, l]) {
   return [f(h + 1 / 3) * 255, f(h) * 255, f(h - 1 / 3) * 255];
 }
 export const luma = ([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-// The grade: what makes a phone photograph look like this game. lo/hi are the photo's own darkest and
-// brightest brightness, so a grey overcast yard still gets blacks and whites.
-export const SHADOW = [44, 12, 96], LIGHT = [255, 240, 200];
-export function grade(r, g, b, lo = 0, hi = 1) {
-  const span = Math.max(0.08, hi - lo);
-  const l0 = luma([r, g, b]);
-  const l1 = Math.max(0, Math.min(1, (l0 - lo) / span));
-  const k = l0 > 0.004 ? l1 / l0 : 0;
-  let [h, s, l] = toHsl([Math.min(255, r * k), Math.min(255, g * k), Math.min(255, b * k)]);
-  s = Math.min(1, s * 1.45 + 0.04);
-  const out = fromHsl([h, s, l]);
-  const dark = (1 - l1) ** 2 * 0.5, bright = l1 ** 3 * 0.14;
-  return out.map((v, i) => v + (SHADOW[i] - v) * dark + (LIGHT[i] - v) * bright);
-}
-
-// Median cut: split the photograph's colours into boxes along their widest channel until there are
-// COLOURS of them; each box's average is one palette entry.
-export function buildPalette(pixels, count = COLOURS) {
-  let boxes = [pixels];
-  while (boxes.length < count) {
-    let pick = -1, widest = -1, channel = 0;
-    boxes.forEach((box, i) => {
-      if (box.length < 2) return;
-      for (let c = 0; c < 3; c += 1) {
-        let min = 255, max = 0;
-        for (const p of box) { if (p[c] < min) min = p[c]; if (p[c] > max) max = p[c]; }
-        // weighted by how many pixels the box holds, so large plain areas are split before rare specks
-        const range = (max - min) * Math.sqrt(box.length);
-        if (range > widest) { widest = range; pick = i; channel = c; }
-      }
-    });
-    if (pick < 0 || widest <= 0) break;
-    const box = boxes[pick].sort((a, b) => a[channel] - b[channel]);
-    const half = box.length >> 1;
-    boxes.splice(pick, 1, box.slice(0, half), box.slice(half));
-  }
-  const table = boxes.map((box) => [0, 1, 2].map((c) => Math.round(box.reduce((n, p) => n + p[c], 0) / Math.max(1, box.length))));
-  while (table.length < count) table.push(table[table.length - 1] || [0, 0, 0]);
-  table.sort((a, b) => luma(a) - luma(b));
-  return [...table, OUTLINE_RGB, VOID_RGB];
-}
 
 export function nearest(table, r, g, b, upto = COLOURS, from = 0) {
   let best = from, bestD = 1e12;
@@ -137,6 +95,10 @@ export function lookThrough(table, filterId, seconds = 0) {
     // turning the hue changes how bright a colour looks; it is pulled back so no filter reorders the tones
     const got = luma(out);
     if (got > 0) out = out.map((v) => Math.min(255, (v * want) / got));
+    // A saturated colour scaled up can clip a channel at 255, which leaves it DARKER than wanted and can put
+    // it below its neighbour in the table. What clipping lost is made up toward white.
+    const short = want - luma(out);
+    if (short > 0.002) { const t = short / Math.max(1e-6, 1 - luma(out)); out = out.map((v) => v + (255 - v) * Math.min(1, t)); }
     if (f.toward) { const to = hex(f.toward); out = out.map((v, i) => v + (to[i] - v) * f.mix); }
     return out.map((v) => Math.round(Math.max(0, Math.min(255, v))));
   });

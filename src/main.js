@@ -197,7 +197,7 @@ function withWindows(seg, st, w, h, big) {
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
 function build(rgba, w, h, dets, big = null) {
-  const st = stylise(rgba, w, h);
+  const st = stylise(rgba, w, h, big);
   const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big);
   if (!regions.length) return false;
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
@@ -364,7 +364,7 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
-  const st = stylise(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big) });
+  const st = stylise(shot.rgba, w, h, shot.big), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);

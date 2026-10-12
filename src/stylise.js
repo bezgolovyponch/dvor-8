@@ -1,49 +1,23 @@
-// A photograph in, an 8-bit picture of the same yard out. Pure: arrays in, arrays out.
+// A photograph in, an 8-bit picture of the same yard out, in the game's ONE palette. Pure: arrays in,
+// arrays out. The stages live in downscale.js, ramps.js and pixelart.js; this file runs them in order and
+// keeps the guided filter, which still makes the smoothed picture the window finder and the sky/ground map
+// read. Why each stage, what it replaced and the measurements behind it: docs/pixel-pipeline.md.
 //
-//   1. grade       more contrast, more colour, purple shadows — the look (palette.js)
-//   2. guided      an edge-preserving pass that removes sensor grain and JPEG blockiness WITHOUT crossing
-//                  a surface boundary
-//   3. palette     the 28 colours that describe THIS yard best
-//   4. diffuse     each pixel takes its nearest palette colour and passes the error to its neighbours
-//   5. ink         the strongest structure lines are drawn over it, one pixel wide
+// The yard must stay the yard. What is red in the photograph is red in the picture — but in the GAME's red.
 //
-// The yard must stay the yard. What is red in the photograph is red in the picture.
+// WHAT CHANGED, IN ONE PARAGRAPH. The previous pipeline was grade → guided filter → median cut → Floyd-
+// Steinberg → Sobel ink. Gerstner et al. (2012) name "downsampling followed by median cut" as the baseline
+// pixel artists rate worst, and a palette cut from each photograph made every yard look like its own
+// photograph: an overcast one grey-brown, a sunset one orange, with nothing tying them into one game. Now
+// every photograph is forced into one fixed set of hue-shifted ramps, which is how pixel art gets a style.
 //
-// WHY THESE TWO CHANGES, AND WHY THEY WERE MEASURED RATHER THAN ASSUMED
-// ---------------------------------------------------------------------
-// The old pipeline quantised the raw photograph with a single ordered (Bayer) dither. Two things were
-// wrong, and both are sourced:
-//
-//   DITHER. Surma's "Ditherpunk" states it plainly: "error diffusion algorithms ... can handle arbitrary
-//   color palettes, while ordered dithering requires your color palette to be evenly spaced." This palette
-//   is built from the photograph by median cut, so it is NOT evenly spaced. Bayer also carries a brightness
-//   bias: "an area where every pixel has a brightness of 1/255 ... a level 0 Bayer matrix of size 2x2 will
-//   make one out of the four pixels white, resulting in an average brightness of 25%". Floyd-Steinberg is
-//   therefore the correct family here, not merely an alternative.
-//
-//   SMOOTHING. Quantising raw pixels leaves the photograph's own noise as 8-bit speckle, which reads as
-//   detail but is not. A guided filter (He, Sun & Tang, ECCV 2010) is the right tool, and that paper says
-//   why: it behaves "like the popular bilateral filter, but has better behavior near the edges" and "does
-//   not suffer from the gradient reversal artifacts" — gradient reversal being exactly what would draw a
-//   halo along a roofline against the sky. It is also O(N) in the window radius.
-//
-//   INK. Quantising a photograph keeps its edges low-contrast, because a quantiser can only pick the nearest
-//   of 28 colours and an edge is usually between two of them. The creator's words were that "the borders of
-//   the structures and elements are not really detailed", and that is exactly this: the boundary is there in
-//   the luminance but nothing draws it. The operator is Canny's shape without its hysteresis — Sobel, then
-//   NON-MAXIMUM SUPPRESSION across the gradient direction so the ridge collapses to one pixel, then a
-//   threshold. The suppression is the part that matters: without it a Sobel threshold three pixels wide
-//   reads as a shadow rather than as a drawn line. Canny's own hysteresis thresholds are NOT used, and the
-//   often-quoted 2:1 or 3:1 ratio between them is not cited here because Canny's paper could not be opened.
-//
-// The parameters were chosen by measuring five variants on two real photographs
-// (tools/stylise-compare.mjs) and then LOOKING at the results, because the metric alone misled: a heavy
-// smoothing pass scored BEST on surface separation while visibly erasing the bench, the tree branches and
-// the car's edges. r=1 with a small epsilon is the light touch that cleans the grain and keeps the
-// structure. The heavy variants remain in the tool as the evidence for that decision.
+import { OUTLINE_RGB, VOID_RGB } from './palette.js';
+import { skyAndGround } from './materials.js';
+import { masterRamps } from './ramps.js';
+import { binDownscale } from './downscale.js';
+import { grade, detail, mapRamps, cleanup, selOut } from './pixelart.js';
 
-import { grade, buildPalette, nearest, luma, COLOURS, OUTLINE, SIZE } from './palette.js';
-import { skyAndGround, patternAtlas, offsetAt } from './materials.js';
+const RAMPS = masterRamps();
 
 // WHY eps IS 0.001 AND NOT 0.01. The first shipped version used 0.01 and the creator's verdict was that
 // the picture was blurred with no style. That was correct, and the mechanism is the ratio var/(var+eps):
@@ -56,11 +30,6 @@ import { skyAndGround, patternAtlas, offsetAt } from './materials.js';
 // this pass cleans the grain or erases the picture.
 export const GUIDED_R = 1;         // window radius. r=1 reaches only immediate neighbours: a light touch
 export const GUIDED_EPS = 0.001;   // regularisation. Small enough that texture survives; see above
-export const DITHER = 26;          // kept as the exported name; now the clamp on a diffused sample
-export const INK = 0.45;           // how far a structure line is taken toward the palette's darkest colour
-export const INK_KEEP = 0.18;      // the share of thin edge pixels kept: the strongest fifth becomes ink
-export const INK_FLOOR = 24;       // gradient magnitude below which there is no edge at all, 0-255 luma
-export const SEED = 7;             // the material patterns are seeded, so a yard always looks the same
 
 // Box mean over a (2r+1) window, separable and O(N), so the radius is nearly free.
 function boxMean(src, w, h, r) {
@@ -115,145 +84,35 @@ export function guided(rgba, w, h, r = GUIDED_R, eps = GUIDED_EPS) {
 }
 
 /**
- * Structure lines, drawn over a quantised picture, as palette indices.
+ * The photograph → the game's picture, in ONE fixed palette (ramps.js), so every yard looks like the same
+ * game. The stages and the evidence for each are in docs/pixel-pipeline.md.
  *
- * Sobel gradient, non-maximum suppression along the gradient, then keep the strongest `INK_KEEP` share and
- * move those pixels `INK` of the way toward the darkest colour in the palette. Taking the ink FROM the
- * palette rather than using pure black is what keeps it looking drawn in the picture's own colours instead
- * of pasted on top of it.
+ *   1. downscale   if a 3× crop is handed in, each game pixel is the dominant-lightness colour of its cell
+ *                  (photo2pixel's bin vote), so railings, frames and posts survive the shrink
+ *   2. grade       OKLab: the photo's own light range stretched, colour pushed up
+ *   3. detail      local contrast on lightness, so a window a shade darker than its wall stays a window
+ *   4. ramps       hue picks the ramp (from the neighbourhood), lightness picks the step; checker between
+ *                  two steps only on smooth surfaces
+ *   5. cleanup     stray single pixels take their neighbours' colour
+ *   6. sel-out     a one-pixel line on the dark side of every boundary between two ramps
  *
- * It returns INDICES, not colours, because that is what the whole renderer draws from — a palette index per
- * pixel — so an ink pixel has to be a real palette entry like every other pixel, which is also why this
- * cannot invent a black the yard does not contain.
+ * `big` is { data, w, h }, the same crop at three picture-pixels to one (main.js already makes it for the
+ * windows). Without it the small picture is used as it is.
+ *
+ * The return value is the shape the rest of the game was built on: palette indices, a table of 28 + 2
+ * colours, the smoothed picture and the sky/ground map.
  */
-export function inkOver(idx, src, w, h, palette, strength = INK) {
+export function stylise(rgba, w, h, big = null) {
   const n = w * h;
-  const g = new Float32Array(n);
-  for (let i = 0; i < n; i += 1) g[i] = luma([src[i * 4], src[i * 4 + 1], src[i * 4 + 2]]) * 255;
-  const mag = new Float32Array(n), dir = new Float32Array(n);
-  for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
-    const i = y * w + x;
-    const gx = -g[i - w - 1] - 2 * g[i - w] - g[i - w + 1] + g[i + w - 1] + 2 * g[i + w] + g[i + w + 1];
-    const gy = -g[i - w - 1] - 2 * g[i - 1] - g[i + w - 1] + g[i - w + 1] + 2 * g[i + 1] + g[i + w + 1];
-    mag[i] = Math.sqrt(gx * gx + gy * gy);
-    dir[i] = Math.atan2(gy, gx);
-  }
-  // THE FLOOR IS NOT OPTIONAL, and leaving it out is a bug that inks the entire picture.
-  //
-  // In a flat region the gradient is exactly 0, and 0 is a local maximum in every direction, so
-  // non-maximum suppression alone marks almost every flat pixel as a thin edge. On a synthetic two-tone
-  // image that was 5704 of 6144 pixels "thin", of which the great majority had a magnitude of 0; the
-  // percentile cut then landed on 0 as well, and `mag < cut` was false for them, so every one became ink.
-  // Canny's first threshold is what prevents this, and it is the threshold that is kept here: a pixel is an
-  // edge only if it is a local maximum AND its gradient clears a floor. The second, higher threshold and the
-  // hysteresis between them are NOT used — Canny's own paper could not be opened to verify the ratio.
-  const thin = new Uint8Array(n);
-  const at = (x, y) => mag[Math.round(y) * w + Math.round(x)] || 0;
-  for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
-    const i = y * w + x;
-    if (mag[i] < INK_FLOOR) continue;
-    const dx = Math.cos(dir[i]), dy = Math.sin(dir[i]);
-    if (mag[i] >= at(x + dx, y + dy) && mag[i] >= at(x - dx, y - dy)) thin[i] = 1;
-  }
-  const vals = [];
-  for (let i = 0; i < n; i += 1) if (thin[i]) vals.push(mag[i]);
-  if (!vals.length) return idx;
-  vals.sort((a, b) => a - b);
-  // `cut` is never allowed below the floor, so the strongest-share rule cannot be defeated by a picture
-  // whose edges are all weak.
-  const cut = Math.max(INK_FLOOR, vals[Math.floor(vals.length * (1 - INK_KEEP))]);
-
-  let ink = 0;
-  for (let i = 1; i < palette.length; i += 1) {
-    if (luma(palette[i]) < luma(palette[ink])) ink = i;
-  }
-  const [ir, ig, ib] = palette[ink];
-  const cache = new Int16Array(32768).fill(-1);
-  let drawn = 0;
-  for (let i = 0; i < n; i += 1) {
-    if (!thin[i] || mag[i] < cut) continue;
-    const own = palette[idx[i]];
-    const r = (own[0] * (1 - strength) + ir * strength) | 0;
-    const g = (own[1] * (1 - strength) + ig * strength) | 0;
-    const b = (own[2] * (1 - strength) + ib * strength) | 0;
-    const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-    // `nearest` defaults to scanning up to COLOURS entries; the palette handed in may be shorter, so the
-    // bound is passed explicitly rather than relying on the default.
-    if (cache[key] < 0) cache[key] = nearest(palette, r, g, b, Math.min(palette.length, SIZE));
-    idx[i] = cache[key];
-    drawn += 1;
-  }
-  idx.inkDrawn = drawn;
-  return idx;
-}
-
-export function stylise(rgba, w, h) {
-  const n = w * h;
-  // the photograph's own darkest and brightest 1%
-  const bins = new Uint32Array(256);
-  for (let i = 0; i < n; i += 1) bins[Math.min(255, (luma([rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]]) * 255) | 0)] += 1;
-  const at = (share) => { let seen = 0; for (let i = 0; i < 256; i += 1) { seen += bins[i]; if (seen >= share * n) return i / 255; } return 1; };
-  const lo = at(0.01), hi = at(0.99);
-
-  const graded = new Float32Array(n * 3);
-  const sample = [];
-  for (let i = 0; i < n; i += 1) {
-    const c = grade(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2], lo, hi);
-    graded[i * 3] = c[0]; graded[i * 3 + 1] = c[1]; graded[i * 3 + 2] = c[2];
-    if (i % 3 === 0) sample.push(c);
-  }
-  const palette = buildPalette(sample, COLOURS);
-
-  // Guided pass on the graded pixels, so the palette is built from the same pixels that get quantised.
-  const flat = new Uint8ClampedArray(n * 4);
-  for (let i = 0; i < n; i += 1) {
-    flat[i * 4] = graded[i * 3]; flat[i * 4 + 1] = graded[i * 3 + 1]; flat[i * 4 + 2] = graded[i * 3 + 2]; flat[i * 4 + 3] = 255;
-  }
-  const smooth = guided(flat, w, h);
-
-  // Floyd-Steinberg. The error a pixel could not represent is pushed onto neighbours not yet visited,
-  // which is what lets an uneven palette reproduce a smooth gradient without banding.
-  // The surface map is computed BEFORE quantisation so the diffusion can be told what each pixel is made of.
+  const src = big && big.w >= w * 2 ? binDownscale(big.data, big.w, big.h, w, h) : rgba;
+  const ramps = RAMPS;
+  const lab = grade(src, n);
+  detail(lab, w, h);
+  const idx = mapRamps(lab, w, h, ramps);
+  cleanup(idx, w, h);
+  idx.inkDrawn = selOut(idx, w, h, ramps);
+  const palette = [...ramps.map((r) => r.rgb.slice()), OUTLINE_RGB, VOID_RGB];
+  const smooth = guided(src, w, h);
   const surfaces = skyAndGround(smooth, w, h);
-  const atlas = patternAtlas(SEED);
-  const idx = new Uint8Array(n);
-  const buf = new Float32Array(n * 3);
-  for (let i = 0; i < n; i += 1) { buf[i * 3] = smooth[i * 4]; buf[i * 3 + 1] = smooth[i * 4 + 1]; buf[i * 3 + 2] = smooth[i * 4 + 2]; }
-  const cache = new Int16Array(32768).fill(-1);
-  const clamp = (v) => (v < 0 ? 0 : v > 255 ? 255 : v);
-
-  for (let y = 0; y < h; y += 1) {
-    // Serpentine: alternate the scan direction each row so the diffused error does not systematically
-    // trail to one side, which is the usual visible artefact of a single-direction Floyd-Steinberg.
-    const ltr = (y & 1) === 0;
-    for (let k = 0; k < w; k += 1) {
-      const x = ltr ? k : w - 1 - k;
-      const i = y * w + x, p = i * 3;
-      // the material's own pattern, added before the nearest colour is chosen
-      const mat = offsetAt(atlas, surfaces.what, i, x, y);
-      const r = clamp(buf[p] + mat), g = clamp(buf[p + 1] + mat), b = clamp(buf[p + 2] + mat);
-      const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
-      // `nearest` defaults to scanning up to COLOURS entries; the palette handed in may be shorter, so the
-    // bound is passed explicitly rather than relying on the default.
-    if (cache[key] < 0) cache[key] = nearest(palette, r, g, b, Math.min(palette.length, SIZE));
-      const q = cache[key];
-      idx[i] = q;
-      const er = r - palette[q][0], eg = g - palette[q][1], eb = b - palette[q][2];
-      const d = ltr ? 1 : -1;
-      const push = (dx, dy, wt) => {
-        const nx = x + dx * d, ny = y + dy;
-        if (nx < 0 || nx >= w || ny >= h) return;
-        const o = (ny * w + nx) * 3;
-        buf[o] += er * wt; buf[o + 1] += eg * wt; buf[o + 2] += eb * wt;
-      };
-      push(1, 0, 7 / 16); push(-1, 1, 3 / 16); push(0, 1, 5 / 16); push(1, 1, 1 / 16);
-    }
-  }
-  inkOver(idx, smooth, w, h, palette);
-  // The material layer uses only the two surfaces that can be found reliably: sky and ground. Sky is a FLAT
-  // surface and gets no grain of its own, so it dithers as a smooth gradient instead of speckling; ground
-  // gets the organic random pattern the pixel-art convention assigns to earth. Everything between the two is
-  // left as it was, because those surfaces cannot be named without a model — see the measurements at the top
-  // of materials.js. The split between them is the horizon this module measured.
-  return { idx, palette, smooth, surfaces };
+  return { idx, palette, smooth, surfaces, ramps };
 }
