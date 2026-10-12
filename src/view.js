@@ -40,10 +40,21 @@ export function clientToWorld(px, py, rect, angle, shift, w, h) {
 
 // What the screen shows of the street. From the balcony: the whole of the yard you stand over. Down in
 // it: a closer window that follows you, and never looks past the end of what exists.
-export function cameraFor(world, me) {
+/**
+ * `duck` is 0 in the open and 1 fully behind the pillar. It moves the camera as well as drawing the frame:
+ * the frame is fixed to the window and the WORLD slides under it, so what the player actually sees shift is
+ * the yard — which is what happens when you step behind a pillar and look out from one side of it. Drawing
+ * a frame over a still camera would read as a sticker rather than as a movement.
+ */
+export function cameraFor(world, me, duck = 0) {
   const sw = world.sw, h = world.h;
   if (!me) return { x: 0, y: 0, w: sw, h };
-  if (!me.down) return { x: Math.min(world.w - sw, Math.floor(me.x / sw) * sw), y: 0, w: sw, h };
+  if (!me.down) {
+    const base = Math.min(world.w - sw, Math.floor(me.x / sw) * sw);
+    const slide = Math.round(duck * sw * 0.22);        // the yard moves left as you step behind
+    const lift = Math.round(duck * h * 0.03);
+    return { x: Math.max(0, Math.min(world.w - sw, base + slide)), y: lift, w: sw, h };
+  }
   const w = Math.round(sw / ZOOM), vh = Math.round(h / ZOOM);
   return {
     x: Math.round(Math.max(0, Math.min(world.w - w, me.x - w / 2))),

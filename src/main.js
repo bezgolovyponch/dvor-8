@@ -506,7 +506,7 @@ function frame(now) {
       if (folk.seen && (endIn -= dt) <= 0) finish();
       if (world.done && (endIn -= dt) <= 0) finish();
     }
-    cam = cameraFor(world, me);
+    cam = cameraFor(world, me, hideT);
     if (canvas.width !== cam.w || canvas.height !== cam.h) setSize(cam.w, cam.h);
     // A throw leaves the hand of whoever is down in the yard, or the balcony above the yard on screen; and
     // down there, what can be seen clearly is what is near you.

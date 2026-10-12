@@ -176,6 +176,40 @@ function ship(c, f, seconds) {
   } else write(c, f.text, sign.x + sign.w - Math.round(f.scroll), sign.y + 1, GOLD, { from: sign.x + 1, to: sign.x + sign.w - 1 });
 }
 
+// What a looking person can SEE, drawn as the wedge their eyesight covers.
+//
+// This is the missing half of the danger system. The heat meter told the player how much trouble they were
+// in but never WHY, so "no levels of danger" was a fair reading: there was a number and no cause. The wedge
+// is the cause made visible — it comes out of the person's own eyes, it sweeps the yard, and standing in it
+// is what costs you. It also gives the per-kind rates a shape the player can learn: a courier's wedge is
+// short and quick, the police's is long.
+//
+// Drawn in a warm colour that matches the danger meter, so the two read as one system rather than two.
+function cone(c, p, w, h, hidden) {
+  if (p.state !== 'look') return;
+  const x = Math.round(p.x), y = Math.round(p.y);
+  // where their eyes are, and how far their look reaches at this kind's rate
+  const ey = y - (p.kind === 'cop' ? 12 : 10);
+  const reach = Math.round(46 + (p.kind === 'cop' ? 34 : p.kind === 'courier' ? 20 : 0) + p.t * 6);
+  const half = 15;                                   // half-width at the far end: a wedge, not a line
+  const lean = Math.sin(p.t * 2.2 + p.phase) * 4;    // it sweeps a little, so it is alive
+  const warm = hidden ? CYAN : PINK;                 // cyan when covered: the same colour the heat uses
+  c.save();
+  c.beginPath();
+  c.moveTo(x, ey);
+  c.lineTo(x + lean - half, ey + reach);
+  c.lineTo(x + lean + half, ey + reach);
+  c.closePath();
+  c.globalAlpha = hidden ? 0.10 : 0.17;
+  c.fillStyle = warm;
+  c.fill();
+  c.globalAlpha = hidden ? 0.30 : 0.5;
+  c.strokeStyle = warm;
+  c.lineWidth = 1;
+  c.stroke();
+  c.restore();
+}
+
 // Someone passing through the yard. The same dozen pixels as the walker, dressed by kind, and above the
 // head what they are doing about you: «!» has noticed, an eye-high «!» in pink is looking, «?» has lost
 // you, «112» is calling. That mark is the whole of the stealth: it must be readable at a glance.
@@ -244,21 +278,48 @@ function passer(c, p, seconds, hidden) {
 // HUD announces. The yard stays fully readable through the gap — you are waiting for a look to pass, not
 // losing the picture — and the drop in brightness is what tells you that you are covered.
 function rail(c, w, h, hideT = 1) {
-  const top = h - Math.round(h * 0.2);
-  const gapW = Math.round(46 + hideT * 82);            // 46 px as you start to duck, 128 px when covered
-  const gx = Math.round((w - gapW) / 2);
-  const gh = Math.round(10 + hideT * 5);
-  rects(c, 'rgba(11,0,24,.45)', [[0, 0, w, h]]);
-  rects(c, INK, [[0, top, w, h - top]]);
-  rects(c, CYAN, [[0, top, w, 2]]);
-  for (let x = 4; x < w; x += 10) {
-    if (x + 4 > gx && x < gx + gapW) continue;         // the gap: no plank here
-    rects(c, '#12052e', [[x, top + 2, 4, h - top - 2]]);
-  }
-  // the rim of the gap, lit, because a hole you look through should read as a hole
-  rects(c, '#2b1050', [[gx, top, 2, gh], [gx + gapW - 2, top, 2, gh]]);
-  write(c, 'СПРЯТАН', Math.round((w - textWidth('СПРЯТАН')) / 2), top + 6, PALE);
+  // The window you step behind. It is made of the four things a real window has — a frame, a sill, glass
+  // with a highlight on it, and a PILLAR down the middle — and the pillar is the point: it is what the
+  // player hides behind, so it has to be an object with a position, not a darkening of the whole screen.
+  //
+  // The pillar sits over the middle and the camera slides sideways as you duck (view.js cameraFor), so the
+  // yard visibly moves behind the frame. That is the difference between hiding and a filter.
+  const sill = h - Math.round(h * 0.19);
+  const pillarW = Math.round(18 + hideT * 26);          // the pillar grows as you commit to the duck
+  const px0 = Math.round((w - pillarW) / 2);
+  const frame = 5;
+
+  // glass: very dark, and it does NOT flatten the yard behind it, because you are looking through, not at
+  rects(c, 'rgba(11,0,24,.30)', [[frame, frame, w - frame * 2, sill - frame]]);
+  // a diagonal highlight across the glass, the way a pane catches light
+  c.save();
+  c.beginPath(); c.rect(frame, frame, w - frame * 2, sill - frame); c.clip();
+  c.fillStyle = 'rgba(63,224,240,.11)';
+  for (let i = -h; i < w; i += 34) c.fillRect(i + Math.round(hideT * 8), frame, 12, sill);
+  c.restore();
+
+  // the frame: dark ink with a lit inner edge, all four sides
+  rects(c, INK, [[0, 0, w, frame], [0, sill - frame, w, frame], [0, 0, frame, sill], [w - frame, 0, frame, sill]]);
+  rects(c, '#2b1050', [[frame, frame, w - frame * 2, 1], [frame, sill - frame - 1, w - frame * 2, 1]]);
+  rects(c, CYAN, [[frame, frame, w - frame * 2, 1]]);
+
+  // the pillar, in two tones so it reads as round rather than flat
+  rects(c, INK, [[px0 - 1, frame, pillarW + 2, sill - frame]]);
+  rects(c, '#1b0a3c', [[px0, frame, pillarW, sill - frame]]);
+  rects(c, '#2b1050', [[px0 + 1, frame, 3, sill - frame]]);
+  rects(c, INK, [[px0 + pillarW - 3, frame, 3, sill - frame]]);
+  // the catch: one bright line, so the pillar has a light source
+  rects(c, 'rgba(63,224,240,.5)', [[px0 + Math.round(pillarW / 2) - 1, frame + 3, 2, sill - frame - 8]]);
+
+  // the sill, below the glass, catching light on its top edge
+  rects(c, INK, [[0, sill, w, h - sill]]);
+  rects(c, '#12052e', [[0, sill + 3, w, h - sill - 3]]);
+  rects(c, 'rgba(255,255,255,.14)', [[0, sill, w, 1]]);
+  for (let x = 6; x < w; x += 14) rects(c, '#1b0a3c', [[x, sill + 4, 8, h - sill - 4]]);
+
+  write(c, 'СПРЯТАН', Math.round((w - textWidth('СПРЯТАН')) / 2), sill + 7, PALE);
 }
+
 
 // scanY: null once the scan is over; before that, everything below it is still the photograph.
 // cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
@@ -319,7 +380,11 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     // how much it can still take, as pips under it
     for (let n = 0; n < r.hp - r.hits; n += 1) { ctx.fillStyle = '#0b0018'; ctx.fillRect(x0 + n * 4, y1 + 2, 4, 3); ctx.fillStyle = '#f0286e'; ctx.fillRect(x0 + n * 4, y1 + 2, 3, 2); }
   }
-  if (folk && scanY === null) for (const p of [...folk.people].sort((a, b) => a.y - b.y)) if (p.x > cx - 12 && p.x < cx + w + 12) passer(ctx, p, seconds, folk.hidden);
+  if (folk && scanY === null) {
+    // cones first, then the people on top, so a body is never hidden inside its own sight line
+    for (const p of folk.people) if (p.x > cx - 20 && p.x < cx + w + 20) cone(ctx, p, w, h, folk.hidden);
+    for (const p of [...folk.people].sort((a, b) => a.y - b.y)) if (p.x > cx - 12 && p.x < cx + w + 12) passer(ctx, p, seconds, folk.hidden);
+  }
   if (me?.down) person(ctx, me, seconds, land > 0 ? -1 : (me.z > 0 && me.vz > 60 ? 1 : 0), hideT);
   // Dust from under the feet when a jump ends: two frames of it, which is all a 192-px picture needs to
   // make a landing read as a landing rather than as a teleport.
