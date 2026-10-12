@@ -93,6 +93,7 @@ is fun.**
     docs/style.md           every look-and-feel decision, its source, its test
     docs/feasibility.md     similar games, what the evidence says, and whether to go on
     docs/structure.md       the game taken apart: atoms, loops, hooks, and what the research does and does not support
+    docs/request-neighbours.md  the people-and-police request: what is built, what similar games show, open questions
     docs/pyramid.html       what stands on what
     brief.md, game-skeleton/, standards/   the intake and earlier material, kept for the record
 
