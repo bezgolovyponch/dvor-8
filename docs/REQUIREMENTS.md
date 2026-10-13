@@ -23,7 +23,7 @@ work, never after.
 | 15 | Share the ruins or the flowered result | DONE | `imprint()` + card |
 | 16 | Random absurd actions (eat the car) | DONE | `ANTICS` |
 | 17 | Ten existing style methods, no changes yet | DONE | `docs/style-candidates.md` |
-| 18 | Apply 2+3 (segmentation + geometry) | **PARTLY** — OpenCV's bundle has no `dnn`, so segmentation is not shipped; needs its own decomposition (onnxruntime-web or structure-only) | remains: the runtime decision |
+| 18 | Apply 2+3 (segmentation + geometry) | **PARTLY, now decomposed in three layers** (`docs/knowledge-base.md` §8): (1) a permissively licensed ADE20K checkpoint — SegFormer's backbone is Apache-2.0, its ADE20K finetune is not, so MMSegmentation and PaddleSeg checkpoints are to be licence-checked; (2) if none is permissive, train the TWO classes this game needs (window, wall) on CCF BY-SA CMP Facade with the Apache backbone; (3) **the piece that unblocks the screen today** — a class-agnostic model (SAM family, ONNX) prompted by the detector boxes, giving true object silhouettes without any class semantics | remains, in order: verify the SAM-family checkpoint licences and pick the smallest ONNX export (3a), wire box→mask and replace the colour cut-out (3b), check the MMSeg/PaddleSeg checkpoint licences in parallel (1a) |
 | 19 | Apply the scene analysis; enhance first; shadows secondary | DONE | `src/enhance.js`, facade rhythm, Lite2 |
 | 20 | The r9 formula | DONE | `src/vector.js` |
 | 21 | Visually appealing destruction + share tag I AM HERE | DONE | card with Я ЗДЕСЬ · I AM HERE |

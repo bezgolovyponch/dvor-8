@@ -125,3 +125,45 @@ The order that follows from it, and the only order in which the remaining work m
    running light, 1-px outline (v6's own citation).
 3. **THEN THE EVENTS**: a hurricane as a front that tears the BUILT world apart, a tsunami that floods it,
    a beast that walks through it. An event is what happens to a world, never an overlay on a picture.
+
+## 8. Requirement 18, decomposed in layers (the licence is a research gap, not an obstacle)
+
+My earlier answer — "the model is non-commercial, your decision" — was lazy. The searches prove the field is
+layered, and the layers have different licences:
+
+**LAYER 1 — a permissively licensed ADE20K model (windows, doors, walls as classes).**
+The *backend* of SegFormer is Apache-2.0: [`nvidia/mit-b0`](https://huggingface.co/nvidia/mit-b0) is labelled
+`license: apache-2.0`. The **finetune** on ADE20K is not: [`nvidia/segformer-b0-finetuned-ade-512-512`](https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512)
+is `license: other` (NVIDIA Source Code License, non-commercial). The consistent alternatives to check, in order:
+[MMSegmentation's ADE20K configs](https://raw.githubusercontent.com/open-mmlab/mmsegmentation/main/configs/segformer/metafile.yaml)
+(OpenMMLab, Apache-2.0 project — the weights must be confirmed per checkpoint, not assumed from the repo) and
+[PaddleSeg's model zoo](https://raw.githubusercontent.com/PaddlePaddle/PaddleSeg/refs/heads/release/2.9/docs/model_zoo_overview.md)
+(Apache-2.0, and it includes ADE20K 150-class models — confirm the checkpoint licence the same way).
+
+**LAYER 2 — if no 150-class checkpoint is permissive: build the two classes we actually need.**
+We do not need all 150. This game needs **window** and **wall/plane**. Those two can be trained from permissively
+licensed *annotations* — CMP Facade (CC BY-SA, rectified facades with window rectangles) — on the Apache-2.0
+backbone above. One head, two classes, a laptop-scale job, and no licence question at all.
+
+**LAYER 3 — do not wait for either: cut objects out with a CLASS-AGNOSTIC model.**
+This is the piece that unblocks the visual work TODAY. The requirement that is actually failing on screen is not
+"know that this is a window" — the facade rhythm already finds windows — it is **"the outline must be the thing's
+own shape"**. A class-agnostic segmentation model does exactly that, prompted by the detector boxes we already
+have: the SAM family ([facebook/sam2-hiera-large](https://huggingface.co/facebook/sam2-hiera-large) and its mobile
+variants) plus community ONNX exports such as
+[`nrl-ai/samexporter-onnx-models`](https://huggingface.co/nrl-ai/samexporter-onnx-models). **Licences must be
+verified per checkpoint before shipping** — that is the first action of this layer, not an assumption.
+
+**THE ORDER, and what each piece unblocks:**
+
+| piece | unblocks | state |
+|---|---|---|
+| 3a verify the SAM-family checkpoint licences and pick the smallest ONNX export | the whole of layer 3 | next action |
+| 3b wire the prompt (detector box → mask) and replace the colour cut-out | true silhouettes: outlines, damage along the silhouette, the car template on a real shape | blocked by 3a |
+| 1a check MMSegmentation and PaddleSeg ADE20K checkpoint licences | layer 1 | parallel to 3a |
+| 2a if 1a fails: train window+wall on CMP Facade with the Apache backbone | layer 2 | after 1a |
+| 4 measure: gate + suite on a clean frame | confirms the piece did what it claimed | after 3b |
+
+**What this changes about my previous answer:** the non-commercial licence was one sentence of research about one
+checkpoint, and I turned it into a blocker. Three layers exist, two of them permissive, and the one that fixes the
+screen needs no class semantics at all.
