@@ -81,19 +81,21 @@ export function wreckAlong(world, region, at = null, strength = 1) {
   const cx = at ? at.x : region.cx, cy = at ? at.y : region.cy;
   const R = Math.max(2, Math.min(12, (Math.sqrt(region.area) / 3) * strength));
   const voidI = world.palette.length - 1;
-  let torn = 0, dented = 0;
+  let torn = 0, dented = 0, holed = 0;
   for (const p of region.pixels) {
     const x = p % world.w, y = (p / world.w) | 0;
     const d = Math.hypot(x - cx, y - cy);
     const onBorder = poly.length > 3 && !insideBorder(poly, x, y);
-    if (d <= R * 0.5) { world.rubble[p] = voidI; torn += 1; continue; }
+    // THE HOLE IS SMALL AND IT IS ONE HOLE. A wreck is mostly the thing itself: a hole where the blow landed, a
+    // torn edge along its own border, and the rest of it scraped one tone. Nothing whole is replaced by nothing.
+    if (d <= Math.max(1.5, R * 0.3)) { world.rubble[p] = voidI; holed += 1; continue; }
     if (d <= R || (onBorder && (x * 3 + y * 5) % 3 === 0)) {
       world.rubble[p] = world.dent[world.idx[p]] ?? voidI; torn += 1;
     } else {
       world.idx[p] = world.dent[world.idx[p]] ?? world.idx[p]; dented += 1;
     }
   }
-  return { poly, torn, dented };
+  return { poly, torn, dented, holed };
 }
 
 // ---- THE ENVIRONMENT IS DESTRUCTIBLE TOO ------------------------------------------------------------------
@@ -168,10 +170,15 @@ export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1,
  * environment's own colours, and directly recognisable as the thing it was.
  */
 export function dentMap(palette) {
-  const OUT = palette.length - 2, VOIDP = palette.length - 1, scorch = scorchMap(palette);
+  const OUT = palette.length - 2, VOIDP = palette.length - 1;
   return Uint8Array.from({ length: palette.length }, (_, i) => {
     if (i === OUT || i === VOIDP) return i;
-    return i % STEPS > 0 ? i - 1 : scorch[i];
+    if (i % STEPS > 0) return i - 1;                       // a tone down its own ramp, as before
+    // A COLOUR WITH NOWHERE DARKER TO GO GETS ONE TONE UP, NOT THE SCORCH. This is the difference between damage
+    // and a hole: a dark car hit by a disaster used to be driven to 34% brightness - a black mass where a car had
+    // been, which is exactly what the creator saw on screen. A blow that exposes the surface UNDER the paint is
+    // both truer (that is what a scrape looks like) and visible: the thing keeps its shape and its colour family.
+    return Math.min(OUT - 1, i + 1);
   });
 }
 

@@ -904,9 +904,16 @@ const TOP = bandTop(w);
   check('a hit wrecks it IN ITS OWN SHAPE: the blow is torn out, and most of the thing is dented one tone down rather than deleted',
     hit.torn > 4 && hit.dented > hit.torn && stillDark < car.pixels.length * 0.2 && w4.rubble.some((v) => v !== 255),
     `${hit.torn} torn, ${hit.dented} dented, ${stillDark} untouched`);
-  check('and nothing turns into a black box: no more than a fifth of the thing is void',
-    car.pixels.filter((p) => w4.rubble[p] === w4.palette.length - 1).length < car.pixels.length * 0.2,
-    `${car.pixels.filter((p) => w4.rubble[p] === w4.palette.length - 1).length} void of ${car.pixels.length}`);
+  // THE REMAINS STAY. A wrecked thing must keep its shape and its colour family: the hole is small, most of the
+  // thing is scraped one tone rather than deleted, and a colour with nowhere darker to go goes one tone UP
+  // instead of to the scorch - which is what stopped a dark car from becoming a black mass (the creator's
+  // "destroyed cars leave just a black hole").
+  const voidN = car.pixels.filter((p) => w4.rubble[p] === w4.palette.length - 1).length;
+  const dentMap = w4.dent;
+  check('a wreck is REMAINS, not a hole: the void is a small part of it, and a dark colour scrapes LIGHTER rather than to black',
+    voidN < car.pixels.length * 0.06 && hit.dented > car.pixels.length * 0.5
+    && dentMap[0] === 1 && dentMap[7] === 6 && dentMap[5] === 4,
+    `${voidN} void (${(100 * voidN / car.pixels.length).toFixed(1)}%), ${hit.dented} scraped`);
 }
 
 // ---- the info button: a true fact, random, never the same theme twice ---------------------------------
