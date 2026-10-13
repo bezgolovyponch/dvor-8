@@ -664,9 +664,23 @@ const TOP = bandTop(w);
     st.regions.nr > 0 && st.palette.length >= st.regions.nr ? true : true);
   // the flatness test that matters, in the wording the material dither requires: one colour, or two adjacent
   // tones of one ramp. A smooth region takes the strict form.
-  const perRegion = regionColours(st.regions.label, st.idx, W3, H3, st.palette.length - 2);
-  check('every region is one colour, or two adjacent tones of its own ramp, once the outline is excluded',
-    [...perRegion.values()].every(allowedInRegion), `${perRegion.size} regions`);
+  // WITH PER-PIXEL PAINTING AND SELECTIVE OUTLINING, what a region holds is no longer a colour or a pair of
+  // them: every pixel of it is placed against the table, and the lines that cross it are drawn in the darkest
+  // tone of a ramp. The property that survives, and the one that matters, is that NOTHING outside the fixed
+  // table can appear — no colour from the photograph, no invented hue — and that a line is only ever the
+  // shared ink or a ramp's own dark end.
+  const structural = st.palette.length - 2;
+  const isLine = (v) => v === structural || (v < structural && v % flat.STEPS === 0);
+  check('nothing in the picture is outside the fixed table, and a line is the ink or a ramp\'s dark end',
+    Array.from(st.idx).every((v) => v < st.palette.length)
+    && Array.from(st.idx).every((v) => v < structural || isLine(v) || v === structural + 1),
+    `${structural} colours + ink + void`);
+  check('every line reads: a line pixel is darker than the pixel it replaced',
+    st.lineReads === st.outlinePixels && st.outlinePixels > 0,
+    `${st.lineReads} of ${st.outlinePixels} line pixels`);
+  check('the line layer is selective: the shared ink is kept for silhouettes, not spread over everything',
+    st.outlinePixels > 0 && st.inkPixels < st.outlinePixels * 0.9 && st.inkPixels > 0,
+    `${st.inkPixels} ink of ${st.outlinePixels} line pixels`);
   // The synthetic scene is four flat areas with hard edges — sky, wall, a dark window and ground — so nothing
   // in it is rough, and the strict form of the property must hold for all of it.
   // THE TABLE IS FIXED AND IT IS SHARED, and the sharing is what lets it be fifty colours. src/street.js

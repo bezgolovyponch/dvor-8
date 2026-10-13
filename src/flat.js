@@ -570,6 +570,7 @@ export const paletteOf = () => PALETTE;
  * its own, and averaging it into its surface is how a red brick church came out grey-green in a green field.
  */
 const adjacent = (a, b) => !(a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0);
+const RAMP_SKY = 0, RAMP_STONE = 3, RAMP_METAL = 4, RAMP_DUSK = 6, RAMP_SAND = 7;
 const CHROMA_ENOUGH = 0.18;
 const pixelRampOf = (R, G, B, r) => {
   const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
@@ -846,8 +847,35 @@ export function render(rgba, w, h, opts = {}) {
     const r = reg[i];
     const R = rgba[i * 4], G = rgba[i * 4 + 1], B = rgba[i * 4 + 2];
     const l = 0.299 * R + 0.587 * G + 0.114 * B;
+    // ---- THE COLOUR SCRIPT ------------------------------------------------------------------------------
+    //
+    // What makes a small-palette game look AUTHORED rather than converted is that its colours obey one idea
+    // about light. DVOR-8's idea is that every yard is the same hour: a shadow is violet and a highlight is
+    // amber, whichever photograph it came from. The ramps already carry that inside themselves (the shadow end
+    // of every ramp turns toward blue-violet, the light end toward yellow); this applies it to the PICTURE.
+    //
+    // Two rules, both bounded, and they only touch what has no colour of its own — a grey shadow, a white
+    // cloud — because a coloured thing keeps its own ramp exactly as before:
+    //   a grey pixel in the darkest third of the frame takes the DUSK ramp (the violet a shadow is made of)
+    //   a grey pixel in the brightest tenth takes the SAND ramp (the amber of light on a wall)
+    // The result is that a yard shot at noon and a yard shot at sunset still look like one game, and it costs
+    // nothing that the photograph actually said: a red car is still a red car, a green tree still green.
     const own = pixelRampOf(R, G, B);
-    const here = own < 0 ? ramp[r] : own;
+    let here = own < 0 ? ramp[r] : own;
+    if (own < 0) {
+      const nrm = (l - pLo) * scale / (STEPS - 1);
+      // ONLY THE NEUTRAL SURFACES TAKE THE SCRIPT. The first version applied it to everything grey in the
+      // darkest third of the frame and the whole of a dusk photograph came out violet — the road, the clouds,
+      // the walls — which is a filter, not a colour script. What the convention actually asks for is that a
+      // NEUTRAL shadow turns violet and a NEUTRAL highlight turns amber; a material keeps its own ramp, so a
+      // green tree in shadow is still a green tree and a red car is still red.
+      const neutral = here === RAMP_STONE || here === RAMP_METAL;
+      // ...and the SKY is exempt from the highlight half: it is already the lightest thing in the frame, and
+      // an amber rule applied to it turned an overcast sky cream, which is a sepia filter and not a script.
+      if (neutral && nrm < 0.16) here = RAMP_DUSK;
+      else if (neutral && nrm > 0.94) here = RAMP_SAND;
+      else if (here === RAMP_SKY && nrm < 0.10) here = RAMP_DUSK;    // the deep end of a sky is violet, not black
+    }
     let tone;
     if (maxL[r] - minL[r] < 8) {
       // A SURFACE THE PHOTOGRAPH ITSELF HAS NO DETAIL IN IS PAINTED FLAT. Without this the tone came from the
@@ -857,11 +885,28 @@ export function render(rgba, w, h, opts = {}) {
       // tone and stays one colour, which is also what keeps a wall a wall.
       tone = toneArr[r];
     } else {
+      // THE DETAIL LADDER: BANDS WITH DITHERED SEAMS, not a screen over everything.
+      //
+      // Thresholding every pixel against the next tone up gives a picture where the whole sky is a 40% dot
+      // screen — even, mechanical, and the single thing that made the first per-pixel draft look like a
+      // halftone print. What a crafted small-palette picture does instead is QUANTISE to the nearest tone and
+      // dither only where the value is genuinely between two of them: flat bands, with the transition spent on
+      // the seam. So a dead zone of 0.22 of a tone on either side of the nearest one, and outside it a dither
+      // whose density grows from nothing to one across the next 0.28. The mean is preserved — the density
+      // carries exactly the distance that was rounded away — and the screen appears only where a gradient is.
       const t = Math.max(0, Math.min(STEPS - 1, (l - pLo) * scale + face[r] * faceWeight));
-      const t0 = Math.floor(t);
-      const x = i % w, y = (i / w) | 0;
-      const take = (t - t0) > BAYER[((y & 7) << 3) | (x & 7)] / 64;
-      tone = take ? Math.min(STEPS - 1, t0 + 1) : t0;
+      const near = Math.round(t);
+      const frac = t - near;
+      const DEAD = 0.22, SPAN = 0.28;
+      tone = near;
+      if (Math.abs(frac) > DEAD) {
+        const partner = near + (frac > 0 ? 1 : -1);
+        if (partner >= 0 && partner < STEPS) {
+          const density = Math.min(1, (Math.abs(frac) - DEAD) / SPAN);
+          const x = i % w, y = (i / w) | 0;
+          if (BAYER[((y & 7) << 3) | (x & 7)] < density * 64) tone = partner;
+        }
+      }
     }
     if (role[r] === PANE_ROLE) tone = Math.min(1, tone);
     else if (role[r] === SKY_ROLE) tone = Math.max(1, tone);
@@ -919,15 +964,52 @@ export function render(rgba, w, h, opts = {}) {
   // to keep the transition quick), so drawing it would put a chunky, made-up border over a picture whose real
   // edges are already there. The ink map is computed at full resolution, so this is one pixel wide, follows
   // kerbs and rooflines, and never draws a line the photograph does not have.
+  // AND THE LINE IS THE DARKEST TONE OF THE COLOUR IT SEPARATES, not one ink for the whole picture. This is the
+  // pixel-art rule called selective outlining, and it is the difference between a drawing and a colouring book:
+  // a single near-black contour over everything flattens a picture into a diagram, while a line in the darkest
+  // tone of the surface's OWN ramp — a dark blue line on a blue sky, a dark red one on a brick wall — reads as
+  // the surface turning away from the light. The shared ink is kept for one job only: a silhouette against the
+  // sky, where there is nothing darker on either side to borrow a colour from.
   const OUT = palette.length - 2;
-  let outlinePixels = 0;
+  const darkOf = new Int32Array(RAMPS.length);
+  const lumOf = new Float64Array(palette.length);
+  for (let k = 0; k < palette.length; k += 1) lumOf[k] = 0.299 * palette[k][0] + 0.587 * palette[k][1] + 0.114 * palette[k][2];
+  for (let r = 0; r < RAMPS.length; r += 1) darkOf[r] = r * STEPS;              // tone 0 is the darkest of the ramp
+  const skyRamp = 0;
+  let outlinePixels = 0, inkPixels = 0, lineReads = 0;
   for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
     const i = y * w + x;
-    if (inkMap[i] >= inkLine) { idx[i] = OUT; outlinePixels += 1; }
+    if (inkMap[i] < inkLine) continue;
+    // the two sides of this edge, and the darker of them, in the picture's own terms
+    const mine = idx[i], ramp = Math.floor(mine / STEPS);
+    let other = -1, darkest = mine;
+    for (const j of [i - 1, i + 1, i - w, i + w]) {
+      const v = idx[j];
+      if (v === mine || v >= OUT) continue;
+      if (other < 0 || lumOf[v] < lumOf[other]) other = v;
+      if (lumOf[v] < lumOf[darkest]) darkest = v;
+    }
+    const againstSky = ramp === skyRamp || (other >= 0 && Math.floor(other / STEPS) === skyRamp);
+    const line = darkOf[Math.floor(darkest / STEPS)];
+    // THREE CASES, which is the whole of the outlining rule and the thing that makes a picture look drawn
+    // rather than either flat or outlined:
+    //   a silhouette, or a strong step in value, takes the INK — that is the crisp line the eye reads as shape
+    //   ordinary interior structure takes the DARKEST TONE OF ITS OWN RAMP — a line that is a shade of the
+    //     surface, which is what selective outlining means
+    //   a line that would not actually be darker than what it crosses is not a line: the ink, or nothing
+    const step = lumOf[mine] - lumOf[darkest];
+    const useInk = againstSky || step >= 30 || lumOf[line] > lumOf[darkest] - 18 || lumOf[line] > 118;
+    idx[i] = useInk ? OUT : line;
+    outlinePixels += 1;
+    if (useInk) inkPixels += 1;
+    // A LINE MUST READ: it is a line only if it is darker than the pixel it replaced. Counted, not assumed,
+    // because the whole point of selective outlining is that the line is a shade of the surface and not one
+    // black contour over everything.
+    if (lumOf[idx[i]] < lumOf[mine]) lineReads += 1;
   }
 
   return {
-    idx, palette, outlinePixels,
+    idx, palette, outlinePixels, inkPixels, lineReads,
     regions: { label: reg, size, box, rampOf: ramp, toneOf: toneArr, nr, role, luma, ink: inkEnergy },
     light,
   };

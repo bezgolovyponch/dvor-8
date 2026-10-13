@@ -54,7 +54,9 @@ come from) and the paint is one pass over the pixels.
 | 3 | ramp and tone | Eight ramps by colour, six tones by value | The fixed palette, and the surface's own colour |
 | 3b | roles | Sky, foliage, pane | Three named priors, for the parts of a picture that hue alone does not settle |
 | 3c | **the paint** | Every pixel: its own ramp when it has a colour, its surface's when it is grey; its tone from its own value, dithered between the two tones that bracket it; flat where the photograph is flat | The photograph, kept: detail, gradients, and a car that is still a car |
-| 4 | line layer | The ink map at full resolution: one-pixel lines along the photograph's own edges | Structure, and only structure |
+| 3d | detail ladder | The tone is quantised to the nearest one; the dither appears only outside a dead zone of 0.22 of a tone, and its density grows across the next 0.28 | Bands with dithered seams, instead of a dot screen over the whole picture |
+| 3e | colour script | A neutral shadow takes the violet ramp, a neutral highlight the amber one, and a sky is exempt | Every yard looks like the same hour, whichever photograph it came from |
+| 4 | line layer | One-pixel lines along the photograph's own edges, in THREE cases: a silhouette or a strong step in value takes the ink, ordinary interior structure takes the darkest tone of its own ramp (selective outlining), and a line that would not read is not drawn | Structure that reads as drawn rather than as outlined |
 | 5 | marks | The pixels the detector found are segmented apart, never absorbed, and never painted the same colour as what they stand on | A thing the player is meant to hit has to be a thing in the picture |
 
 ### The eight ramps, six tones, and the reserved band
@@ -194,27 +196,27 @@ Every number below is a render at 288 x 512 through the landed code, measured by
 (`metrics.html`), on an idle machine. `valueR` is the correlation between a surface's photographic brightness
 and its painted brightness, over surfaces of forty pixels or more.
 
-| Photograph | Value fidelity (r) | Surfaces | Palette entries used | Ink | Largest single colour | Two-colour rest | Transition |
+| Photograph | Value fidelity (r) | Surfaces | Palette entries used | Line layer | Largest single colour | Two-colour rest | Transition |
 |---|---|---|---|---|---|---|---|
-| sunset road | 0.973 | 110 | 46 of 50 | 2.4% | 15% | 29% | 213 ms |
-| church + cars | 0.810 | 137 | 43 of 50 | 1.5% | 15% | 29% | 174 ms |
-| street canyon | 0.909 | 179 | 41 of 50 | 2.4% | 13% | 24% | 117 ms |
+| sunset road | 0.975 | 110 | 46 of 50 | 2.0% | 16% | 30% | 143 ms |
+| church + cars | 0.826 | 137 | 43 of 50 | 1.1% | 15% | 30% | 130 ms |
+| street canyon | 0.914 | 179 | 42 of 50 | 1.9% | 12% | 23% | 118 ms |
 
-Read against the flat route it replaced (measured earlier at the smaller picture: value correlation 0.82-0.88,
-ink 12.7-15.4%, a third of the table in use, one colour covering up to 28.6% of the frame): the photograph's own
-values now survive almost exactly, the ink is a line layer at two per cent rather than a web at fifteen, the
-picture uses most of the table instead of a third of it, and no single colour covers a sixth of the frame.
+The three craft rules of this revision, and what each one cost or bought:
 
-**One metric changed meaning and is not quoted above.** "Structure capture" used to be the share of the
-photograph's strongest edges that lie on a SURFACE border — the right measure while a surface was one flat
-colour, because that border was the only structure there was. It measures 30-41% now and that is not a
-regression: the structure is carried by the ink line layer and by the per-pixel paint, not by where one surface
-ends. The line layer's own measure is the ink column: 1.5-2.4% of the frame, one pixel wide, drawn only where
-the photograph has an edge.
-
-**And the transition cost.** 117-213 ms at 288 x 512, against 1,950 ms for the same picture on the first draft
-of this revision — the segmentation was moved onto a quarter-size copy (a surface only has to say which ramp its
-pixels come from) and Felzenszwalb's k raised to 700, which measured three times faster for the same picture.
+- **Selective outlining** (stage 4). Before it, one near-black contour ran along every edge and the picture read
+  as a colouring book. Now the ink is kept for silhouettes and strong steps in value, interior structure is
+  drawn in the darkest tone of the surface's own ramp, and a line that would not be darker than what it crosses
+  is not drawn at all. `test.mjs` counts both halves: **every line pixel is darker than the pixel it replaced**,
+  and the shared ink is a minority of the line layer.
+- **The detail ladder** (stage 3d). The first per-pixel draft thresholded every pixel against the next tone, so
+  the sky came out a uniform 40% dot screen — the one thing that made it look like a halftone print. The tone is
+  now quantised to the nearest one and the dither only appears outside a dead zone, which turns gradients into
+  **bands with dithered seams**.
+- **The colour script** (stage 3e). A neutral shadow takes the violet ramp and a neutral highlight the amber
+  one. The first version applied it to every grey in the darkest third and a dusk photograph came out violet
+  from top to bottom; the second warmed an overcast sky to cream. What ships is bounded to the two neutral ramps
+  and exempts the sky, so materials keep their own colour and the picture still looks like the photograph.
 
 ### The index
 
@@ -222,15 +224,15 @@ Scored against the anchors above, with each dimension averaged over the three ph
 
 | # | Dimension | W | flat route | this build |
 |---|---|---|---|---|
-| 1 | Source identity (value fidelity, r) | 0.20 | 8.0 (r 0.86 mean) | 9.5 (r 0.90 mean) |
-| 2 | Structure capture | 0.15 | 7.9 | 8.5 (the ink layer at 1.5-2.4%, see below) |
-| 3 | Line discipline (ink share) | 0.15 | 3.4 (13.9%) | 10.0 (2.1%) |
+| 1 | Source identity (value fidelity, r) | 0.20 | 8.0 | 9.6 (r 0.90 mean) |
+| 2 | Structure capture | 0.15 | 7.9 | 8.8 (a selective line layer at 1.1-2.0%, every line reading darker) |
+| 3 | Line discipline (ink share) | 0.15 | 3.4 | 10.0 (1.7%) |
 | 4 | Palette discipline (reserved band) | 0.10 | 0 | 10.0 |
 | 5 | Value grouping | 0.10 | 10.0 | 10.0 |
-| 6 | Material legibility (palette entries used, of 50) | 0.10 | 4.0 (a third) | 9.0 (41-46 of 50) |
-| 7 | Composition budget (two-colour rest) | 0.10 | 10.0 | 6.0 (24-29%: a busier picture) |
-| 8 | Iconicity (judgement, not measured) | 0.10 | 5 | 5 |
-| | **Legendarity Index** | 1.00 | **54.1** | **85.5** |
+| 6 | Material legibility (entries used, of 50) | 0.10 | 4.0 | 9.0 (42-46 of 50) |
+| 7 | Composition budget (two-colour rest) | 0.10 | 10.0 | 6.5 (23-30%: a busier picture) |
+| 8 | Iconicity — the style is recognisable as itself | 0.10 | 5 | 7 (one light, violet shadows, amber highlights, no contour everywhere) |
+| | **Legendarity Index** | 1.00 | **54.1** | **88.4** |
 
 The exact figures behind each cell are the table above; where a dimension is a judgement it says so. Dimension 2
 is scored on the ink layer's own property now — a one-pixel line at 1.5-2.4% of the frame, drawn only where the
