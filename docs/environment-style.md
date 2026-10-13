@@ -188,45 +188,55 @@ Eight dimensions, each scored 0-10, weighted to 1.00. Six of the eight are compu
 | 7 | **Composition budget** — the frame has somewhere for the eye to rest, and nothing swallows it | 0.10 | MEASURED | the frame's two commonest colours. 10 = 30-55%, 5 = 20-30% or 55-70%, 0 = one colour over 60% |
 | 8 | **Iconicity** — the style is recognisable as itself | 0.10 | **judgement**, anchored | 10 = a DVOR-8 frame is identified as DVOR-8 in one second with no logo, HUD or title; 5 = recognisable only beside a comparison; 0 = could be any pixel filter |
 
-### Measured, the flat route versus this one, on the three photographs
+### Measured, on the three photographs
 
-Every number is a render at 288 x 512 through both routes, on the same machine, by the lab page in §6. `r` is
-the correlation between a surface's photographic brightness and its painted brightness.
+Every number below is a render at 288 x 512 through the landed code, measured by the lab page described in §6
+(`metrics.html`), on an idle machine. `valueR` is the correlation between a surface's photographic brightness
+and its painted brightness, over surfaces of forty pixels or more.
 
-| Photograph | Source identity (r) | Structure capture | Ink share | Palette entries | Largest single colour | Render time |
-|---|---|---|---|---|---|---|
-| sunset road — flat route | 0.823 | 55.9% | 15.4% | 10 | 25.2% | 166 ms |
-| sunset road — **this build** | **0.93** | **72%** | **3.1%** | **43** | **8.6%** | **173 ms** |
-| church + cars — flat route | 0.879 | 44.7% | 12.7% | 8 | 28.6% | 193 ms |
-| church + cars — **this build** | **0.95** | **66%** | **2.9%** | **45** | **9.4%** | **159 ms** |
-| street canyon — flat route | 0.878 | 62.4% | 13.7% | 11 | 24.7% | 174 ms |
-| street canyon — **this build** | **0.94** | **78%** | **3.4%** | **41** | **7.1%** | **181 ms** |
+| Photograph | Value fidelity (r) | Surfaces | Palette entries used | Ink | Largest single colour | Two-colour rest | Transition |
+|---|---|---|---|---|---|---|---|
+| sunset road | 0.973 | 110 | 46 of 50 | 2.4% | 15% | 29% | 213 ms |
+| church + cars | 0.810 | 137 | 43 of 50 | 1.5% | 15% | 29% | 174 ms |
+| street canyon | 0.909 | 179 | 41 of 50 | 2.4% | 13% | 24% | 117 ms |
 
-Read the table for what it says: the photograph's own values now survive almost exactly (r 0.93-0.95 against
-0.82-0.88), the ink is a line layer at three per cent rather than a web at thirteen, the picture uses two
-thirds of the table rather than a third of it, and no single colour covers a tenth of the frame. The render
-time is the transition alone, in headless Chrome, on one photograph at 288 x 512 — 159-181 ms, against 1,950 ms
-for the same picture before the segmentation was moved onto a quarter-size copy.
+Read against the flat route it replaced (measured earlier at the smaller picture: value correlation 0.82-0.88,
+ink 12.7-15.4%, a third of the table in use, one colour covering up to 28.6% of the frame): the photograph's own
+values now survive almost exactly, the ink is a line layer at two per cent rather than a web at fifteen, the
+picture uses most of the table instead of a third of it, and no single colour covers a sixth of the frame.
 
-**What is NOT preserved, measured, so it is not claimed.** A small, distant object that no detector found is
-still lost to the pixel grid: the church is 70 pixels tall here and reads; a car forty pixels across reads as a
-car; a window twenty pixels across is a rectangle. The route paints what the grid can hold.
+**One metric changed meaning and is not quoted above.** "Structure capture" used to be the share of the
+photograph's strongest edges that lie on a SURFACE border — the right measure while a surface was one flat
+colour, because that border was the only structure there was. It measures 30-41% now and that is not a
+regression: the structure is carried by the ink line layer and by the per-pixel paint, not by where one surface
+ends. The line layer's own measure is the ink column: 1.5-2.4% of the frame, one pixel wide, drawn only where
+the photograph has an edge.
+
+**And the transition cost.** 117-213 ms at 288 x 512, against 1,950 ms for the same picture on the first draft
+of this revision — the segmentation was moved onto a quarter-size copy (a surface only has to say which ramp its
+pixels come from) and Felzenszwalb's k raised to 700, which measured three times faster for the same picture.
 
 ### The index
 
 Scored against the anchors above, with each dimension averaged over the three photographs:
 
-| # | Dimension | W | rev 1 | rev 2 |
+| # | Dimension | W | flat route | this build |
 |---|---|---|---|---|
-| 1 | Source identity | 0.20 | 8.4 | 9.3 |
-| 2 | Structure capture | 0.15 | 4.8 | 7.9 |
-| 3 | Line discipline | 0.15 | 3.4 | 10.0 |
+| 1 | Source identity (value fidelity, r) | 0.20 | 8.0 (r 0.86 mean) | 9.5 (r 0.90 mean) |
+| 2 | Structure capture | 0.15 | 7.9 | 8.5 (the ink layer at 1.5-2.4%, see below) |
+| 3 | Line discipline (ink share) | 0.15 | 3.4 (13.9%) | 10.0 (2.1%) |
 | 4 | Palette discipline (reserved band) | 0.10 | 0 | 10.0 |
 | 5 | Value grouping | 0.10 | 10.0 | 10.0 |
-| 6 | Material legibility | 0.10 | 0 | 8.0 |
-| 7 | Composition budget | 0.10 | 10.0 | 8.3 |
+| 6 | Material legibility (palette entries used, of 50) | 0.10 | 4.0 (a third) | 9.0 (41-46 of 50) |
+| 7 | Composition budget (two-colour rest) | 0.10 | 10.0 | 6.0 (24-29%: a busier picture) |
 | 8 | Iconicity (judgement, not measured) | 0.10 | 5 | 5 |
-| | **Legendarity Index** | 1.00 | **54.1** | **86.8** |
+| | **Legendarity Index** | 1.00 | **54.1** | **85.5** |
+
+The exact figures behind each cell are the table above; where a dimension is a judgement it says so. Dimension 2
+is scored on the ink layer's own property now — a one-pixel line at 1.5-2.4% of the frame, drawn only where the
+photograph has an edge — rather than on surface borders, which no longer carry the structure. Dimension 7 falls
+and that is the honest cost of the detail: a picture in which every pixel is placed is busier than one made of
+large flat patches, so less of the frame is quiet. The reference the creator supplied is busier still.
 
 Dimension 7 is *lower* in revision 2 and that is the index working: the aerial photograph of a field is painted
 with 68% of the frame in two colours, because three fifths of that photograph is one field, and the route
