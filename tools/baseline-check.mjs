@@ -50,6 +50,8 @@ const ROWS = [
   ['L1 v6\'s edges map replaced the traced polyline for outlining', 'src/world.js', () => has(src('world.js'), 'export function edgesOf')],
   // THE DESTRUCTION MODEL: recorded before anything is built on it, and implemented in the three parts the
   // knowledge base names - the ladder, the carrier, the transition.
+  ['L2 The frame is FLAT by measurement: despeckle and shaped markings', 'src/vector.js',
+    () => has(src('vector.js'), 'DESPECKLE', 'mk.area < 14', 'four neighbours agree')],
   ['L1 The product renders constructively by default, on measurement', 'src/main.js',
     () => has(src('main.js'), "get('style') || 'vector'", 'flat surfaces at 18%')],
   ['L1 The gate reads the DRAWN canvas, not a screenshot', 'tools/photo-shot.mjs + tools/concept-check.mjs',
