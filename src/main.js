@@ -1072,11 +1072,15 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
     e.stopPropagation();
   }, true);
 }
+// THE ARROW HIDES THE PANEL. It is the first control on the bar: collapsed, the toolbar is two round buttons and
+// nothing else, which is what a player wants once they have chosen; expanded, it shows the name in the hand and
+// the weather, each with its own dropdown.
 $('barMore')?.addEventListener('click', (e) => {
-  const box = $('moreBox');
-  if (!box) return;
-  box.open = !box.open;
-  e.currentTarget.setAttribute('aria-expanded', String(box.open));
+  const bar = $('bar');
+  if (!bar) return;
+  const hidden = bar.classList.toggle('hidden');
+  e.currentTarget.textContent = hidden ? '▴' : '▾';
+  e.currentTarget.setAttribute('aria-expanded', String(!hidden));
 });
 $('shareBtn').addEventListener('click', () => share(false));
 $('cardBtn').addEventListener('click', () => share(true));
