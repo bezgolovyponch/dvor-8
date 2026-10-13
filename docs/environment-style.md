@@ -171,14 +171,14 @@ Every number is a render at 192 x 256 through both routes, on the same day, on t
 page described in §6. `r` is the correlation between a shape's photographic brightness and its painted
 brightness, with the line layer excluded.
 
-| Photograph | Source identity (r) | Structure capture | Ink share | Material pattern | Two-colour rest | Largest single colour | Render time |
-|---|---|---|---|---|---|---|---|
-| sunset road — rev 1 | 0.823 | 55.9% | 15.4% | 0% | 40.6% | 25.2% | 288 ms |
-| sunset road — **rev 2** | **0.862** | **70.4%** | **6.7%** | **1.6%** | 41.5% | **22.7%** | **244 ms** |
-| church + cars — rev 1 | 0.879 | 44.7% | 12.7% | 0% | 50.8% | 28.6% | 255 ms |
-| church + cars — **rev 2** | **0.929** | **60.5%** | **5.8%** | **6.3%** | 68.0% | 41.9% | 268 ms |
-| street canyon — rev 1 | 0.878 | 62.4% | 13.7% | 0% | 39.3% | 24.7% | 236 ms |
-| street canyon — **rev 2** | **0.934** | **76.9%** | **7.4%** | **9.4%** | 50.0% | 31.1% | 363 ms |
+| Photograph | Source identity (r) | Structure capture | Ink share | Material pattern | Two-colour rest | Largest single colour | Palette entries | Render time |
+|---|---|---|---|---|---|---|---|---|
+| sunset road — rev 1 | 0.823 | 55.9% | 15.4% | 0% | 40.6% | 25.2% | 10 | 166 ms |
+| sunset road — **rev 2** | **0.878** | **70.4%** | **6.7%** | **1.6%** | 36.6% | **18.7%** | 20 | 205 ms |
+| church + cars — rev 1 | 0.879 | 44.7% | 12.7% | 0% | 50.8% | 28.6% | 8 | 193 ms |
+| church + cars — **rev 2** | **0.929** | **60.5%** | **5.8%** | **6.3%** | 68.0% | 41.9% | 16 | 221 ms |
+| street canyon — rev 1 | 0.878 | 62.4% | 13.7% | 0% | 39.3% | 24.7% | 11 | 174 ms |
+| street canyon — **rev 2** | **0.934** | **76.9%** | **7.4%** | **9.4%** | 50.0% | 31.1% | 13 | 232 ms |
 
 Value grouping was measured on the drawn demo yard, where the separated pairs are countable: **0% of the
 adjacent pairs the photograph separates by 0.12 of its value range are painted the same colour, in BOTH
@@ -187,8 +187,9 @@ property was already satisfied, and what revision 2 adds is that it is now asser
 stage 3b instead of happening by luck.
 
 The render time is the transition alone, in headless Chrome, on one photograph, on an idle machine; run to run
-it moves by 10-20%, so the useful statement is the range: revision 2 costs **0.85x to 1.55x** of revision 1 on
-these three photographs (244 / 268 / 363 ms against 288 / 255 / 236 ms). The extra work — an ink gate, a
+it moves by 10-20%, so the useful statement is the range: revision 2 costs **1.2x to 1.35x** of revision 1 on
+these three photographs (205 / 221 / 232 ms against 166 / 193 / 174 ms) — one extra ramp, an ink gate and a
+roughness measure, against the two passes the audit removed. The extra work — an ink gate, a
 roughness measure, a material pattern, a value-separation pass — was paid for twice over: the merge used to
 copy a second pair table on every one of its ~1400 merges (223 ms of a 519 ms merge, measured), and the
 value-separation pass scanned the whole pair table for every candidate move. Both were removed in the audit
@@ -200,7 +201,7 @@ Scored against the anchors above, with each dimension averaged over the three ph
 
 | # | Dimension | W | rev 1 | rev 2 |
 |---|---|---|---|---|
-| 1 | Source identity | 0.20 | 8.4 | 9.2 |
+| 1 | Source identity | 0.20 | 8.4 | 9.3 |
 | 2 | Structure capture | 0.15 | 4.8 | 7.9 |
 | 3 | Line discipline | 0.15 | 3.4 | 10.0 |
 | 4 | Palette discipline (reserved band) | 0.10 | 0 | 10.0 |
@@ -208,7 +209,7 @@ Scored against the anchors above, with each dimension averaged over the three ph
 | 6 | Material legibility | 0.10 | 0 | 8.0 |
 | 7 | Composition budget | 0.10 | 10.0 | 8.3 |
 | 8 | Iconicity (judgement, not measured) | 0.10 | 5 | 5 |
-| | **Legendarity Index** | 1.00 | **54.1** | **86.6** |
+| | **Legendarity Index** | 1.00 | **54.1** | **86.8** |
 
 Dimension 7 is *lower* in revision 2 and that is the index working: the aerial photograph of a field is painted
 with 68% of the frame in two colours, because three fifths of that photograph is one field, and the route
@@ -272,7 +273,7 @@ BASE=http://127.0.0.1:4312/ node --experimental-websocket tools/check.mjs out ph
 | `node tools/monetisation-check.mjs` | 29 PASS, 0 FAIL |
 | `tools/check.mjs` on a real photograph | exit 0, 4 targets, no page errors |
 | `tools/walk-check.mjs`, `folk-check.mjs`, `news-check.mjs`, `pop-check.mjs`, `paint-check.mjs` | all exit 0, no page errors |
-| the game on the three photographs, in headless Chrome | played in all three, 4 / 10 / 5 targets found, no page errors |
+| the game on the three photographs, in headless Chrome | played in all three, **4 / 10 / 6 targets** found, every one of them a shape with a colour of its own, no page errors |
 | the A/B renders above | the table in §4 |
 
 The A/B harness used for the table is the style lab: `compare.html` beside this repository's checkout, which
