@@ -739,6 +739,85 @@ const TOP = bandTop(w);
 // the flat route draws the region borders instead, and those are checked in the picture section above and in
 // the transition section below. Keeping checks for a function that no longer exists tests nothing.
 
+// ---- kind actions: what you can do to a yard that is not wrecking it -----------------------------------
+// Three actions, one shape: what it costs the player, what it adds to the world, and what it looks like while
+// doing it. The rules a kind action is held to are the game's own — it breaks nothing, it takes nothing away,
+// and it differs from the others in a way the player can feel on the first use.
+{
+  const kind = await import('./src/kind.js');
+  const flatMod = await import('./src/flat.js');
+  const steps = flatMod.STEPS;
+
+  // FLOWERS: they go into bare ground that takes paint, they grow through stages, and they never leave.
+  const g = yard();
+  const ground = (() => {
+    for (let y = Math.floor(H * 0.75); y < H - 2; y += 1) for (let x = 2; x < W - 2; x += 1) {
+      const p = y * W + x;
+      if (g.owner[p] < 0 && g.rubble[p] === 255) return { x, y };
+    }
+    return null;
+  })();
+  const holds = (what, w, h, x, y) => takesPaint(yardOfSt().surfaces.what, w, h, x, y);
+  function yardOfSt() { return styliseFlat(DEMO.rgba, W, H); }
+  const st2 = yardOfSt();
+  const bloom = kind.plant(g, ground.x, ground.y, mulberry32(3), (what, w, h, x, y) => takesPaint(st2.surfaces.what, w, h, x, y));
+  check('a flower is planted on bare ground and stays there', Boolean(bloom) && g.blooms.length === 1 && bloom.stage === 1, 'planted');
+  const before = g.blooms[0].stage;
+  kind.stepBlooms(g, kind.FLOWERS.grow * 3);
+  check('a flower grows through its stages and stops at the last one',
+    g.blooms[0].stage === kind.FLOWERS.stages && kind.FLOWERS.stages > before, `stage ${g.blooms[0].stage}`);
+  const skyTest = kind.plant(g, 4, 2, mulberry32(4), () => false);
+  check('a flower will not grow where the ground does not take it, and a miss costs nothing',
+    skyTest === null && g.blooms.length === 1, 'refused');
+  const pixels = kind.bloomPixels(st2.palette, steps, g.blooms[0], 0);
+  check('a flower is drawn in the palette\'s own colours, stem and petals from different ramps',
+    pixels.length >= 4 && pixels.every((p) => p.i < st2.palette.length - 2)
+    && new Set(pixels.map((p) => Math.floor(p.i / steps))).size >= 2,
+    `${pixels.length} pixels of the flower`);
+
+  // WASHING: one tone up the thing's own ramp, once, and the hue cannot change.
+  const w2 = yard();
+  const car2 = byKind(w2, 'car');
+  const hueOf = (i) => {
+    const c = w2.palette[i], mx = Math.max(...c), mn = Math.min(...c);
+    let hh = 0;
+    if (mx !== mn) { const [r, gg, b] = c; hh = mx === r ? 60 * (((gg - b) / (mx - mn)) % 6) : mx === gg ? 60 * ((b - r) / (mx - mn) + 2) : 60 * ((r - gg) / (mx - mn) + 4); }
+    return ((hh % 360) + 360) % 360;
+  };
+  const rampsBefore = car2.pixels.map((p) => Math.floor(w2.idx[p] / steps));
+  const washed = kind.wash(w2, car2, steps);
+  check('washing a thing moves every pixel one tone up its OWN ramp, and the hue cannot change',
+    washed && washed.pixels.length > 0
+    && car2.pixels.every((p, n) => Math.floor(w2.idx[p] / steps) === rampsBefore[n])
+    && washed.pixels.every((p) => Math.abs(hueOf(w2.idx[p]) - hueOf(washed.pixels.includes(p) ? w2.idx[p] : w2.idx[p])) < 90),
+    `${washed ? washed.pixels.length : 0} pixels lighter`);
+  check('and it happens once: a second wash of the same thing is refused',
+    kind.wash(w2, car2, steps) === null && car2.washed === true, 'once');
+  check('a wash is worth more than a dent and less than a wreck',
+    kind.WASH.points > 25 && kind.WASH.points < 100, `${kind.WASH.points} points`);
+
+  // HELPING: the courier's parcel, carried back, lowers the danger meter — the only thing that does.
+  const folkTest = makeFolk();
+  folkTest.heat = 0.6;
+  const parcel = kind.dropParcel(w2, 40, 300, mulberry32(7));
+  check('the courier leaves a parcel in the yard, and it is findable by a finger',
+    w2.parcels.length === 1 && kind.parcelAt(w2, parcel.cx, parcel.cy) === parcel, 'dropped');
+  const done = kind.help(w2, parcel, folkTest);
+  check('carrying it back scores, takes a mark off the danger meter and cannot be done twice',
+    Boolean(done) && done.points === kind.HELP.points && folkTest.heat < 0.6 && kind.help(w2, parcel, folkTest) === null,
+    `danger 0.6 → ${folkTest.heat.toFixed(2)}`);
+  check('a kind action never takes a point away and never breaks anything',
+    [kind.FLOWERS, kind.WASH, kind.HELP].every((a) => a.points > 0) && Object.values(kind.worth).every((p) => p > 0)
+    && THROWABLES.flowers.damage === 0 && THROWABLES.sponge.damage === 0,
+    'flowers and sponge deal no damage');
+  check('the hand can hold them: both are in the throwables list and in the drawer order',
+    Boolean(THROWABLES.flowers && THROWABLES.sponge) && THROW_ORDER.includes('flowers') && THROW_ORDER.includes('sponge'),
+    THROW_ORDER.join(' '));
+  const box = kind.parcelPixels(st2.palette, steps, parcel);
+  check('the parcel is drawn as a box with tape, in the palette\'s own colours',
+    box.length >= 8 && box.every((p) => p.i < st2.palette.length - 2), `${box.length} pixels`);
+}
+
 // ---- there must be a way to use a photo you ALREADY have ------------------------------------------------
 // `capture="environment"` makes a phone open the camera immediately and hides the photo library. Every
 // photo input carried it, so the only way into the game was to take a new picture on the spot — there was

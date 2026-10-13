@@ -43,6 +43,16 @@ export const THROWABLES = {
     flight: 0.42, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 58, sky: true,
     why: 'The one thing you throw AT PEOPLE and never at the yard — a ball of water, which is what a balcony is actually for. It carries no damage to property, so it is the honest answer to someone standing where you cannot reach them.',
   },
+  flowers: {
+    label: 'цветы', hint: 'растут там, где упали · остаются навсегда', kind: 'flowers',
+    flight: 0.26, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 18, sky: false,
+    why: 'The only throw that ADDS and stays: it plants where it lands and the flower is still there at the end. Nothing to break, nothing to lose — throw it at bare ground and watch the yard change.',
+  },
+  sponge: {
+    label: 'губка', hint: 'моет машину — светлее на тон, один раз', kind: 'wash',
+    flight: 0.18, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 30, sky: false,
+    why: 'The only thing that makes anything LIGHTER: it moves a car one tone up its own ramp, so it is visibly clean and still the same colour. Once per thing, because the point is the change and not the farming.',
+  },
   paint: {
     label: 'краска', hint: 'пятно остаётся на стене · ничего не ломает',
     flight: 0.24, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 34, sky: false,
@@ -50,7 +60,7 @@ export const THROWABLES = {
   },
 };
 
-export const ORDER = ['stone', 'brick', 'slipper', 'bottle', 'water', 'paint'];
+export const ORDER = ['stone', 'brick', 'slipper', 'bottle', 'water', 'paint', 'flowers', 'sponge'];
 
 // The throwable's own numbers, with the mode's vision left alone. A mode may still sharpen the aim or add
 // reach — that is its business — but it no longer decides what is in the hand.

@@ -28,6 +28,8 @@ import { makeFolk, stepFolk, personAt, soak, threw, stars, KINDS as FOLK } from 
 import { mulberry32 } from './rng.js';
 import { sfx, unlock, setMuted } from './audio.js';
 import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
+import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, FLOWERS, WASH, HELP } from './kind.js';
+import { STEPS } from './flat.js';
 import { makeWindow, hitWindow, shards } from './glass.js';
 import { PAINTS, stamp, lay } from './decal.js';
 import { spawn, fling, PRESETS } from './parts.js';
@@ -303,6 +305,12 @@ function folkSays(ev) {
   if (ev.type === 'look') { sfx.alarm(); pop(folk.hidden ? 'ИЩЕТ' : 'СМОТРИТ — ПРЯЧЬСЯ', p.x, p.y - 30, folk.hidden ? 'tag' : 'warn'); navigator.vibrate?.(25); }
   else if (ev.type === 'lost') { sfx.lost(); pop('НЕ ВИДИТ', p.x, p.y - 30, 'tag'); }
   else if (ev.type === 'call') { sfx.phone(); banner('ЗВОНЯТ В ПОЛИЦИЮ'); }
+  else if (ev.type === 'enter' && ev.who.kind === 'courier' && world && world.parcels.filter((q) => !q.taken).length < 2) {
+    // The courier is in a hurry and drops one: a small box that lies where they came in until somebody carries
+    // it back. Without it there would be nothing in the yard to help, and the danger meter would only climb.
+    dropParcel(world, ev.who.x, ev.who.y, rnd);
+    pop('ПОСЫЛКА', ev.who.x, ev.who.y - 26, 'tag');
+  }
   else if (ev.type === 'police') { sfx.siren(); banner('ПОЛИЦИЯ'); note('полиция смотрит по очереди: спрячься, пока смотрит, и действуй, пока отвернулась'); }
   else if (ev.type === 'seen') { sfx.seen(); navigator.vibrate?.([60, 40, 120]); banner('ЗАМЕТИЛИ'); endIn = 0.9; }
 }
@@ -420,6 +428,8 @@ function resolve(rock) {
   const m = THROWABLES[rock.kind] || THROWABLES.stone;
   if (rock.sky && skyHit(rock)) return;
   if (rock.kind === 'paint') { paintLands(rock); return; }
+  if (rock.kind === 'flowers') { flowersLand(rock); return; }
+  if (rock.kind === 'sponge') { spongeLands(rock); return; }
   // What it lands on: everything near, for a thing that bursts; otherwise the one thing it was thrown at.
   const targets = rock.splash ? splashTargets(world, rock.tx, rock.ty, rock.splash) : rock.region && !rock.region.gone ? [rock.region] : [];
   if (rock.splash) {
@@ -503,6 +513,44 @@ function paintLands(rock) {
   world.score += PAINT_POINTS; world.hits += 1; world.splats = (world.splats || 0) + 1;
   pop(`+${PAINT_POINTS}`, rock.tx, rock.ty);
   pop(colour.name.toUpperCase(), rock.tx, rock.ty - 12, 'tag');
+}
+
+// A bunch of flowers came down on bare ground. It plants where it lands and the flower is still there when the
+// run ends: the one thing in the game that adds to the yard and keeps it. A miss costs nothing at all.
+function flowersLand(rock) {
+  const home = rock.tx < yard.w;
+  const holds = (what, w, h, x, y) => takesPaint(home ? yard.st.surfaces.what : null, home ? yard.w : world.w, h, x, y);
+  const bloom = plant(world, rock.tx, rock.ty, rnd, holds);
+  if (!bloom) { sfx.miss(); spawn(fx, rock.tx, rock.ty, PRESETS.puff, rnd); pop('ТУТ НЕ РАСТЁТ', rock.tx, rock.ty, 'tag'); return; }
+  sfx.ready();
+  burst(fx, Array.from({ length: 8 }, (_, n) => ({ x: rock.tx, y: rock.ty, c: 0, rgb: n % 2 ? '#8bd46a' : '#ffd23f', floor: rock.ty + 6 })), rock.tx, rock.ty, rnd, 40);
+  impact(fx, 'dent', calm);
+  navigator.vibrate?.(8);
+  world.score += FLOWERS.points; world.hits += 1; world.planted = (world.planted || 0) + 1;
+  pop(`+${FLOWERS.points}`, rock.tx, rock.ty);
+  pop('ЦВЕТОК', rock.tx, rock.ty - 12, 'tag');
+}
+
+// A sponge came down on something standing. It is washed: every pixel one tone up its own ramp, once, with
+// foam, and it is the only thing in the game that gets lighter instead of darker.
+function spongeLands(rock) {
+  const t = rock.region && !rock.region.gone ? rock.region
+    : splashTargets(world, rock.tx, rock.ty, 14).find((r) => !r.gone) || null;
+  if (!washable(world, t)) {
+    sfx.miss(); spawn(fx, rock.tx, rock.ty, PRESETS.puff, rnd);
+    pop(t ? 'УЖЕ ЧИСТО' : 'НЕЧЕГО МЫТЬ', rock.tx, rock.ty, 'tag');
+    return;
+  }
+  const done = wash(world, t, STEPS);
+  const hx = Math.max(t.x, Math.min(t.x + t.w, rock.tx)), hy = Math.max(t.y, Math.min(t.y + t.h, rock.ty));
+  burst(fx, Array.from({ length: WASH.foam }, () => ({ x: hx, y: hy, c: 0, rgb: rnd() < 0.5 ? '#ffffff' : '#8fe6ff', floor: t.y + t.h })), hx, hy, rnd, 34);
+  spawn(fx, hx, hy, { ...PRESETS.paint, rgb: '#ffffff', settle: true }, rnd);
+  sfx.splash();
+  impact(fx, 'crack', calm);
+  navigator.vibrate?.(14);
+  world.score += WASH.points; world.hits += 1; world.washed = (world.washed || 0) + 1;
+  pop(`+${WASH.points}`, hx, hy);
+  pop('ЧИСТО', t.cx, t.y - 6, 'tag');
 }
 
 // Nothing is left standing. From the balcony that is the end. Down in the yard there is more street.
@@ -610,6 +658,7 @@ function frame(now) {
     for (const rock of stepFx(fx, world, dt)) resolve(rock);
     if (stage === 'play' && !frozen) {
       tick(world, dt);
+      stepBlooms(world, dt);
       stepDrink(drink, dt);
       if (me?.down) walk(dt);
       if (stepSky(sky, dt, cam.w)) sfx.fly();
@@ -645,6 +694,24 @@ function throwAt(at) {
   threw(folk);
   // A touch on a person is a ball of water, whatever is in the hand: nothing else is ever thrown at one.
   // A thing under the finger comes first, so nobody is soaked by a throw meant for the car behind them.
+  // A parcel lying in the yard is CARRIED BACK, not hit: the tap is answered at once and nothing is thrown.
+  // It is the one action aimed at somebody without being aimed AT them, and the only one that lowers danger.
+  const parcel = parcelAt(world, at.x, at.y);
+  if (parcel) {
+    const done = help(world, parcel, folk);
+    if (done) {
+      world.score += done.points; world.hits += 1;
+      burst(fx, blossomBurst(parcel.cx, parcel.cy, rnd), parcel.cx, parcel.cy, rnd, 46);
+      sfx.ready();
+      impact(fx, 'dent', calm);
+      navigator.vibrate?.(18);
+      pop(`+${done.points}`, parcel.cx, parcel.cy);
+      pop(done.line, parcel.cx, parcel.cy - 12, 'tag');
+      pop(`−${Math.round(done.heat * 5)} ОПАСНОСТЬ`, parcel.cx, parcel.cy + 14, 'good');
+      note('посылка вернулась к курьеру: он кивнул, и опасность стала меньше');
+      return;
+    }
+  }
   const who = standing(world, at.x, at.y) ? null : personAt(folk, at.x, at.y, 3, WATER.flight);
   if (who && !hitAt(sky, at.x - cam.x, at.y - cam.y)) {
     world.throws += 1;

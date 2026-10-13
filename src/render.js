@@ -7,6 +7,8 @@ import { glyph, ADVANCE, GLYPH_W, GLYPH_H } from './font.js';
 import { boxes, SHIP, PLANE, BANNER_H, SHADOW } from './sky.js';
 import { textWidth } from './font.js';
 import { PAINTS, COVER } from './decal.js';
+import { bloomPixels, parcelPixels } from './kind.js';
+import { RAMPS, STEPS } from './flat.js';
 
 // A GAME PIXEL IS PX PICTURE PIXELS (view.js). The picture doubled so that a photograph keeps its detail;
 // every sprite is still drawn in the old units, so each one is drawn PX times bigger AROUND ITS OWN ANCHOR —
@@ -395,6 +397,17 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
 
   ctx.save();
   ctx.translate(ox - cx, oy - cy);
+  // WHAT KIND ACTIONS ADDED, drawn over the picture the way the picture draws itself: one rect per pixel of the
+  // flower or the box, in the palette's own colours (kind.js picks the entries). A flower sways, because a
+  // still flower on a still picture reads as a sticker; the box does not, because a box does not.
+  for (const q of world.parcels) {
+    if (q.taken || q.x > cx + w + 8 || q.x + q.w < cx - 8) continue;
+    for (const px of parcelPixels(pal, STEPS, q)) { ctx.fillStyle = css(pal[px.i]); ctx.fillRect(px.x, px.y, 1, 1); }
+  }
+  for (const b of world.blooms) {
+    if (b.x > cx + w + 6 || b.x < cx - 6) continue;
+    for (const px of bloomPixels(pal, STEPS, b, seconds)) { ctx.fillStyle = css(pal[px.i]); ctx.fillRect(px.x, px.y, 1, 1); }
+  }
   // Corner brackets on everything still standing and in view: what can be hit is never a guess.
   for (const r of world.regions) {
     if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;
@@ -482,6 +495,15 @@ export function postcard(world, title, line) {
     const s = paint[p] ? PAINTS[paint[p] - 1].rgb : c;   // what was painted is on the card too
     d[o] = c[0] + (s[0] - c[0]) * COVER; d[o + 1] = c[1] + (s[1] - c[1]) * COVER; d[o + 2] = c[2] + (s[2] - c[2]) * COVER; d[o + 3] = 255;
   }
+  // The flowers and the boxes are on the card too: a card that showed a wrecked yard without the flowers that
+  // were planted in it would be a picture of a different run. Drawn at the picture's own scale, no sway.
+  const put = (px) => {
+    if (px.x < 0 || px.y < 0 || px.x >= sw || px.y >= h) return;
+    const o = (px.y * sw + px.x) * 4, c = palette[px.i];
+    d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = 255;
+  };
+  for (const q of world.parcels) if (!q.taken) for (const px of parcelPixels(palette, STEPS, q)) put(px);
+  for (const b of world.blooms) for (const px of bloomPixels(palette, STEPS, b, 0)) put(px);
   small.ctx.putImageData(small.image, 0, 0);
   const card = document.createElement('canvas');
   card.width = sw * k; card.height = h * k + foot;
