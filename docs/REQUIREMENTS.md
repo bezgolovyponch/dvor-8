@@ -113,3 +113,29 @@ polling, a screenshot per state - and in its first run it exposed three faults t
 | the yard vanished under an olive field | the flood **replaced** every pixel below the water line | the water now **mixes** with what is under it, deeper water hiding more, and only the top rows are foam |
 | the wave was a small dark blob | the ported v6 sprite was drawn at 32 px on a 384-wide frame (v6 draws 32 in 185) | drawn at 64 px, the same share of the picture |
 | a car was outlined as a **rectangle** | the tracer fell back to the box on a large solid region | v6's own **edges map** (`world.edgesOf`): a pixel is on the outline when a neighbour is not in the thing. No tracing, no simplification, no fallback - and the damage now tears along the silhouette too |
+
+
+## THE RESTRICTIONS — what this project must never do again
+
+Each line is here because it was done, it was seen on screen, and it was wrong. A restriction is stronger than a
+requirement: a requirement says what to build, a restriction says what is forbidden even if it looks convenient.
+
+| # | FORBIDDEN | proved wrong by |
+|---|---|---|
+| R1 | Drawing a thing as a BOX when its shape is known | the creator photographed the brackets: "what is this?" — a rectangle round a car says a car might be there; the edges map says THIS is the car |
+| R2 | Letting a disaster be an overlay on a picture | "why is the hurricane still a sign" — a sprite crossing a photograph is a sign, not an event: an event must act on a built world |
+| R3 | Painting per pixel what should be a surface | the flatness measurement: 10–18% flat, 0.83 colour changes per pixel, against 79% / 0.09 after the surfaces were built |
+| R4 | Deleting a thing instead of wrecking it | the black boxes: `gone = true` and scorch-everything left no remains |
+| R5 | Showing the raw photograph inside the game frame | the scan wipe drew the camera image above the line: a slab of unprocessed photo with a seam, read as a renderer fault |
+| R6 | Measuring a frame that carries transient overlays or grades | three separate false readings: the news ticker (59% → 16% flat), the scan wipe, and the tsunami grade (62% "one colour") |
+| R7 | Claiming a result without a picture of it on a REAL photograph | five requirements were reported done while nothing had been seen on screen; the L3 rows exist because of it |
+| R8 | Writing a patch and reading the measurement without checking the patch landed | one round measured a road that had never been changed: the script died before writing the file |
+| R9 | Inventing a mechanic when a working reference exists | v6's path (grid → fills + edges → outline → highlight states → tooltip) was the answer for four rounds while I built alternatives |
+
+**The validation loop that goes with them**, run before ANY report, in this order:
+
+1. `node test.mjs` — the suite.
+2. `node tools/baseline-check.mjs` — the checklist and the pictures.
+3. `node tools/concept-check.mjs <canvas.json>` on a CLEAN frame — the concept gate.
+4. `node tools/photo-shot.mjs` — and LOOK at the pictures, on the creator's own photograph.
+5. Read this restriction table and check the change against every line of it.

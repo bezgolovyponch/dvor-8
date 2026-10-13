@@ -10,6 +10,7 @@ import { PAINTS, COVER } from './decal.js';
 import { bloomPixels, parcelPixels } from './kind.js';
 import { weatherTable } from './weather.js';
 import { beastPixels, beastAt, eventSprite } from './disaster.js';
+import { edgesOf } from './world.js';
 import { disasterTable, DISASTERS as DISASTERS_LOOK } from './disaster.js';
 import { RAMPS, STEPS } from './flat.js';
 
@@ -468,20 +469,30 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     } else drawEdges(mark.poly, blink ? SEL : INFO);
   }
 
-  // Corner brackets on everything still standing and in view: what can be hit is never a guess.
+  // THE THING IS OUTLINED IN ITS OWN SHAPE — v6's rule, and the whole point of the edges map.
+  //
+  // What stood here was a BOX: four corner brackets drawn from the region's x/y/w/h, which is what the creator
+  // photographed and called bullshit - a rectangle round a car says "a car might be in here", while an outline
+  // says "THIS is the car". Every visible thing now draws its own silhouette: the pixels where a neighbour is not
+  // part of it (world.edgesOf), cached per region because the shape does not change while the yard stands.
   for (const r of world.regions) {
     if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;
     if (scanY === null && !inFocus(mode, world, r, fxx, fyy)) continue;
-    if ((seconds * 2 + r.id * 0.37) % 1 > 0.82) continue;   // a blink, out of step with its neighbours
-    const colour = r.hits ? '#ffffff' : r.id % 2 ? '#ffd23f' : '#3fe0f0';
-    const x0 = r.x - 2, y0 = r.y - 2, x1 = r.x + r.w + 1, y1 = r.y + r.h + 1, k = Math.max(3, Math.min(6, Math.round(Math.min(r.w, r.h) / 3)));
-    for (const [dx, dy, fill] of [[1, 1, '#0b0018'], [0, 0, colour]]) {
-      ctx.fillStyle = fill;
-      for (const [cx, cy, sx, sy] of [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]]) {
-        ctx.fillRect((sx > 0 ? cx : cx - k + 1) + dx, cy + dy, k, 1);
-        ctx.fillRect(cx + dx, (sy > 0 ? cy : cy - k + 1) + dy, 1, k);
-      }
+    world.edgesCache = world.edgesCache || new Map();
+    let edges = world.edgesCache.get(r.id);
+    if (!edges) { edges = edgesOf(world, r); world.edgesCache.set(r.id, edges); }
+    const blink = (seconds * 2 + r.id * 0.37) % 1 > 0.82;      // a blink, out of step with its neighbours
+    const aimed = world.aim && world.aim.id === r.id;
+    const colour = aimed ? '#f04f78' : r.hits ? '#ffffff' : blink ? '#ffd23f' : '#3fe0f0';
+    for (const p2 of edges) {
+      const ex = p2 % world.w, ey = (p2 / world.w) | 0;
+      if (ex < cx - 1 || ex > cx + w) continue;
+      ctx.fillStyle = '#0b0018';
+      ctx.fillRect(ex, ey + 1, 1, 1);                            // one pixel of dark under it, so it reads on anything
+      ctx.fillStyle = colour;
+      ctx.fillRect(ex, ey, 1, 1);
     }
+    const x0 = r.x - 2, y1 = r.y + r.h + 1;
     // how much it can still take, as pips under it
     for (let n = 0; n < r.hp - r.hits; n += 1) { ctx.fillStyle = '#0b0018'; ctx.fillRect(x0 + n * 4, y1 + 2, 4, 3); ctx.fillStyle = '#f0286e'; ctx.fillRect(x0 + n * 4, y1 + 2, 3, 2); }
   }
