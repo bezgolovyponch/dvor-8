@@ -50,6 +50,8 @@ const ROWS = [
   ['L1 v6\'s edges map replaced the traced polyline for outlining', 'src/world.js', () => has(src('world.js'), 'export function edgesOf')],
   // THE DESTRUCTION MODEL: recorded before anything is built on it, and implemented in the three parts the
   // knowledge base names - the ladder, the carrier, the transition.
+  ['L1 THE INTERIM GATE exists and reads the concept', 'tools/concept-check.mjs + docs/concept-gate.md',
+    () => has(read('tools/concept-check.mjs'), 'flatShare', 'transPerPx', 'window sprites') && has(read('docs/concept-gate.md'), 'The gate cannot be calibrated from a screenshot')],
   ['L1 THE CORE ISSUE is recorded as a rule: adopt the reference\'s ARCHITECTURE, not its parts', 'docs/knowledge-base.md',
     () => has(read('docs/knowledge-base.md'), 'THE CORE ISSUE IN MY APPROACH', 'ADOPT THE REFERENCE\'S ARCHITECTURE FOR THAT LAYER', 'BUILD THE WORLD', 'BUILD THE THINGS', 'THEN THE EVENTS')],
   ['L2 A window is a SPRITE: frame, glass and sill - not one dark rectangle', 'src/vector.js',
