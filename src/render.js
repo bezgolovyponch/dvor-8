@@ -414,6 +414,22 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     if (b.x > cx + w + 6 || b.x < cx - 6) continue;
     for (const px of bloomPixels(pal, STEPS, b, seconds)) { ctx.fillStyle = css(pal[px.i]); ctx.fillRect(px.x, px.y, 1, 1); }
   }
+  // THE INFO OUTLINE: the thing the player asked about, drawn in its own border while the answer is on screen.
+  const mark = world.infoMark;
+  if (mark && seconds < mark.until && mark.poly && mark.poly.length > 3) {
+    ctx.save();
+    ctx.strokeStyle = '#9ff5c8';
+    ctx.lineWidth = PX;
+    ctx.setLineDash([PX * 2, PX]);
+    ctx.beginPath();
+    for (let i = 0; i < mark.poly.length; i += 1) {
+      const [ax, ay] = mark.poly[i], [bx, by] = mark.poly[(i + 1) % mark.poly.length];
+      if (i === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+      ctx.lineTo(bx, by);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
   // Corner brackets on everything still standing and in view: what can be hit is never a guess.
   for (const r of world.regions) {
     if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;

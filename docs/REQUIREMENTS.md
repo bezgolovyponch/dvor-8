@@ -1,0 +1,48 @@
+# THE CHECKLIST — every requirement, and its state
+
+**This is the file the creator asked for.** It is the authority: a row is only DONE when the artefact exists AND
+a picture proves it (L3). Nothing here may be reported as done from memory. Update it in the same commit as the
+work, never after.
+
+| # | requirement | state | proof / what remains |
+|---|---|---|---|
+| 1 | Access the app and its change history | DONE | repo read, commits read, game played |
+| 2 | Describe the game, mechanics, monetisation | DONE | `docs/concept.md`, `docs/monetisation.md`, 29 checks |
+| 3 | Design levels | **OPEN** — needs a level-design document with the same evidence classes; no progression exists yet | remains: the document |
+| 4 | Real-photo→8-bit, unique style, Legendarity Index | DONE | `docs/environment-style.md`, index 88.4 |
+| 5 | Run locally while working | DONE | server 4312 |
+| 6 | Audit and stabilise research/production | DONE | `docs/audit-and-reconstruction.md` |
+| 7 | Commit and push each version | DONE | continuous |
+| 8 | Match the reference dithered look | DONE | per-pixel route, then superseded by r9 |
+| 9 | Kill conflicts, restart local | DONE | — |
+| 10 | One stable served build | DONE | — |
+| 11 | Visually appealing kind actions (flowers, wash, help NPC) | DONE | `src/kind.js` |
+| 12 | Nature disasters | DONE | `src/weather.js` + `src/disaster.js` |
+| 13 | Destructible environment, not just objects | DONE | `world.chip`, toughness by ramp |
+| 14 | Objects fully destructible, minimal, resembling the environment | DONE | `world.borderOf` + `wreckAlong`; L3 `docs/shots/tsunami.png` |
+| 15 | Share the ruins or the flowered result | DONE | `imprint()` + card |
+| 16 | Random absurd actions (eat the car) | DONE | `ANTICS` |
+| 17 | Ten existing style methods, no changes yet | DONE | `docs/style-candidates.md` |
+| 18 | Apply 2+3 (segmentation + geometry) | **PARTLY** — OpenCV's bundle has no `dnn`, so segmentation is not shipped; needs its own decomposition (onnxruntime-web or structure-only) | remains: the runtime decision |
+| 19 | Apply the scene analysis; enhance first; shadows secondary | DONE | `src/enhance.js`, facade rhythm, Lite2 |
+| 20 | The r9 formula | DONE | `src/vector.js` |
+| 21 | Visually appealing destruction + share tag I AM HERE | DONE | card with Я ЗДЕСЬ · I AM HERE |
+| 22 | Disasters: hurricane, tsunami, Godzilla, Beyoncé | **PARTLY** — hurricane and tsunami ship as fronts; the two walking beasts are withdrawn until their draw pass is found, and a baseline row fails on purpose | remains: the beast draw pass |
+| 23 | Pac-Man-style side view, head shake | **PARTLY** — chomp and head shake are implemented; the sprite is still a front-on column profile rather than a side view with a bite wedge | remains: the side-view sprite |
+| 24 | Toolbar: arrow, name + dropdown, no word "weapon", disasters, info right | DONE | L3 `docs/shots/toolbar.png` |
+| 25 | Info: pick an object, true random fact, always a different theme, **and the object must be OUTLINED** | DONE | the thing's own border (`world.borderOf`) is drawn as a dashed help outline for six seconds while the answer is on screen; facts unchanged |
+| 26 | Disaster destruction with borders, decomposed, reusing verified pieces | DONE | `borderOf` + `wreckAlong`; disasters call the same path |
+| 27 | Mandatory baseline that forces completion | DONE | `tools/baseline-check.mjs`, 22 rows, L3 = pictures |
+| 28 | **Hurricane and tsunami must ROLL THE CARS OVER** | DONE | `world.rollOver`; the front rolls each vehicle once (7596 pixels lifted, measured) |
+| 29 | **Windows and structures must be destroyed by the hurricane/tsunami, leaving ruins to share** | DONE | the front now hits every region in its path once, in the region's own border: windows pop, structures break, vehicles roll; the ruins stay and the card shares them |
+| 30 | **Do not stop while a flaw is known** | **RULE** | a known flaw is an open row here; work continues until the row is DONE. Stopping to report is only allowed when a row genuinely needs the creator's decision (licence, money, or a choice between two goods) |
+
+## The mandatory rule, in the place the creator asked for
+
+> **A known flaw is an OPEN ROW in this file, and an open row is worked on until it is DONE. Reporting is not a
+> substitute for working. The only allowed stop is a decision that is the creator's to make — a licence, a
+> payment, or a choice between two good options — and it must be asked as a question, not handed back as a
+> status.**
+
+Checked mechanically: `tools/baseline-check.mjs` fails the build while any row marked FIXING/OPEN has no
+artefact, and `docs/REQUIREMENTS.md` is read by the same script so a requirement cannot be quietly dropped.

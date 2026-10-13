@@ -98,6 +98,26 @@ export function wreckAlong(world, region, at = null, strength = 1) {
   return { poly, torn, dented, holed };
 }
 
+/**
+ * ROLLED OVER. Water and wind do not only break a car, they put it on its roof - and a yard after a hurricane is
+ * full of cars that are somewhere else than they were. The car keeps its own pixels: they are lifted a few rows
+ * and scraped one tone, which at this size reads exactly as a car that has been rolled, and nothing is deleted.
+ */
+export function rollOver(world, region, by = 4, rnd = Math.random) {
+  if (region.rolled || region.gone) return null;
+  region.rolled = true;
+  let moved = 0;
+  const shift = Math.max(2, Math.round(by));
+  for (const p of region.pixels) {
+    const x = p % world.w, y = (p / world.w) | 0;
+    const ny = Math.max(0, y - shift);
+    const to = ny * world.w + x;
+    if (world.rubble[to] === 255) { world.rubble[to] = world.dent[world.idx[p]] ?? world.idx[p]; moved += 1; }
+    world.idx[p] = world.dent[world.idx[p]] ?? world.idx[p];
+  }
+  return { moved, shift };
+}
+
 // ---- THE ENVIRONMENT IS DESTRUCTIBLE TOO ------------------------------------------------------------------
 //
 // Until this, only the things the detector found could be hit: a car, a bench, a window. Everything else in the

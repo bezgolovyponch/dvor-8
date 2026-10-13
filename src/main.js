@@ -30,7 +30,7 @@ import { sfx, unlock, setMuted } from './audio.js';
 import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
 import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, antic, WHIMSY, FLOWERS, WASH, HELP } from './kind.js';
 import { STEPS } from './flat.js';
-import { chip, surfaceAt, imprint } from './world.js';
+import { chip, surfaceAt, imprint, borderOf, wreckAlong, rollOver } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
 import { factFor } from './lore.js';
 import { DISASTERS, ORDER as DISASTER_ORDER, makeDisaster, rollDisaster, stepDisaster, beastPixels, beastAt } from './disaster.js';
@@ -577,6 +577,30 @@ function disasterSays(ev) {
     return;
   }
   if (ev.type === 'front') {
+    // AND THE THINGS IN THE WAY. A front that only scraped cells would leave every car and every window standing
+    // in a wrecked yard, which is not what a hurricane does. Each thing the line reaches takes ONE hit in its own
+    // border the first time the front touches it, and a vehicle is ROLLED OVER - water and wind put a car on its
+    // roof, and that is the picture everyone has of a street after a storm.
+    for (const r of world.regions) {
+      if (r.gone || r.hurled) continue;
+      if (ev.x < r.x - 2 || ev.x > r.x + r.w + 2) continue;
+      r.hurled = true;
+      const at = { x: Math.max(r.x, Math.min(r.x + r.w, ev.x)), y: r.cy };
+      if (/car|truck|bus|van|motorcycle/.test(r.kind)) {
+        wreckAlong(world, r, at, 1.2);
+        const rolled = rollOver(world, r, 3 + Math.round(rnd() * 3), rnd);
+        pop('ПЕРЕВЕРНУЛО', r.cx, r.y - 6, 'warn');
+        world.score += (rolled ? 30 : 0) + 20;
+        navigator.vibrate?.(16);
+      } else {
+        wreckAlong(world, r, at, r.kind === 'window' ? 1.6 : 1);
+        pop(r.kind === 'window' ? 'ОКНО ВЫБИЛО' : 'СЛОМАЛО', r.cx, r.y - 4, 'warn');
+        world.score += 15;
+      }
+      // windows and structures are hit for real: the hit is counted, so the thing ends up GONE like any other
+      r.hits += 1;
+      if (r.hits >= r.hp) { r.gone = true; r.hits = r.hp; }
+    }
     // THE FRONT ITSELF. Every cell the line covers takes one step down the ladder the whole game uses:
     // intact -> scraped one tone -> torn -> void. High first, ground last, which is what wind does.
     const x = ev.x, top = Math.floor(world.h * (1 - ev.top * 0.85));
@@ -1088,6 +1112,17 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
     if (!infoOn || stage !== 'play' || !world) return;
     const at = toWorld(e);
     const t = pick(world, at.x, at.y);
+    // THE OBJECT IS OUTLINED WHILE IT IS DESCRIBED. Info mode was returning a line of text about a thing the
+    // player could not see marked - a mechanic that tells you about something without pointing at it. The border
+    // is the thing's OWN border (world.borderOf), drawn as ink for a few seconds, exactly like the target
+    // brackets but in the help colour.
+    if (t) {
+      const poly = borderOf(world, t);
+      world.infoMark = { poly, until: clock + 6, label: t.label, kind: t.kind };
+      pop(t.label.toUpperCase(), t.cx, t.y - 8, 'tag');
+    } else {
+      world.infoMark = null;
+    }
     const f = factFor(lastTheme, rnd);
     lastTheme = f.theme;
     const what = t ? t.label : 'этот двор';

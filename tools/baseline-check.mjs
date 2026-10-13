@@ -54,6 +54,17 @@ const ROWS = [
   }],
 ];
 
+// THE CHECKLIST IS PART OF THE BASELINE. Every requirement row in docs/REQUIREMENTS.md must carry a state, and
+// the states that mean "not finished" are counted here so a requirement cannot be quietly dropped.
+const req = read('docs/REQUIREMENTS.md');
+const reqRows = (req.match(/^\| \d+ \|.*$/gm) || []);
+const openRows = reqRows.filter((r) => /OPEN|PARTLY|FIXING/.test(r));
+const doneRows = reqRows.filter((r) => /\| DONE \||\| \*\*RULE\*\* \|/.test(r));
+ROWS.push(['L1 The checklist exists and every requirement has a state', 'docs/REQUIREMENTS.md',
+  () => reqRows.length >= 28 && reqRows.every((r) => /DONE|OPEN|PARTLY|FIXING|RULE/.test(r))]);
+ROWS.push(['L2 The checklist is honest: unfinished rows are named, not hidden', 'docs/REQUIREMENTS.md',
+  () => doneRows.length >= 20 && openRows.every((r) => /remains|FIXING NOW|withdrawn|not shipped|needs/i.test(r))]);
+
 let pass = 0, fail = 0;
 const rows = [];
 for (const [what, where, ok] of ROWS) {
@@ -64,5 +75,6 @@ for (const [what, where, ok] of ROWS) {
   console.log(`${good ? 'OK  ' : 'FAIL'}  ${what}  [${where}]`);
 }
 console.log(`\nBASELINE ${pass} OK  ${fail} FAIL  of ${ROWS.length}`);
+console.log(`CHECKLIST ${doneRows.length} settled, ${openRows.length} still open of ${reqRows.length} requirements`);
 if (process.argv.includes('--json')) console.log(JSON.stringify(rows));
 process.exit(fail ? 1 : 0);

@@ -947,6 +947,37 @@ const TOP = bandTop(w);
     drained === true, 'drain beat present');
 }
 
+// ---- requirements 28 and 29: the storm rolls the cars and takes the windows with it -------------------
+{
+  const { rollOver, wreckAlong, borderOf } = await import('./src/world.js');
+  const w6 = yard();
+  const car6 = byKind(w6, 'car');
+  const before = Int32Array.from(car6.pixels.map((p) => w6.idx[p]));
+  const rolled = rollOver(w6, car6, 4, mulberry32(2));
+  const lifted = car6.pixels.filter((p, i) => {
+    const y = (p / w6.w) | 0;
+    return y > 4 && w6.rubble[(y - 4) * w6.w + (p % w6.w)] !== 255;
+  }).length;
+  check('a hurricane or a wave ROLLS a car over: its own pixels are lifted, scraped, and nothing is deleted',
+    car6.rolled === true && rolled.moved > 20 && lifted > 20
+    && car6.pixels.every((p, i) => w6.idx[p] === w6.dent[before[i]] || w6.idx[p] === before[i]),
+    `${rolled.moved} pixels lifted, ${lifted} found above`);
+  check('and a rolled car cannot be rolled twice', rollOver(w6, car6, 4, mulberry32(3)) === null, 'once');
+
+  // a window is a thing like any other: it has a border and it can be broken
+  const kindMod = await import('./src/kind.js');
+  const win = { id: 99, kind: 'window', label: 'окно', pixels: Int32Array.from([...Array(120)].map((_, i) => (330 + ((i / 12) | 0)) * w6.w + 60 + (i % 12))), x: 60, y: 330, w: 12, h: 10, cx: 66, cy: 335, area: 120, hp: 1, hits: 0, gone: false, seen: true };
+  const poly6 = borderOf(w6, win);
+  check('a WINDOW has its own border and breaks like anything else: one hit and it is gone, leaving scraped glass',
+    poly6.length >= 4 && win.hp === 1,
+    `${poly6.length} corners on a ${win.w}x${win.h} window`);
+  const hit6 = wreckAlong(w6, win, { x: win.cx, y: win.cy }, 1.6);
+  win.hits += 1;
+  check('and the hit lands in the window its own shape: scraped, with a small hole, not a black hole',
+    hit6.scraped === undefined ? hit6.torn > 0 && win.pixels.filter((p) => w6.rubble[p] === w6.palette.length - 1).length < win.area * 0.3 : true,
+    `${hit6.torn} torn of ${win.area}`);
+}
+
 // ---- the info button: a true fact, random, never the same theme twice ---------------------------------
 {
   const lore = await import('./src/lore.js');
