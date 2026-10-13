@@ -7,7 +7,7 @@
 // day's news from news.js. frame.js finds the windows in the walls, glass.js says how one breaks, decal.js
 // keeps the colour thrown at the yard, parts.js throws the pieces. This file wires them to the page and the finger.
 
-import { styliseFlat } from './stylise.js';
+import { styliseFlat, styliseVector } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { demoYard } from './demo.js';
@@ -54,6 +54,7 @@ let yard = null;        // the photograph, its picture and its things: kept, so 
 let world = null, fx = null, buf = null;
 let stage = 'title';    // title → detect → scan → play → done   (or → empty)
 let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
+const styleChoice = new URLSearchParams(location.search).get('style') || 'flat';
 let weather = makeWeather('clear');               // the day's sky (weather.js)
 let hand = 'stone', item = THROWABLES.stone;      // hand/item: what you THROW
 let clock = 0, scanT = 0, endIn = 0, last = performance.now();
@@ -217,7 +218,11 @@ function build(rgba, w, h, dets, big = null) {
   // about the player's world. What it buys: a found thing is never absorbed into its background and never
   // painted the same colour as what it stands on, so a grey car on grey asphalt is still a car in the picture.
   // It invents nothing — the boxes come from the detector, and a box that finds nothing marks nothing.
-  const st = styliseFlat(rgba, w, h, { marks: dets });
+  // WHICH PAINTER. `?style=vector` gives the r9 vector route, `?style=flat` (the default) the per-pixel one.
+  // Both are the same contract, so nothing downstream knows or cares; the switch exists so the two can be
+  // looked at side by side on the same photograph in the same session before either is called the style.
+  const useVector = styleChoice === 'vector';
+  const st = useVector ? styliseVector(rgba, w, h, { marks: dets }) : styliseFlat(rgba, w, h, { marks: dets });
   const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big, rgba);
   if (!regions.length) return false;
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
@@ -414,7 +419,7 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
-  const st = styliseFlat(shot.rgba, w, h, { marks: found.kept }), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
+  const st = (styleChoice === 'vector' ? styliseVector(shot.rgba, w, h, { marks: found.kept }) : styliseFlat(shot.rgba, w, h, { marks: found.kept })), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);

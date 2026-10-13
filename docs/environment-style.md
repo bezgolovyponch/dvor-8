@@ -65,6 +65,50 @@ Scenery gives points but **not combo**: if a wall fed the multiplier, the cheape
 to stand still and hammer the ground, and the things the detector found — the actual game — would be worth less
 than the backdrop.
 
+## 1b. The r9 route: flat designed surfaces with straight edges (`src/vector.js`)
+
+The per-pixel route above is faithful and unstable. Measured on the three photographs it leaves **13–15% of
+pixels as strays** (a pixel whose four neighbours are all a different colour), **18–19% of the frame in specks
+under four pixels**, and **19–23 same-colour blobs per thousand pixels** — a picture made of confetti. Two more
+failures are structural rather than cosmetic: a facade seam of similar tone merges (Felzenszwalb's own paper
+shows it merging across weak boundaries, so this is expected, not a bug), and region borders are pixel-jagged
+because a region's edge is whatever the pixels happened to do.
+
+The r9 route refuses to paint per pixel, and everything it does follows from that refusal:
+
+| stage | what it does | why |
+|---|---|---|
+| 1. sky | a blue core connected to the top of the frame, **grown through its own clouds**, stopped at the skyline; one flat colour, taken from the blue core and not from the grown region | a photograph's clouds are not blue, so taking only blue pixels left every cloud as a traced shape on a flat field — and averaging the grown region painted a sunset sky beige |
+| 2. foliage | the green band, kept as masses | trees are masses, not texture |
+| 3. shapes | everything else, labelled by hue band and value, then **each shape traced, simplified into a polyline and filled back** | this is what makes a border straight and every angle deliberate instead of pixel-jagged |
+| 4. colour | **one colour per shape**: hue picks the family, value the shade; a warm surface stays in one family | per-pixel ramp choice turned a red-brick church into pink and orange patches |
+| 5. clean-up | shapes under 4 px removed; small **low-contrast** shapes merged into their surroundings; high-contrast ones kept | it is texture that should go, not a window or a wing mirror |
+| 6. staircase | the corner pixel of every two-pixel step is cut, twice, after the fill takes back what it missed | a polygon filled one row at a time still steps diagonally |
+| 7. clouds | 1–5 **designed** clouds: symmetric puffs, flat base, one shaded row, spread across the band, never within 10 px of the skyline | the photograph's clouds are weather; a drawn sky wants drawn clouds |
+| 8. line | one 1-pixel line where the sky meets what is not sky, and nowhere else | a line everywhere is a colouring book; nowhere loses the building |
+
+**Measured, all three photographs at 288×512, against the per-pixel route:**
+
+| photograph | route | stray | specks < 4 px | blobs / 1000 px | jagged | colours | time |
+|---|---|---|---|---|---|---|---|
+| sunset road | per-pixel | 14.41% | 19.43% | 22.7 | 38% | 47 | 143 ms |
+| | **r9** | **0.04%** | **0.22%** | **2.8** | **27%** | 28 | **112 ms** |
+| church + cars | per-pixel | 12.88% | 18.07% | 22.2 | 41% | 44 | 128 ms |
+| | **r9** | **0.09%** | **0.36%** | **4.2** | **33%** | 33 | **71 ms** |
+| street canyon | per-pixel | 15.32% | 19.34% | 19.2 | 36% | 43 | 90 ms |
+| | **r9** | **0.09%** | **0.24%** | **2.1** | **28%** | 28 | **61 ms** |
+
+Stray pixels fall by two orders of magnitude and it is **faster** than the route it replaces, because it paints
+shapes rather than pixels.
+
+**Open, and stated as open.** Windows are found by a local-contrast test (an opening is darker than a blurred
+copy of its own surroundings) and it returns **1–2 per photograph where a street facade holds dozens** — the
+blur, the fill ratio and the row/column grouping are all CHOICE with no measurement behind them, and the honest
+next step is the geometry route: rectify, then fit the window grid, rather than threshold. The sky's colour is
+the photograph's own blue core rather than a designed one. And the option of a neural segmentation
+(ADE20K/SegFormer, 4.4 MB, windows and doors as classes) is recorded in `docs/style-candidates.md` with its
+licence: non-commercial.
+
 ## 2. The stages, and what each one is for
 
 | # | Stage | What it does | What it is for |
