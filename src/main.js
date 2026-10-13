@@ -10,7 +10,6 @@
 import { styliseFlat, styliseVector } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
-import { demoYard } from './demo.js';
 import { makeWorld, pick, strike, tick, left } from './world.js';
 import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js';
 import { MODES, splashTargets, chainNext } from './modes.js';
@@ -473,14 +472,6 @@ async function addPhoto(file) {
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);
   note(`снимок ${yard.more.length + 1} встал дальше по улице — иди направо · ${names.length ? names.join(', ') : 'вещей на нём не узнал, но улица твоя'}`);
-}
-function fromDemo() {
-  const [w, h] = window.innerHeight >= window.innerWidth ? [SHORT, LONG] : [LONG, SHORT];
-  const demo = demoYard(w, h, 8);
-  me = null; cam = { x: 0, y: 0, w, h };
-  setSize(w, h);
-  build(demo.rgba, w, h, demo.dets, null, true);   // drawn art: the vector route is for photographs only
-  note('демо: нарисованный двор, вещи в нём известны заранее');
 }
 
 // ---- a landing ------------------------------------------------------------------------------------
@@ -1028,7 +1019,6 @@ $('picIn').addEventListener('change', (e) => {
   e.target.value = '';
   if (file) addPhoto(file).catch((error) => note(`снимок не добавился: ${error.message}`));
 });
-for (const id of ['demoBtn', 'demoBtn2']) $(id).addEventListener('click', () => { unlock(); fromDemo(); });
 $('againBtn').addEventListener('click', begin);
 $('restartBtn').addEventListener('click', () => { if (yard && (stage === 'play' || stage === 'done' || stage === 'scan')) begin(); });
 const home = () => {

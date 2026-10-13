@@ -11,7 +11,6 @@ import { buildPalette, grade, lookThrough, scorchMap, nearest, luma, toHsl, LOOK
 import { styliseFlat } from './src/stylise.js';
 import { RAMPS as THROWABLE_RAMPS, STEPS as THROWABLE_STEPS, RESERVED as HUD_HUES } from './src/flat.js';
 import { TARGETS, tilesFor, merge, toRegions, MAX_TARGETS, MIN_SCORE } from './src/objects.js';
-import { demoYard } from './src/demo.js';
 import { makeWorld, pick, strike, tick, left, DEBRIS_MAX } from './src/world.js';
 import { shakeFor, TRAUMA_DECAY, TRAUMA_POW, TRAUMA_DENT, TRAUMA_BREAK, makeFx, throwThing, impact, burst, stepFx, shakeOffset, HIT_PAUSE, BREAK_PAUSE, SHAKE_MAX } from './src/fx.js';
 import { MODES, splashTargets, chainNext, inFocus } from './src/modes.js';
@@ -41,7 +40,45 @@ const rows = [];
 const section = (name) => rows.push({ name });
 const check = (what, ok, detail = '') => { rows.push({ what, ok: Boolean(ok), detail: String(detail) }); if (ok) pass += 1; else fail += 1; };
 const W = SHORT, H = LONG, N = W * H;
-const DEMO = demoYard(W, H, 8);
+// A SYNTHETIC PHOTOGRAPH, not the game's drawn yard. The drawn demo was deleted on the creator's instruction:
+// it was a test screen pretending to be a product, and every visual fault survived on it. This fixture is what a
+// camera gives - a gradient sky, a textured wall, a road, noise - plus the boxes a detector would return, so the
+// tests still drive the real code paths without any drawn art existing at all.
+function syntheticPhoto(w, h) {
+  const rgba = new Uint8ClampedArray(w * h * 4);
+  let seed = 20261013;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+    const i = (y * w + x) * 4;
+    const t = y / h;
+    let r, g, b;
+    if (t < 0.30) { r = 150 + 40 * t + rnd() * 8; g = 175 + 30 * t + rnd() * 8; b = 215 + 20 * t + rnd() * 8; }        // sky
+    else if (t < 0.66) { const k = 0.6 + 0.5 * (x / w); r = 205 * k + rnd() * 10; g = 190 * k + rnd() * 10; b = 168 * k + rnd() * 10; }   // a lit wall
+    else { r = 96 + rnd() * 14; g = 92 + rnd() * 14; b = 90 + rnd() * 14; }                                            // road
+    if (t > 0.34 && t < 0.50 && x > w * 0.12 && x < w * 0.24) { r = 38; g = 40; b = 58; }                                // a window
+    if (t > 0.34 && t < 0.50 && x > w * 0.62 && x < w * 0.74) { r = 38; g = 40; b = 58; }
+    // the things the detector found, each in its own solid colour against the road: a region only exists if its
+    // pixels differ from the ring around its box, which is exactly what the real detector gives us
+    const fx2 = x / w, fy2 = y / h;
+    if (fx2 > 0.08 && fx2 < 0.34 && fy2 > 0.68 && fy2 < 0.80) { r = 176; g = 178; b = 184; }      // a pale car
+    if (fx2 > 0.52 && fx2 < 0.74 && fy2 > 0.66 && fy2 < 0.77) { r = 34; g = 44; b = 96; }         // a dark car
+    if (fx2 > 0.30 && fx2 < 0.48 && fy2 > 0.82 && fy2 < 0.89) { r = 138; g = 108; b = 70; }       // a bench
+    if (fx2 > 0.44 && fx2 < 0.52 && fy2 > 0.78 && fy2 < 0.88) { r = 58; g = 96; b = 54; }         // a plant
+    if (fx2 > 0.56 && fx2 < 0.65 && fy2 > 0.80 && fy2 < 0.89) { r = 96; g = 72; b = 48; }          // a chair
+    if (fx2 > 0.78 && fx2 < 0.92 && fy2 > 0.72 && fy2 < 0.84) { r = 26; g = 26; b = 30; }          // a bicycle
+    rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b; rgba[i + 3] = 255;
+  }
+  const dets = [
+    { label: 'car', score: 0.8, x: 0.08, y: 0.68, w: 0.26, h: 0.12 },
+    { label: 'car', score: 0.7, x: 0.52, y: 0.66, w: 0.22, h: 0.11 },
+    { label: 'bench', score: 0.6, x: 0.30, y: 0.82, w: 0.18, h: 0.07 },
+    { label: 'potted plant', score: 0.5, x: 0.44, y: 0.78, w: 0.08, h: 0.10 },
+    { label: 'chair', score: 0.5, x: 0.56, y: 0.80, w: 0.09, h: 0.09 },
+    { label: 'bicycle', score: 0.6, x: 0.78, y: 0.72, w: 0.14, h: 0.12 },
+  ];
+  return { rgba, dets };
+}
+const DEMO = syntheticPhoto(W, H);   // the name stays so the rest of the suite reads the same
 const yard = () => { const st = styliseFlat(DEMO.rgba, W, H); const seg = toRegions(DEMO.dets, DEMO.rgba, W, H); return makeWorld({ w: W, h: H, photo: DEMO.rgba, idx: st.idx, palette: st.palette, ...seg, seed: 8 }); };
 const byKind = (w, kind, n = 0) => w.regions.filter((r) => r.kind === kind)[n];
 
