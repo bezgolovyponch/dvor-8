@@ -39,18 +39,20 @@ export function styliseFlat(rgba, w, h, opts = {}) {
   // THE MATERIAL MAP, read back from flat.js's own decision rather than measured again.
   //
   // Two things need to know where the sky is: the window finder skips it when looking for dark openings in a
-  // wall, and the paint refuses to land on it. Both read `what`. A pixel's palette index is
-  // `ramp * STEPS + tone`, so its ramp comes straight out of the index and the ramp's own NAME says what it
-  // is — no colour rule, no threshold, and no second classifier that could disagree with the painter.
+  // wall, and the paint refuses to land on it. Both read `what`.
   //
-  // An earlier version returned null here, on the honest grounds that flat.js does not classify materials.
-  // That was right about the naming and wrong about the consequence: `takesPaint` reads
-  // `!what || what[i] !== SKY`, so a null map means EVERY pixel takes paint, and a thrown ball of paint
-  // landed on the sky. The flaw was hidden by a harness assertion that compared a total splat count and so
-  // could not fail.
+  // WHAT CHANGED IN REVISION 2, and why this reads a role instead of a ramp name. The route used to force every
+  // bright top-of-frame region onto the sky ramp, so "the ramp is sky" and "this is sky" were the same
+  // sentence. It no longer forces it: a grey overcast sky is painted from the metal ramp and a sunset cloud
+  // bank from the stone ramp, because forcing them blue was the bug that turned a sunset sky blue. The sky is
+  // therefore carried explicitly as a ROLE in `regions.role`, and this map reads that. Re-deriving it here from
+  // a colour rule would be a second classifier, free to disagree with the painter.
   const out = st.palette.length - 2;
   const what = new Uint8Array(n);
+  const role = st.regions && st.regions.role;
+  const SKY_ROLE = 1;
   for (let i = 0; i < n; i += 1) {
+    if (role) { what[i] = role[st.regions.label[i]] === SKY_ROLE ? SKY : OTHER; continue; }
     const k = st.idx[i];
     if (k >= out) { what[i] = OTHER; continue; }
     const ramp = RAMPS[(k / STEPS) | 0];

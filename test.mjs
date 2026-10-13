@@ -9,7 +9,7 @@
 
 import { buildPalette, grade, lookThrough, scorchMap, nearest, luma, toHsl, LOOKS, COLOURS, OUTLINE, VOID, SIZE } from './src/palette.js';
 import { styliseFlat } from './src/stylise.js';
-import { RAMPS as THROWABLE_RAMPS, STEPS as THROWABLE_STEPS } from './src/flat.js';
+import { RAMPS as THROWABLE_RAMPS, STEPS as THROWABLE_STEPS, RESERVED as HUD_HUES } from './src/flat.js';
 import { TARGETS, tilesFor, merge, toRegions, MAX_TARGETS, MIN_SCORE } from './src/objects.js';
 import { demoYard } from './src/demo.js';
 import { makeWorld, pick, strike, tick, left, DEBRIS_MAX } from './src/world.js';
@@ -71,18 +71,85 @@ check('the palette spans deep shadow to bright light', (() => {
   const t = st.palette.slice(0, OUT_OF).map(luma);
   return Math.min(...t) <= 0.17 && Math.max(...t) >= 0.8;
 })(), `darkest ${Math.min(...st.palette.slice(0, OUT_OF).map(luma)).toFixed(2)}, lightest ${Math.max(...st.palette.slice(0, OUT_OF).map(luma)).toFixed(2)}`);
-check('a region is FLAT: it holds exactly one colour, which is why grain cannot survive',
+// THE FLATNESS PROPERTY, RESTATED FOR THE MATERIAL DITHER (docs/environment-style.md, stage 3c).
+//
+// What this check has always protected is that the PHOTOGRAPH'S GRAIN cannot survive: asphalt speckle, leaf
+// texture and JPEG ringing are uncorrelated and multi-coloured, so a region that could hold arbitrary colours
+// would hold them. The original wording — one colour per region — was the strongest way to say that while the
+// route had no texture stage at all. The route now paints a ROUGH surface with the two ADJACENT tones of its
+// OWN ramp, split by a fixed ordered threshold, which is a documented pixel-art convention for material and
+// not noise. So the property is stated exactly: a region holds one colour, or two tones that are neighbours
+// inside one ramp, and never anything else. A smooth region must still be exactly one colour, and that is
+// asserted separately below so the weaker wording cannot hide a regression.
+const regionColours = (label, idx, w, h, outline) => {
+  const per = new Map();
+  for (let i = 0; i < w * h; i += 1) {
+    if (idx[i] === outline) continue;                     // the outline is drawn over the top
+    const r = label[i];
+    if (!per.has(r)) per.set(r, new Set());
+    per.get(r).add(idx[i]);
+  }
+  return per;
+};
+const allowedInRegion = (set) => {
+  if (set.size <= 1) return true;
+  if (set.size > 2) return false;
+  const [a, b] = [...set];
+  const rampA = Math.floor(a / THROWABLE_STEPS), rampB = Math.floor(b / THROWABLE_STEPS);
+  return rampA === rampB && Math.abs((a % THROWABLE_STEPS) - (b % THROWABLE_STEPS)) === 1;
+};
+check('a region is one colour, or two ADJACENT tones of its own ramp — never a scatter',
   (() => {
-    const label = st.regions.label;
-    const seenPer = new Map();
-    for (let i = 0; i < N; i += 1) {
-      if (st.idx[i] === OUT_OF) continue;                 // the outline is drawn over the top
-      const r = label[i];
-      if (seenPer.has(r) && seenPer.get(r) !== st.idx[i]) return false;
-      seenPer.set(r, st.idx[i]);
-    }
-    return seenPer.size > 4;
+    const per = regionColours(st.regions.label, st.idx, W, H, OUT_OF);
+    return per.size > 4 && [...per.values()].every(allowedInRegion);
   })(), `${st.regions.nr} regions`);
+// THE RESERVED BAND. In this game's HUD, pink and cyan mean "you can touch this": the bracket round a target,
+// the pips that count its hits, the stick. No colour in the yard may come near those hues, or the signal stops
+// meaning anything. Measured before the rule existed: the sky ramp's darkest tone sat 1 degree from the HUD
+// cyan on the sunset photograph. The margin asserted here is 8 degrees, and the table is built to keep 10.8.
+check('no colour in the yard comes near the hues that mean "interactive"', (() => {
+  const hueOf = ([r, g, b]) => {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    if (mx === mn) return null;
+    let hh;
+    if (mx === r) hh = 60 * (((g - b) / (mx - mn)) % 6);
+    else if (mx === g) hh = 60 * ((b - r) / (mx - mn) + 2);
+    else hh = 60 * ((r - g) / (mx - mn) + 4);
+    return (hh + 360) % 360;
+  };
+  let closest = 360;
+  for (const c of st.palette.slice(0, OUT_OF)) {
+    const hh = hueOf(c);
+    if (hh === null) continue;
+    for (const [a, b] of HUD_HUES) closest = Math.min(closest, Math.abs(hh - a), Math.abs(hh - b));
+  }
+  return closest >= 8;
+})(), `${HUD_HUES.length} reserved bands`);
+
+// VALUE GROUPING (docs/environment-style.md, stage 3b). Two touching shapes that the photograph separates by a
+// clear step in value must not be painted the same colour: with the line layer thinned, the tone is the only
+// thing holding them apart, and a wall and the house in front of it become one silhouette without it.
+check('two touching shapes the photograph separates by value are never painted the same', (() => {
+  const label = st.regions.label, paint = new Int32Array(st.regions.nr).fill(-1);
+  for (let i = 0; i < N; i += 1) if (st.idx[i] !== OUT_OF) paint[label[i]] = st.idx[i];
+  const pairs = new Map();
+  for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) {
+    const i = y * W + x, a = label[i];
+    const add = (j) => { const b = label[j]; if (a === b) return; const k = a < b ? a * 1e6 + b : b * 1e6 + a; pairs.set(k, (pairs.get(k) || 0) + 1); };
+    if (x < W - 1) add(i + 1);
+    if (y < H - 1) add(i + W);
+  }
+  let checked = 0, failed = 0;
+  for (const [k, len] of pairs) {
+    if (len < 3) continue;
+    const a = Math.floor(k / 1e6), b = k % 1e6;
+    if (Math.abs(st.regions.luma[a] - st.regions.luma[b]) / 255 < 0.12) continue;
+    checked += 1;
+    if (paint[a] === paint[b]) failed += 1;
+  }
+  return checked > 20 && failed === 0;
+})(), `${st.regions.nr} regions`);
+
 const flat = styliseFlat(new Uint8ClampedArray(N * 4).fill(128), W, H);
 check('a blank photograph does not crash the palette', flat.palette.length === st.palette.length && flat.idx.every((v) => v < flat.palette.length),
   `palette ${flat.palette.length}, max index ${Math.max(...flat.idx)}`);
@@ -532,16 +599,15 @@ const TOP = bandTop(w);
   const used = new Set(Array.from(st.idx));
   check('a surface is painted as ONE flat colour: a region cannot contain two',
     st.regions.nr > 0 && st.palette.length >= st.regions.nr ? true : true);
-  // the flatness test that matters: inside a region there is exactly one palette index
-  const perRegion = new Map();
-  let flatOk = true;
-  for (let i = 0; i < W3 * H3; i += 1) {
-    const r = st.regions.label[i];
-    if (st.idx[i] === st.palette.length - 2) continue;        // the outline is drawn over the top
-    if (perRegion.has(r) && perRegion.get(r) !== st.idx[i]) flatOk = false;
-    perRegion.set(r, st.idx[i]);
-  }
-  check('every region is exactly one colour once the outline is excluded', flatOk, `${perRegion.size} regions`);
+  // the flatness test that matters, in the wording the material dither requires: one colour, or two adjacent
+  // tones of one ramp. A smooth region takes the strict form.
+  const perRegion = regionColours(st.regions.label, st.idx, W3, H3, st.palette.length - 2);
+  check('every region is one colour, or two adjacent tones of its own ramp, once the outline is excluded',
+    [...perRegion.values()].every(allowedInRegion), `${perRegion.size} regions`);
+  // The synthetic scene is four flat areas with hard edges — sky, wall, a dark window and ground — so nothing
+  // in it is rough, and the strict form of the property must hold for all of it.
+  check('a region the photograph does not make rough is exactly ONE colour',
+    [...perRegion.values()].every((v) => v.size === 1), `${[...perRegion.values()].filter((v) => v.size > 1).length} textured of ${perRegion.size}`);
   check('the palette is a FIXED structure of ramps and tones, not a cut of the photograph',
     st.palette.length === flat.RAMPS.length * flat.STEPS + 2 && flat.RAMPS.length === 6 && flat.STEPS === 4,
     `${flat.RAMPS.length} ramps x ${flat.STEPS} tones + outline + void = ${st.palette.length}`);

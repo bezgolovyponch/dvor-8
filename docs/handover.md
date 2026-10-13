@@ -14,7 +14,7 @@ environment, plays, and shares it.
 ## How to run everything
 
 ```
-node test.mjs                                  # 228 checks, must be 0 FAIL
+node test.mjs                                  # 231 checks, must be 0 FAIL
 node tools/monetisation-check.mjs              # 29 checks, must be 0 FAIL
 python3 tools/serve.py 4312                    # serve the folder (or any static server)
 BASE=http://127.0.0.1:4312/ node --experimental-websocket tools/<harness>.mjs <outdir> photos-test/a.jpg
@@ -100,5 +100,7 @@ Never quote the ×51.6 payer-layer figure. It is cross-market, it is an upper bo
 
 ## What a new chat should read first
 
-`docs/formula.md` for what the numbers are, then `docs/style.md` (decisions D1–D12) for what the picture is,
-then `src/flat.js`'s header for why the style route is what it is. Everything else is reference.
+`docs/environment-style.md` for what the picture is, stage by stage, with the measurements and the Legendarity
+Index; then `docs/style.md` (decisions D1–D41) for the rest of the look and the feel; then `docs/formula.md`
+for what the money model is. `src/flat.js`'s header carries the same reasons beside the code. Everything else
+is reference.
