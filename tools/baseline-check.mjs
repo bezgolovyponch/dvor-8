@@ -56,6 +56,8 @@ const ROWS = [
     () => has(src('main.js'), "get('style') || 'vector'", 'flat surfaces at 18%')],
   ['L1 The gate reads the DRAWN canvas, not a screenshot', 'tools/photo-shot.mjs + tools/concept-check.mjs',
     () => has(read('tools/photo-shot.mjs'), 'canvas.json', 'getImageData') && has(read('tools/concept-check.mjs'), "endsWith('.json')")],
+  ['L1 The layer-3 model is chosen by MEASUREMENT, with its licence and size', 'docs/knowledge-base.md',
+    () => has(read('docs/knowledge-base.md'), 'slimsam-77-uniform', 'Apache-2.0', '13.8 MB quantized', '3b-1')],
   ['L1 Requirement 18 is decomposed in layers, with the licence question answered per layer', 'docs/knowledge-base.md',
     () => has(read('docs/knowledge-base.md'), 'decomposed in layers', 'nvidia/mit-b0', 'PaddleSeg', 'class-agnostic', 'THE ORDER')],
   ['L1 THE RESTRICTIONS are written, nine of them, each with its proof', 'docs/REQUIREMENTS.md',

@@ -158,8 +158,8 @@ verified per checkpoint before shipping** — that is the first action of this l
 
 | piece | unblocks | state |
 |---|---|---|
-| 3a verify the SAM-family checkpoint licences and pick the smallest ONNX export | the whole of layer 3 | next action |
-| 3b wire the prompt (detector box → mask) and replace the colour cut-out | true silhouettes: outlines, damage along the silhouette, the car template on a real shape | blocked by 3a |
+| 3a verify the SAM-family checkpoint licences and pick the smallest ONNX export | the whole of layer 3 | **DONE — `Xenova/slimsam-77-uniform`, Apache-2.0, ONNX, 13.8 MB quantized** (vision encoder 8.9 MB + prompt encoder/mask decoder 4.9 MB; fp16 20.8 MB, fp32 39.9 MB). Measured from the repository, not assumed. Also Apache-2.0 and available: `facebook/sam-vit-base`, `facebook/sam2.1-hiera-tiny` (safetensors, need conversion). NOT permissive: `nrl-ai/samexporter-onnx-models` (`other`), `ChaoningZhang/MobileSAM` (no licence tag, no files) |
+| 3b wire the prompt (detector box → mask) and replace the colour cut-out | true silhouettes: outlines, damage along the silhouette, the car template on a real shape | **unblocked.** Sub-pieces, in order: **3b-1** vendor the runtime (transformers.js ESM + its ONNX/WASM backend) and load SlimSAM in the page, measuring the load cost on a phone-sized frame; **3b-2** run one prompt per detector box (the box centre/box as the prompt) and take the best mask; **3b-3** turn the mask into the region's pixels, replacing the adaptive colour cut in `objects.js`; **3b-4** measure: gate + suite on a clean frame, plus a side-by-side of the colour cut and the model cut on the Prague photograph. Each sub-piece ends with a picture and a number, and the model is used ONLY if it beats the colour cut on those |
 | 1a check MMSegmentation and PaddleSeg ADE20K checkpoint licences | layer 1 | parallel to 3a |
 | 2a if 1a fails: train window+wall on CMP Facade with the Apache backbone | layer 2 | after 1a |
 | 4 measure: gate + suite on a clean frame | confirms the piece did what it claimed | after 3b |
