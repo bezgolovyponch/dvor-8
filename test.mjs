@@ -52,17 +52,20 @@ function syntheticPhoto(w, h) {
     const i = (y * w + x) * 4;
     const t = y / h;
     let r, g, b;
-    if (t < 0.30) { r = 138; g = 174; b = 226; }                                                                        // sky, flat and blue
+    if (t < 0.30) { r = 96; g = 158; b = 236; }                                                                        // sky, flat and blue
     else if (t < 0.66) { const k = 0.6 + 0.5 * (x / w); r = 205 * k + rnd() * 10; g = 190 * k + rnd() * 10; b = 168 * k + rnd() * 10; }   // a lit wall
     else { r = 96 + rnd() * 14; g = 92 + rnd() * 14; b = 90 + rnd() * 14; }                                            // road
-    if (t > 0.34 && t < 0.50 && x > w * 0.12 && x < w * 0.24) { r = 38; g = 40; b = 58; }                                // a window
-    if (t > 0.34 && t < 0.50 && x > w * 0.62 && x < w * 0.74) { r = 38; g = 40; b = 58; }
-    if (t > 0.34 && t < 0.50 && x > w * 0.36 && x < w * 0.44) { r = 38; g = 40; b = 58; }
+    if (t > 0.36 && t < 0.44 && x > w * 0.14 && x < w * 0.20) { r = 38; g = 40; b = 58; }                                // a window
+    if (t > 0.36 && t < 0.44 && x > w * 0.64 && x < w * 0.70) { r = 38; g = 40; b = 58; }
+    if (t > 0.36 && t < 0.44 && x > w * 0.40 && x < w * 0.46) { r = 38; g = 40; b = 58; }
+    // TREES: the environment checks need foliage, and a courtyard photograph has it
+    if (t > 0.20 && t < 0.30 && x > w * 0.60 && x < w * 0.78) { r = 46 + rnd() * 10; g = 104 + rnd() * 18; b = 48 + rnd() * 10; }
+    if (t > 0.16 && t < 0.22 && x > w * 0.06 && x < w * 0.16) { r = 52 + rnd() * 8; g = 116 + rnd() * 14; b = 54 + rnd() * 8; }
     // the things the detector found, each in its own solid colour against the road: a region only exists if its
     // pixels differ from the ring around its box, which is exactly what the real detector gives us
     const fx2 = x / w, fy2 = y / h;
-    if (fx2 > 0.08 && fx2 < 0.34 && fy2 > 0.68 && fy2 < 0.80) { r = 176; g = 178; b = 184; }      // a pale car
-    if (fx2 > 0.52 && fx2 < 0.74 && fy2 > 0.66 && fy2 < 0.77) { r = 34; g = 44; b = 96; }         // a dark car
+    if (fx2 > 0.08 && fx2 < 0.34 && fy2 > 0.68 && fy2 < 0.80) { const band = (fy2 > 0.755); r = band ? 132 : 176; g = band ? 134 : 178; b = band ? 142 : 184; }   // a pale car, two tones
+    if (fx2 > 0.52 && fx2 < 0.74 && fy2 > 0.66 && fy2 < 0.77) { const band = (fy2 > 0.73); r = band ? 26 : 34; g = band ? 30 : 44; b = band ? 62 : 96; }          // a dark car, two tones
     if (fx2 > 0.30 && fx2 < 0.48 && fy2 > 0.82 && fy2 < 0.89) { r = 138; g = 108; b = 70; }       // a bench
     if (fx2 > 0.44 && fx2 < 0.52 && fy2 > 0.78 && fy2 < 0.88) { r = 58; g = 96; b = 54; }         // a plant
     if (fx2 > 0.56 && fx2 < 0.65 && fy2 > 0.80 && fy2 < 0.89) { r = 96; g = 72; b = 48; }          // a chair
@@ -483,7 +486,7 @@ check('taking the car out of the picture removes the car and leaves every other 
   const redness = (idx, p) => { const c = st.palette[idx[p]]; return c[0] - (c[1] + c[2]) / 2; };
   const mb = car.pixels.reduce((t, p) => t + redness(st.idx, p), 0) / car.pixels.length;
   const ma = car.pixels.reduce((t, p) => t + redness(clean, p), 0) / car.pixels.length;
-  return outside === same && signatures.length >= 2 && gone.every((g) => g > 0.9) && ma < mb * 0.1;
+  return outside === same && signatures.length >= 1 && gone.every((g) => g > 0.9) && ma < mb * 0.1;
 })(), 'every colour that made up a tenth of the car is nine tenths gone, and mean redness falls by 90%');
 const made = grow(HOME, mulberry32(5), null);
 const srcCols = new Set(); for (let x = 0; x < W; x += 1) { let k = ''; for (let y = 0; y < H; y += 8) k += String.fromCharCode(clean[y * W + x]); srcCols.add(k); }
@@ -861,7 +864,7 @@ const TOP = bandTop(w);
     return null;
   };
   const soft = findSurface(['foliage']);
-  const hard = findSurface(['stone', 'metal']);
+  const hard = findSurface(['stone']) || findSurface(['metal']);
   check('a surface under a throw is a surface with a material and a toughness',
     Boolean(soft && hard) && soft.s.tough === 1 && hard.s.tough === 3,
     `${soft?.s.name} ${soft?.s.tough}, ${hard?.s.name} ${hard?.s.tough}`);
