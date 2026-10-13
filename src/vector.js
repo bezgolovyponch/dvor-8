@@ -757,35 +757,130 @@ export function trace(rgba, w, h, opts = {}) {
   // nothing else. "Real objects seem real but with all the fundamental details that create shape" is this pass:
   // the details kept are the ones that CREATE the shape, and the texture of the paint is dropped.
   let objectCount = 0;
-  // OFF UNTIL THE MARKS CARRY SHAPE. `opts.marks` is the detector's bounding boxes, so "the object's outline"
-  // was the BOX's outline and every car came out as a black rounded rectangle on screen. Drawing fundamentals
-  // needs the thing's own pixels (a cut-out), which is the next piece of work; until then this pass does not
-  // run, because a wrong silhouette is worse than none.
-  if (opts.marks && opts.fundamentals === true) {
+  // ---- 5d. THE OBJECTS, CUT OUT AND REDRAWN WITH THEIR FUNDAMENTALS ------------------------------------
+  //
+  // "Each detector box is turned into the vehicle's exact outline" (scene analysis). The first attempt at this
+  // treated the BOX as the silhouette, so every car became a black rounded rectangle; the second was withdrawn
+  // for the same reason. The cut-out is what was missing, and it is the cheap version of the analysis's GrabCut:
+  // a pixel inside the box belongs to the thing when its colour is UNLIKE the ring of background just outside
+  // the box (the test objects.js already uses), and then the thing's own border is traced and simplified - the
+  // same outline() and simplify() the scenery uses.
+  //
+  // What is drawn on top is the analysis's own list: OUTLINE one pixel, BODY one flat tone of the thing's own
+  // colour, GLASS its dark half - the details that create the shape, and nothing else.
+  if (opts.marks && opts.fundamentals !== false) {
     const marks = opts.marks;
-    const { parts: objs } = components(w, h, (p2) => (marks[p2] ? 1 : 0));
-    for (const o of objs) {
-      if (o.area < 12) continue;
-      let r = 0, g = 0, b = 0;
-      for (const p2 of o.px) { r += rgb[p2 * 3]; g += rgb[p2 * 3 + 1]; b += rgb[p2 * 3 + 2]; }
-      const c = o.area;
-      const mean = [r / c, g / c, b / c];
+    const { parts: boxes } = components(w, h, (p2) => (marks[p2] ? 1 : 0));
+    const OUT2 = palette.length - 2;
+    for (const box of boxes) {
+      if (box.area < 24) continue;
+      const bw = box.maxX - box.minX + 1, bh = box.maxY - box.minY + 1;
+      if (bw < 4 || bh < 4) continue;
+      // the ring: what the background just outside the box looks like
+      const ring = [];
+      for (let x = box.minX - 2; x <= box.maxX + 2; x += 1) for (const y of [box.minY - 2, box.maxY + 2]) {
+        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+        const p2 = y * w + x;
+        ring.push([rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]]);
+      }
+      for (let y = box.minY - 2; y <= box.maxY + 2; y += 1) for (const x of [box.minX - 2, box.maxX + 2]) {
+        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+        const p2 = y * w + x;
+        ring.push([rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]]);
+      }
+      if (!ring.length) continue;
+      // CUT OUT: unlike the ring by more than the noise of the surface it stands on
+      const inside = new Uint8Array(n);
+      let count = 0, sr = 0, sg = 0, sb = 0;
+      const near = (p2) => {
+        let best = Infinity;
+        const r0 = rgb[p2 * 3], g0 = rgb[p2 * 3 + 1], b0 = rgb[p2 * 3 + 2];
+        for (let k = 0; k < ring.length; k += 2) {
+          const d = (r0 - ring[k][0]) ** 2 + (g0 - ring[k][1]) ** 2 + (b0 - ring[k][2]) ** 2;
+          if (d < best) best = d;
+        }
+        return best;
+      };
+      for (let y = box.minY; y <= box.maxY; y += 1) for (let x = box.minX; x <= box.maxX; x += 1) {
+        const p2 = y * w + x;
+        if (!marks[p2]) continue;
+        if (near(p2) > 34 * 34) { inside[p2] = 1; count += 1; sr += rgb[p2 * 3]; sg += rgb[p2 * 3 + 1]; sb += rgb[p2 * 3 + 2]; }
+      }
+      // a box whose colour is too close to its background is not a thing we can cut: leave it as painted
+      if (count < 20 || count < box.area * 0.25) continue;
+      const mean = [sr / count, sg / count, sb / count];
       const meanL = luma(mean[0], mean[1], mean[2]);
       const body = entryFor(palette, mean[0], mean[1], mean[2]);
-      const glass = entryFor(palette, mean[0] * 0.58, mean[1] * 0.60, mean[2] * 0.68);
-      const lit = entryFor(palette, Math.min(255, mean[0] * 1.22), Math.min(255, mean[1] * 1.22), Math.min(255, mean[2] * 1.22));
-      const OUT2 = palette.length - 2;
-      for (const p2 of o.px) {
-        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        // the outline first: a pixel on the thing's own border, or one whose neighbour is not the thing
+      const glass = entryFor(palette, mean[0] * 0.55, mean[1] * 0.58, mean[2] * 0.66);
+      const lit = entryFor(palette, Math.min(255, mean[0] * 1.2), Math.min(255, mean[1] * 1.2), Math.min(255, mean[2] * 1.2));
+      // THE BORDER OF THE CUT-OUT, traced and simplified: the car's own outline, not the box's
+      const part = { id: 0, px: [], area: count, minX: box.minX, maxX: box.maxX, minY: box.minY, maxY: box.maxY };
+      for (let p2 = 0; p2 < n; p2 += 1) if (inside[p2]) part.px.push(p2);
+      const poly = simplify(outline(inside, w, h, 1, part), 1.6);
+      for (const p2 of part.px) {
         const x = p2 % w, y = (p2 / w) | 0;
-        let border = x === 0 || y === 0 || x === w - 1 || y === h - 1;
-        if (!border) for (const q of [p2 - 1, p2 + 1, p2 - w, p2 + w]) if (!marks[q]) { border = true; break; }
+        let border = false;
+        for (const q of [p2 - 1, p2 + 1, p2 - w, p2 + w]) if (q < 0 || q >= n || !inside[q]) { border = true; break; }
         if (border) { idx[p2] = OUT2; continue; }
-        idx[p2] = L < meanL - 20 ? glass : L > meanL + 26 ? lit : body;
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        idx[p2] = L < meanL - 18 ? glass : L > meanL + 24 ? lit : body;
+      }
+      // ONE PIXEL OF OUTLINE ALONG THE TRACED POLYLINE, so the silhouette is the car and not its pixel noise
+      for (let i = 0; i < poly.length; i += 1) {
+        const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
+        const steps = Math.max(Math.abs(bx - ax), Math.abs(by - ay), 1);
+        for (let k = 0; k <= steps; k += 1) {
+          const x = Math.round(ax + ((bx - ax) * k) / steps), y = Math.round(ay + ((by - ay) * k) / steps);
+          if (x < 0 || y < 0 || x >= w || y >= h) continue;
+          idx[y * w + x] = OUT2;
+        }
       }
       objectCount += 1;
     }
+  }
+
+  // ---- 5e. THE ROAD: one surface, flat, with its OWN MARKINGS KEPT --------------------------------------
+  //
+  // The analysis reads the ground as the surface whose depth increases toward the bottom of the picture; at this
+  // size the same thing is "the large, smooth, bright-to-mid area in the lower part of the frame". What matters
+  // for the look is what the photograph actually says on it: a road is one flat tone plus PAINT - the lane
+  // lines, the arrows, the crossing. Those are the only straight white things in a yard, and a route that
+  // flattens them away has thrown out the detail the player recognises the street by.
+  {
+    const paved = new Uint8Array(n);
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      if (sky[p2] || cls[p2] === 2) continue;
+      const y = (p2 / w) | 0;
+      if (y < h * 0.45) continue;                       // the road is below the horizon
+      if (en.line[p2] > 0.5) continue;                  // not a line: a surface
+      const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+      if (L < 40 || L > 210) continue;
+      paved[p2] = 1;
+    }
+    const { parts: pads } = components(w, h, (p2) => paved[p2]);
+    const marking = entryFor(palette, 236, 236, 228);
+    let roads = 0;
+    for (const pad of pads) {
+      if (pad.area / n < 0.06) continue;                // a road is a big surface
+      roads += 1;
+      // the markings are the BRIGHT pixels inside it; they stay, and they stay straight
+      const brights = [];
+      for (const p2 of pad.px) if (luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) > 168) brights.push(p2);
+      let r = 0, g = 0, b = 0;
+      let c = 0;
+      for (const p2 of pad.px) {
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        if (L > 168) continue;                          // paint, not asphalt
+        r += rgb[p2 * 3]; g += rgb[p2 * 3 + 1]; b += rgb[p2 * 3 + 2]; c += 1;
+      }
+      if (!c) continue;
+      const road = entryFor(palette, r / c, g / c, b / c);
+      for (const p2 of pad.px) {
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        idx[p2] = L > 168 ? marking : road;
+      }
+    }
+    if (roads) sky.__roads = roads;
   }
 
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------

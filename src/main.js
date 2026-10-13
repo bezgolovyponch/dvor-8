@@ -232,7 +232,7 @@ function build(rgba, w, h, dets, big = null, drawn = false) {
   // the player actually photographs.
   // `drawn` is passed in by the DEMO path: drawn art is not a photograph.
   const useVector = styleChoice === 'vector' && !drawn;
-  const st = useVector ? styliseVector(rgba, w, h, { marks: dets }) : styliseFlat(rgba, w, h, { marks: dets });
+  const st = useVector ? styliseVector(rgba, w, h, { marks: dets, fundamentals: true }) : styliseFlat(rgba, w, h, { marks: dets });
   const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big, rgba);
   // THE WINDOWS THE VECTOR ROUTE FOUND ARE THINGS TOO. The per-pixel route guesses at openings in a wall
   // (frame.js, "на глаз"); the vector route reads the facade's own rhythm and returns rectangles. Either way a
