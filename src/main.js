@@ -863,7 +863,7 @@ function frame(now) {
     shake = shakeOffset(fx);
     draw(ctx, buf, world, fx, { filter, mode, seconds: clock, scanY, motion, shake, cam, me, weather,
       drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk,
-      hideT, land: me?.land ?? 0 });
+      hideT, land: me?.land ?? 0, disaster });
     paintHud();
   }
   requestAnimationFrame(frame);

@@ -467,7 +467,10 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     for (const dx of [-spread, -Math.round(spread / 2), Math.round(spread / 2), spread]) ctx.fillRect(lx + dx, ly - 2, 4, 4);
   }
   for (const p of fx.particles) {
-    ctx.fillStyle = p.rgb || css(pal[p.c]);
+    // A PIECE WITH NEITHER A COLOUR NOR A PALETTE INDEX IS NOT A REASON TO STOP THE FRAME. The particle list is
+    // shared by the throwables, the decals, the weather and now the disasters; a harness caught the whole draw
+    // call throwing here (`css(undefined)`), which loses the frame rather than one speck.
+    ctx.fillStyle = p.rgb || (p.c != null && pal[p.c] ? css(pal[p.c]) : '#fff6c2');
     // A tumbling piece is drawn 2x1 instead of 1x1 on alternate frames. That is the whole animation, and
     // at this scale it is enough: the eye reads the alternation as rotation.
     const s = (p.s || (p.life > 2.2 ? 2 : 1)) * PX;
