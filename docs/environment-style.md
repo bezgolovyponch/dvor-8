@@ -42,7 +42,7 @@ That is the whole style. Everything below is the reason for each clause and the 
 | 5 | roles | Sky, foliage, pane | Three named priors that choose a ramp and a tone; never a name shown to the player |
 | 6 | marks | The pixels the detector found are segmented apart from their ground, never absorbed, and never painted the same colour as what they stand on | A thing the player is meant to hit has to be a thing in the picture |
 
-### The six ramps and the reserved band
+### The seven ramps and the reserved band
 
 ```
 sky      hue 218   shadow 242  highlight 207      a blue sky, deeper at the shadow end
@@ -80,6 +80,16 @@ means "interactive" is **10.8 degrees** — further than the distance between tw
 `MEASURED`, `test.mjs` asserts it. Before the rule existed, the sky ramp's darkest tone sat **1 degree** from
 the HUD cyan on the sunset photograph, which is the kind of collision that makes a reserved colour stop meaning
 anything.
+
+**The one limit that is not the pipeline's.** The largest thing this route cannot preserve is a small, distant
+object that no detector found: a church eighty pixels tall in the photograph is twelve pixels tall in a
+144 x 256 yard, and twelve pixels of any palette is a shape, not a church. Measured on the church photograph,
+the same conversion at 256 x 455 keeps it — 223 shapes against 84 — and costs 946 ms against 167 ms in the same
+browser. The canvas size is a design constant with a written reason (`docs/style.md` D3: the picture is the size
+of an 8-bit console screen, and every sprite in the game is drawn to that scale), so raising it is a decision
+about the game, not a fix to the style. It is recorded here because it is the honest answer to "the photograph
+should survive": at this pixel budget what survives is what is big enough to be a shape — plus everything the
+detector found, which stage 6 now guarantees.
 
 ### What is established and what is this project's own
 
