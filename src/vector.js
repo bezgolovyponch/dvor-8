@@ -452,6 +452,48 @@ export function trace(rgba, w, h, opts = {}) {
     idx[p] = entryFor(palette, c[0], c[1], c[2]);
   }
 
+  // ---- 5a. THE FACADES, AND ONE TONE PER FACADE --------------------------------------------------------
+  //
+  // The scene analysis: "buildings now each get their own shading". Two facades at right angles catch the light
+  // differently and a drawing says so with a tone, not with a line - which is also what makes two adjacent
+  // buildings tell themselves apart, the thing that colour-driven merging could never do.
+  //
+  // The plane is taken from the STRUCTURE, not from the colour: flat (few long lines of its own), bright enough
+  // to be masonry, not sky and not foliage, joined into connected planes. The window pass below reads these very
+  // planes, so a wall and its openings cannot disagree about where the wall is.
+  const facadePlanes = (() => {
+    const wallMask = new Uint8Array(n);
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      if (sky[p2] || cls[p2] === 2) continue;
+      const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+      if (L < 62) continue;
+      if (en.line[p2] > 0.55) continue;                 // a line is an edge, not a wall face
+      wallMask[p2] = 1;
+    }
+    return components(w, h, (p2) => wallMask[p2]).parts.filter((q) => q.area / n >= 0.015);
+  })();
+  {
+    // Each plane's own tone, spread across the stone ramp by its mean luma, but pushed apart so two planes that
+    // measure almost the same still LOOK like two planes: a drawing separates them, a photograph may not.
+    const tones = facadePlanes.map((part) => {
+      let L = 0;
+      for (const p2 of part.px) L += luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+      return L / Math.max(1, part.px.length);
+    }).sort((a, b) => a - b);
+    const rank = new Map();
+    facadePlanes.forEach((part, i) => rank.set(part.id, tones.indexOf(tones[i])));
+    for (const part of facadePlanes) {
+      let r = 0, g = 0, b = 0;
+      for (const p2 of part.px) { r += rgb[p2 * 3]; g += rgb[p2 * 3 + 1]; b += rgb[p2 * 3 + 2]; }
+      const c = Math.max(1, part.px.length);
+      const shade = en.smooth[part.px[Math.floor(part.px.length / 2)]] / 255;
+      // two steps of the plane's own ramp, chosen by its brightness, so a lit face and a shaded face differ
+      const want = shade > 0.62 ? 1.16 : shade > 0.42 ? 1.0 : 0.86;
+      const entry = entryFor(palette, (r / c) * want, (g / c) * want, (b / c) * want);
+      for (const p2 of part.px) if (!sky[p2] && idx[p2] !== skyColour) idx[p2] = entry;
+    }
+  }
+
   // ---- 5b. WINDOWS AS OBJECTS ---------------------------------------------------------------------------
   //
   // A courtyard is mostly facade, and a facade is mostly windows, so windows are where the picture has to be
@@ -531,16 +573,7 @@ export function trace(rgba, w, h, opts = {}) {
       // The wall is instead taken from the STRUCTURE: flat (no long lines of its own), not sky, not foliage,
       // bright enough to be masonry - and then joined into one connected plane. That is what a facade is, and it
       // is the same lesson as the sky: the unit of the parse is the structure, not the colour.
-      const wallMask = new Uint8Array(n);
-      for (let p2 = 0; p2 < n; p2 += 1) {
-        if (sky[p2] || cls[p2] === 2) continue;
-        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        if (L < 62) continue;
-        if (en.line[p2] > 0.55) continue;                 // a line is an edge, not a wall face
-        wallMask[p2] = 1;
-      }
-      const { parts: planes } = components(w, h, (p2) => wallMask[p2]);
-      for (const part of planes) {
+      for (const part of facadePlanes) {
         if (part.area / n < 0.02) continue;                       // a wall is big
         const wd0 = part.maxX - part.minX + 1, ht0 = part.maxY - part.minY + 1;
         if (ht0 < 24 || wd0 < 24) continue;
@@ -710,6 +743,47 @@ export function trace(rgba, w, h, opts = {}) {
     windowsFound.push(...gridWindows);
   }
 
+  // ---- 5d. THE OBJECTS: outline, body, glass -----------------------------------------------------------
+  //
+  // The scene analysis: "the BMW looks like a car (white body, dark glass, outline)". That is a fundamentals
+  // pass - three things that make a photographed object read as an object at 288 px, and no more:
+  //
+  //   OUTLINE  one pixel around the thing, in the ink, so its silhouette is a shape and not a smudge
+  //   BODY     one flat tone for the thing, taken from its own colour
+  //   GLASS    the dark part of it - a windscreen, a window, a shadowed half - as one darker tone of the same
+  //            family, split by luma rather than by a model
+  //
+  // The pixels come from the game's own detector marks, so this draws exactly the things the player can hit and
+  // nothing else. "Real objects seem real but with all the fundamental details that create shape" is this pass:
+  // the details kept are the ones that CREATE the shape, and the texture of the paint is dropped.
+  let objectCount = 0;
+  if (opts.marks) {
+    const marks = opts.marks;
+    const { parts: objs } = components(w, h, (p2) => (marks[p2] ? 1 : 0));
+    for (const o of objs) {
+      if (o.area < 12) continue;
+      let r = 0, g = 0, b = 0;
+      for (const p2 of o.px) { r += rgb[p2 * 3]; g += rgb[p2 * 3 + 1]; b += rgb[p2 * 3 + 2]; }
+      const c = o.area;
+      const mean = [r / c, g / c, b / c];
+      const meanL = luma(mean[0], mean[1], mean[2]);
+      const body = entryFor(palette, mean[0], mean[1], mean[2]);
+      const glass = entryFor(palette, mean[0] * 0.58, mean[1] * 0.60, mean[2] * 0.68);
+      const lit = entryFor(palette, Math.min(255, mean[0] * 1.22), Math.min(255, mean[1] * 1.22), Math.min(255, mean[2] * 1.22));
+      const OUT2 = palette.length - 2;
+      for (const p2 of o.px) {
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        // the outline first: a pixel on the thing's own border, or one whose neighbour is not the thing
+        const x = p2 % w, y = (p2 / w) | 0;
+        let border = x === 0 || y === 0 || x === w - 1 || y === h - 1;
+        if (!border) for (const q of [p2 - 1, p2 + 1, p2 - w, p2 + w]) if (!marks[q]) { border = true; break; }
+        if (border) { idx[p2] = OUT2; continue; }
+        idx[p2] = L < meanL - 20 ? glass : L > meanL + 26 ? lit : body;
+      }
+      objectCount += 1;
+    }
+  }
+
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------
   const cloudColour = entryFor(palette, 246, 246, 250);
   const cloudShade = entryFor(palette, 196, 202, 214);
@@ -749,6 +823,7 @@ export function trace(rgba, w, h, opts = {}) {
 
   return {
     idx, palette, skyline, skyN, clouds: placed, traced, removed, merged, linePixels, windows: windowsFound,
+    planes: facadePlanes.length, objects: objectCount,
     ms: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0),
     skyShare: skyN / n,
   };

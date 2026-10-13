@@ -213,7 +213,7 @@ function withWindows(seg, st, w, h, big, photo) {
   return seg;
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
-function build(rgba, w, h, dets, big = null) {
+function build(rgba, w, h, dets, big = null, drawn = false) {
   // THE THINGS THE DETECTOR FOUND ARE HANDED TO THE PAINTER, and this is the only thing the painter is told
   // about the player's world. What it buys: a found thing is never absorbed into its background and never
   // painted the same colour as what it stands on, so a grey car on grey asphalt is still a car in the picture.
@@ -221,9 +221,42 @@ function build(rgba, w, h, dets, big = null) {
   // WHICH PAINTER. `?style=vector` gives the r9 vector route, `?style=flat` (the default) the per-pixel one.
   // Both are the same contract, so nothing downstream knows or cares; the switch exists so the two can be
   // looked at side by side on the same photograph in the same session before either is called the style.
-  const useVector = styleChoice === 'vector';
+  // THE VECTOR ROUTE IS FOR PHOTOGRAPHS. The demo yard is drawn art whose objects are known in advance and
+  // whose flat fills carry no photographic texture: the route reads it as one shape and paints it wrong (a black
+  // frame), because every step in it - the lighting flatten, the straight-line density, the sky test - is
+  // written for a camera image. So the demo keeps the per-pixel route, and `?style=vector` applies to the yard
+  // the player actually photographs.
+  // `drawn` is passed in by the DEMO path: drawn art is not a photograph.
+  const useVector = styleChoice === 'vector' && !drawn;
   const st = useVector ? styliseVector(rgba, w, h, { marks: dets }) : styliseFlat(rgba, w, h, { marks: dets });
   const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big, rgba);
+  // THE WINDOWS THE VECTOR ROUTE FOUND ARE THINGS TOO. The per-pixel route guesses at openings in a wall
+  // (frame.js, "на глаз"); the vector route reads the facade's own rhythm and returns rectangles. Either way a
+  // window is a thing with hit points - so the ones the route found are added here, with their pixels marked as
+  // owned, and the player can break them like anything else. `windowsFound.length` was 1-2 per photograph before
+  // the rhythm reader and is 15-22 after it, so this is the difference between "the facades have windows" and
+  // "the facades have windows you can hit".
+  if (st.windows && st.windows.length) {
+    const HP = TARGETS.window ? TARGETS.window.hp : 1;
+    for (const q of st.windows) {
+      if (q.w < 3 || q.h < 3) continue;
+      const pixels = [];
+      for (let y = q.y; y < q.y + q.h; y += 1) for (let x = q.x; x < q.x + q.w; x += 1) {
+        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+        const p2 = y * w + x;
+        if (owner[p2] >= 0) continue;                      // a car in front of the window keeps its pixels
+        pixels.push(p2);
+      }
+      if (pixels.length < 9) continue;
+      const id = regions.length;
+      for (const p2 of pixels) owner[p2] = id;
+      regions.push({
+        id, kind: 'window', label: TARGETS.window ? TARGETS.window.ru : 'окно', score: 1, pixels: Int32Array.from(pixels),
+        x: q.x, y: q.y, w: q.w, h: q.h, cx: q.cx, cy: q.cy, area: pixels.length,
+        hp: HP, hits: 0, gone: false, seen: false,
+      });
+    }
+  }
   if (!regions.length) return false;
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
   yard = { rgba, w, h, st, regions, owner, home: yardFrom({ w, h, idx: st.idx, palette: st.palette, regions, owner }), more: [] };
@@ -430,7 +463,7 @@ function fromDemo() {
   const demo = demoYard(w, h, 8);
   me = null; cam = { x: 0, y: 0, w, h };
   setSize(w, h);
-  build(demo.rgba, w, h, demo.dets);
+  build(demo.rgba, w, h, demo.dets, null, true);   // drawn art: the vector route is for photographs only
   note('демо: нарисованный двор, вещи в нём известны заранее');
 }
 

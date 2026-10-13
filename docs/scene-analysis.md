@@ -17,6 +17,22 @@ in this repository, and every number below is this repo's own measurement.
 | **"The tower's window grid reads"** | the facade-rhythm reader: peaks in a wall's own row and column profiles give the openings and the pitch, and the grid is completed across the wall where the wall actually is — D55 | **windows 1/2/1 → 22/15/15** |
 | Open in the study: photo 1's clouds join the horizon and render as grey strips | already fixed here: the sky's blue core grows through its own clouds and stops at the skyline | clouds 3 per photograph, placed clear of the skyline |
 
+## Now applied on top of the study
+
+- **The windows the route finds are things with hit points.** The per-pixel route *guessed* at openings in a wall
+  ("на глаз"); the vector route reads the facade's rhythm and returns rectangles, and those rectangles are now
+  added to the world as `window` regions with the same hit points as any other thing. On `photos-test/a.jpg` the
+  yard went from **6 targets (one truck and five guessed windows) to 13 (one truck and twelve found ones)**, and
+  the run scored 14,025 with 671 holes knocked in the scenery and no page errors.
+- **One tone per facade** (`src/vector.js`, stage 5a): each wall plane gets its own shade of its own family, so
+  two buildings at right angles tell themselves apart by tone — which is the study's "buildings now each get
+  their own shading", and something colour-driven merging could never do.
+- **The object fundamentals pass** (stage 5d): each thing the detector marked is drawn as OUTLINE (one pixel of
+  ink round its silhouette), BODY (one flat tone from its own colour) and GLASS (its dark half, one darker tone
+  of the same family, split by luma rather than by a model). That is the study's "white body, dark glass,
+  outline" for a car, done without GrabCut: the details kept are the ones that CREATE the shape, and the texture
+  of the paint is dropped.
+
 ## Not yet applied, and named as such
 
 - **The car redraw.** The study's "BMW looks like a car (white body, dark glass, outline)" is a per-object
