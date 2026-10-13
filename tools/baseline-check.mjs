@@ -22,7 +22,11 @@ const ROWS = [
   ['Everything in the picture is destructible, permanently', 'src/world.js', () => has(src('world.js'), 'export function chip', 'ENV_TOUGH', 'export function imprint')],
   ['Kind actions: flowers, a wash, a parcel, whimsy, antics', 'src/kind.js', () => has(src('kind.js'), 'FLOWERS', 'WASH', 'HELP', 'ANTICS', 'export function plant', 'export function wash')],
   ['Weather: rain, snow, fog, lightning', 'src/weather.js', () => has(src('weather.js'), 'rain:', 'snow:', 'fog:', 'storm:', 'thunder') === false ? has(src('weather.js'), 'rain:', 'snow:', 'fog:', 'storm:') : true],
-  ['Disasters: hurricane, tsunami, Godzilla, Beyoncé', 'src/disaster.js', () => has(src('disaster.js'), 'hurricane:', 'tsunami:', 'godzilla:', 'beyonce:')],
+  ['Disasters that reach the screen: hurricane, tsunami', 'src/disaster.js', () => has(src('disaster.js'), 'hurricane:', 'tsunami:', "ORDER = ['hurricane', 'tsunami']")],
+  // THIS ROW FAILS UNTIL THE WALKING BEASTS ARE DRAWN. It exists so the gap cannot be forgotten: the code is in
+  // disaster.js and UNREALISED names it, but a beast only counts as done when ORDER contains it again AND a
+  // screenshot of it on screen exists beside this file.
+  ['OPEN: Godzilla and Beyoncé are drawn on screen (code exists, screen does not)', 'src/disaster.js + a screenshot', () => src('disaster.js').includes("UNREALISED = ['godzilla', 'beyonce']") === false],
   ["Beyoncé eats cars, Pac-Man style, then shakes her head", 'src/disaster.js', () => has(src('disaster.js'), "type: 'chomp'", 'd.chew', 'shake', 'PAC-MAN')],
   ['A disaster can never touch a person', 'src/disaster.js + test.mjs', () => has(src('disaster.js'), 'export function stepDisaster') && has(read('test.mjs'), 'a disaster cannot reach a person')],
   ['The bottom bar: weapon, disaster, info, expand circle', 'index.html', () => has(read('index.html'), 'id="paletteBox"', 'id="fateBox"', 'id="infoBtn"', 'id="barMore"', 'class="round"')],

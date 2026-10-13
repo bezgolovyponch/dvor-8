@@ -89,3 +89,17 @@ which is the point: they were never assembled.
 
 Pieces A, B, C and E exist in the repo today; D is the wiring; F is the missing discipline. That is the plan,
 and it is now written down rather than carried in my head.
+
+
+## 5. Round two: what the screen showed, and what was removed
+
+The creator opened the page and saw two faults that every test and every baseline row had passed:
+
+| seen on screen | cause | what was done |
+|---|---|---|
+| no Beyoncé after choosing БЕЙОНСЕ | `STEP` put her at x = −0.2, walking in at a tenth of the frame per second — two seconds of nothing | fixed: she arrives at 0.35 and the phase starts at `walk` |
+| black rounded boxes where cars were | `stepDisaster` wrote the VOID index into every pixel of a chomped object | fixed: a disaster now uses the game's own damage language (`world.dent` one tone down, a ragged hole, the void only at its centre) |
+| still no Beyoncé after both fixes | the pixels are correct — 2,890 of them, valid indices, x 84–256, y 154–464, verified in isolation — but the draw call that should put them over the yard does not reach the screen, and the budget ran out before the pass was found | **the beasts are withdrawn from the shipped list** (`ORDER = ['hurricane', 'tsunami']`, `UNREALISED = ['godzilla', 'beyonce']`), the code stays, and a baseline row **fails** until they are drawn |
+
+That last row is the mechanism the audit asked for, applied to the audit's own worst case: the baseline now
+carries a deliberate FAIL for a known gap, so the gap cannot quietly become "done" again.

@@ -52,10 +52,22 @@ export const DISASTERS = {
   },
 };
 
-export const ORDER = ['hurricane', 'tsunami', 'godzilla', 'beyonce'];
+// WHAT SHIPS, AND WHAT DOES NOT. Hurricane, tsunami and the storm grades are drawn by rules that demonstrably
+// reach the screen (a palette table and painted water). The two WALKING beasts do not: their pixels are correct
+// - 2,890 of them, valid palette indices, on-screen coordinates, verified in isolation - but the draw call that
+// should put them over the yard does not reach the screen, and the budget ran out before it was found.
+//
+// The creator's rule is the right one and is followed here: DO NOT APPLY MECHANICS YOU CANNOT REALISE. So the
+// beasts are out of the shipped list; the code stays, marked, and the baseline carries a row that fails until
+// they are drawn and a screenshot proves it.
+export const ORDER = ['hurricane', 'tsunami'];
+export const UNREALISED = ['godzilla', 'beyonce'];
 // How often the sky does something inexcusable. Christmas-tree rare on an ordinary day, because a yard that is
 // always being eaten is a yard nobody looks at; the drawer can summon one on purpose.
 export const CHANCE = 0.12;
+
+/** Beasts are selected only when they can be drawn: `ORDER` for the game, this for the work in progress. */
+export const ALL = ['hurricane', 'tsunami', 'godzilla', 'beyonce'];
 
 // THE MECHANIC IS COPIED, NOT INVENTED, and it is two arcade ideas bolted together:
 //
@@ -68,9 +80,12 @@ export const CHANCE = 0.12;
 // that has just taken a whole car has to do something with it - and walk on. `mouth` and `shake` are the state;
 // the renderer reads them and nothing else.
 export const makeDisaster = (kind, rnd = Math.random) => ({
-  kind, t: 0, next: 1.2, phase: 'arrive', water: 0, eaten: 0, stomped: 0, beamed: 0, roars: 0,
+  kind, t: 0, next: 3.2, phase: 'walk', water: 0, eaten: 0, stomped: 0, beamed: 0, roars: 0,
   mouth: 0, chew: 0, shake: 0,
-  x: kind === 'beyonce' ? -0.2 : 1.15, dir: kind === 'beyonce' ? 1 : -1, step: 0,
+  // ON SCREEN FROM THE FIRST FRAME. The beast used to start outside the picture (x = -0.2) and walk in at a
+  // tenth of the frame per second, so for the first two seconds after summoning there was nothing to look at:
+  // the disaster graded the palette and the monster was still off the left edge. She arrives at 0.35 and walks.
+  x: kind === 'beyonce' ? 0.35 : 0.72, dir: kind === 'beyonce' ? 1 : -1, step: 0,
   seed: rnd(),
 });
 
@@ -218,7 +233,7 @@ export function stepDisaster(d, world, dt, rnd) {
       if (r.gone || r.kind === 'window') continue;
       if (r.y + r.h * 0.6 < line) continue;                 // above the water: it survives
       r.gone = true; r.hits = r.hp;
-      for (const p of r.pixels) world.rubble[p] = world.palette.length - 1;
+      wrecks(world, r);
       out.push({ type: 'drown', target: r });
     }
     if (d.water > 0.05 && rnd() < dt * spec.foam) out.push({ type: 'foam', line });
@@ -238,7 +253,7 @@ export function stepDisaster(d, world, dt, rnd) {
       const target = under[0] || null;
       if (target) {
         target.gone = true; target.hits = target.hp;
-        for (const p of target.pixels) world.rubble[p] = world.palette.length - 1;
+        wrecks(world, target);
         d.stomped += 1;
       }
       out.push({ type: 'stomp', at: { x: cx, y: feet }, target });
@@ -258,7 +273,7 @@ export function stepDisaster(d, world, dt, rnd) {
       const target = cars.sort((a, b) => Math.abs(a.cx - cx) - Math.abs(b.cx - cx))[0] || null;
       if (target) {
         target.gone = true; target.hits = target.hp;
-        for (const p of target.pixels) world.rubble[p] = world.palette.length - 1;
+        wrecks(world, target);
         d.eaten += 1;
       }
       d.mouth = 1;
@@ -276,6 +291,27 @@ export function stepDisaster(d, world, dt, rnd) {
 
   if (d.t > spec.lasts) out.push({ type: 'over' });
   return out;
+}
+
+/**
+ * WHAT A DISASTER LEAVES BEHIND: a wreck, not a black box.
+ *
+ * The first version wrote the void index into every pixel of the object, so a car that Beyoncé ate became a
+ * black rounded rectangle - the "black blobs" on screen. Damage in this game has a language already (D48): one
+ * tone down the thing's own ramp, a ragged hole where the blow landed, and the void only at the centre of it.
+ * A disaster uses that language like every other hitter.
+ */
+function wrecks(world, region) {
+  const voidI = world.palette.length - 1;
+  const cx = region.cx, cy = region.cy;
+  const R = Math.max(2, Math.min(10, Math.sqrt(region.area) / 3));
+  region.pixels.forEach((p, n) => {
+    const x = p % world.w, y = (p / world.w) | 0;
+    const d = Math.hypot(x - cx, y - cy);
+    if (d <= R * 0.5) world.rubble[p] = voidI;                        // torn out
+    else if (d <= R || (x * 3 + y * 5) % 7 === 0) world.rubble[p] = world.dent[world.idx[p]] || voidI;
+    else world.idx[p] = world.dent[world.idx[p]] ?? world.idx[p];     // the rest is one tone down: a wreck
+  });
 }
 
 export const beastAt = (d, world) => {
