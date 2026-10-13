@@ -29,7 +29,7 @@ import { sfx, unlock, setMuted } from './audio.js';
 import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
 import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, antic, WHIMSY, FLOWERS, WASH, HELP } from './kind.js';
 import { STEPS } from './flat.js';
-import { chip, surfaceAt, imprint, borderOf, wreckAlong, rollOver } from './world.js';
+import { chip, surfaceAt, imprint, borderOf, edgesOf, wreckAlong, rollOver } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
 import { factFor } from './lore.js';
 import { DISASTERS, ORDER as DISASTER_ORDER, makeDisaster, rollDisaster, stepDisaster, beastPixels, beastAt } from './disaster.js';
@@ -933,9 +933,9 @@ function aimAt(x, y) {
   const t = pick(world, x, y);
   if (!t) { world.aim = null; return; }
   world.polyCache = world.polyCache || new Map();
-  let poly = world.polyCache.get(t.id);
-  if (!poly) { poly = borderOf(world, t); world.polyCache.set(t.id, poly); }
-  world.aim = { poly, id: t.id, label: t.label };
+  let edges = world.polyCache.get(t.id);
+  if (!edges) { edges = edgesOf(world, t); world.polyCache.set(t.id, edges); }   // v6's edges map
+  world.aim = { edges, id: t.id, label: t.label };
 }
 
 // ---- the finger -----------------------------------------------------------------------------------
@@ -1143,8 +1143,8 @@ tiltEl.addEventListener('pointerdown', (e) => {
     // is the thing's OWN border (world.borderOf), drawn as ink for a few seconds, exactly like the target
     // brackets but in the help colour.
     if (t) {
-      const poly = borderOf(world, t);
-      world.infoMark = { poly, until: clock + 6, label: t.label, kind: t.kind };
+      const edges = edgesOf(world, t);                     // the thing's own silhouette, not its box
+      world.infoMark = { edges, until: clock + 6, label: t.label, kind: t.kind };
       pop(t.label.toUpperCase(), t.cx, t.y - 8, 'tag');
     } else {
       world.infoMark = null;

@@ -16,6 +16,27 @@ import { makeDecals } from './decal.js';
 // instead of only its box. Piece C (world.chip) then tears along that shape, and a disaster (piece D) calls the
 // same path a thrown stone does.
 
+/**
+ * THE EDGES MAP — v6's own way of outlining a thing, and it replaces the polyline here.
+ *
+ * v6 keeps two arrays per object: `fills` (its pixels) and `edges` (the pixels on its border), and it draws the
+ * outline, the hover highlight and the blinking selection from `edges`. A polyline traced and simplified was
+ * this project's invention, and on a large solid region the trace fell back to the thing's BOX - which is why a
+ * car came out outlined as a rectangle. The edge PIXELS cannot fail that way: a pixel is on the edge when one of
+ * its four neighbours is not in the thing.
+ */
+export function edgesOf(world, region) {
+  const { w } = world;
+  const inR = new Set(region.pixels);
+  const out = [];
+  for (const p of region.pixels) {
+    const x = p % w, y = (p / w) | 0;
+    if (x === 0 || y === 0 || x === w - 1 || y === world.h - 1) { out.push(p); continue; }
+    if (!inR.has(p - 1) || !inR.has(p + 1) || !inR.has(p - w) || !inR.has(p + w)) out.push(p);
+  }
+  return out;
+}
+
 /** The region's outline as a simplified closed polyline. Empty if the region has no pixels. */
 export function borderOf(world, region) {
   const { w } = world;
@@ -85,6 +106,7 @@ export function insideBorder(poly, x, y) {
  */
 export function wreckAlong(world, region, at = null, strength = 1) {
   const poly = borderOf(world, region);
+  const edge = new Set(edgesOf(world, region));
   const cx = at ? at.x : region.cx, cy = at ? at.y : region.cy;
   const R = Math.max(2, Math.min(12, (Math.sqrt(region.area) / 3) * strength));
   const voidI = world.palette.length - 1;
@@ -92,7 +114,7 @@ export function wreckAlong(world, region, at = null, strength = 1) {
   for (const p of region.pixels) {
     const x = p % world.w, y = (p / world.w) | 0;
     const d = Math.hypot(x - cx, y - cy);
-    const onBorder = poly.length > 3 && !insideBorder(poly, x, y);
+    const onBorder = edge.has(p) || (poly.length > 3 && !insideBorder(poly, x, y));
     // THE HOLE IS SMALL AND IT IS ONE HOLE. A wreck is mostly the thing itself: a hole where the blow landed, a
     // torn edge along its own border, and the rest of it scraped one tone. Nothing whole is replaced by nothing.
     if (d <= Math.max(1.5, R * 0.3)) { world.rubble[p] = voidI; holed += 1; continue; }
@@ -102,7 +124,7 @@ export function wreckAlong(world, region, at = null, strength = 1) {
       world.idx[p] = world.dent[world.idx[p]] ?? world.idx[p]; dented += 1;
     }
   }
-  return { poly, torn, dented, holed };
+  return { poly, edge: edge.size, torn, dented, holed };
 }
 
 /**

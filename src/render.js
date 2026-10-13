@@ -433,11 +433,17 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     ctx.restore();
   };
   const AIM = '#f04f78', INFO = '#30e1b9', SEL = '#f9c22b';
-  if (world.aim && world.aim.poly) drawEdges(world.aim.poly, AIM);
+  if (world.aim && world.aim.edges) {
+    ctx.fillStyle = AIM;
+    for (const p of world.aim.edges) ctx.fillRect(p % world.w, (p / world.w) | 0, 1, 1);
+  } else if (world.aim && world.aim.poly) drawEdges(world.aim.poly, AIM);
   const mark = world.infoMark;
   if (mark && seconds < mark.until) {
     const blink = Math.floor(seconds * 8) % 2 === 0;
-    drawEdges(mark.poly, blink ? SEL : INFO);
+    if (mark.edges) {
+      ctx.fillStyle = blink ? SEL : INFO;
+      for (const p of mark.edges) ctx.fillRect(p % world.w, (p / world.w) | 0, 1, 1);
+    } else drawEdges(mark.poly, blink ? SEL : INFO);
   }
 
   // Corner brackets on everything still standing and in view: what can be hit is never a guess.
@@ -524,17 +530,25 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
       const line = Math.round(world.h * (1 - disaster.water));
       const water = pal[pal.length - 2 - 3] || pal[4];
       const foam = pal[pal.length - 2 - 1] || pal[5];
-      for (let y = line; y < world.h; y += 1) for (let x = 0; x < world.w; x += 1) {
-        const p = y * world.w + x;
-        if (world.rubble[p] !== 255) continue;
-        ctx.fillStyle = css(((x * 7 + y * 13) % 11 === 0 && y < line + 3) ? foam : water);
-        ctx.fillRect(x, y, 1, 1);
+      // A FLOOD SHOWS THE STREET THROUGH THE WATER. The first version painted a flat colour over every pixel
+      // below the line and the yard disappeared under an olive field - which is what the creator saw. The water
+      // now MIXES with what is under it, and only the top few rows are foam.
+      const mix = (a2, b2, k) => `rgb(${Math.round(a2[0] * (1 - k) + b2[0] * k)},${Math.round(a2[1] * (1 - k) + b2[1] * k)},${Math.round(a2[2] * (1 - k) + b2[2] * k)})`;
+      const depth = Math.max(1, world.h - line);
+      for (let y = line; y < world.h; y += 1) {
+        const k = 0.30 + 0.35 * Math.min(1, (y - line) / depth);          // deeper water hides more
+        for (let x = 0; x < world.w; x += 1) {
+          const p = y * world.w + x;
+          const under = pal[world.rubble[p] !== 255 ? world.rubble[p] : world.idx[p]] || water;
+          ctx.fillStyle = (x * 7 + y * 13) % 11 === 0 && y < line + 3 ? css(foam) : mix(under, water, k);
+          ctx.fillRect(x, y, 1, 1);
+        }
       }
     }
     // THE EVENT SPRITE, from the v6 screen: a spiral for the hurricane, a wave for the tsunami, both with the
     // one-pixel outline that makes them belong to the picture instead of floating over it.
     if (!spec.beast) {
-      const sp = eventSprite(pal, disaster.kind, 32);
+      const sp = eventSprite(pal, disaster.kind, 64);            // v6 draws 32 px in a 185-wide scene: same share here
       const fx2 = disaster.kind === 'hurricane'
         ? { x: world.w * Math.max(0.06, Math.min(0.94, disaster.front)), y: world.h * 0.34 }
         : { x: world.w * 0.7, y: world.h * (1 - disaster.water) - 20 };

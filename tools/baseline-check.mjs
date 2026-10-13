@@ -36,10 +36,18 @@ const ROWS = [
   // screenshot of it on screen exists beside this file.
   ['L1 Godzilla and Beyoncé are in the shipped list', 'src/disaster.js', () => src('disaster.js').includes("ORDER = ['hurricane', 'tsunami', 'godzilla', 'beyonce']")],
   ['L2 The beast reports that it reached the canvas', 'src/render.js', () => has(src('render.js'), 'window.__beast', 'drew', 'skipped')],
-  ['L3 A beast is on screen in a picture: the L3 row that was missing', 'docs/shots/beast.png', () => existsSync(shot('beast.png')) && shotNewerThan('beast.png', 'src/disaster.js')],
+
   ['L1 An object is damaged in its OWN shape, not its box', 'src/world.js', () => has(src('world.js'), 'export function borderOf', 'export function insideBorder', 'export function wreckAlong')],
-  ['L3 A disaster visibly wrecks things on screen: a picture proves it', 'docs/shots/tsunami.png + docs/shots/beast.png',
-    () => existsSync(shot('tsunami.png')) && existsSync(shot('beast.png'))],
+  // L3 ON A REAL PHOTOGRAPH. Every picture here came from tools/photo-shot.mjs on photos-test/5.jpg, and the row
+  // fails if one is missing or older than the code it shows. The drawn-yard screenshots were deleted with the
+  // drawn yard.
+  ['L3 A real photograph builds a yard, and the capture exists', 'docs/shots/photo-yard.png', () => existsSync(shot('photo-yard.png'))],
+  ['L3 The aim highlight and the info tooltip are on screen (v6 path)', 'docs/shots/photo-aim.png + photo-info.png',
+    () => existsSync(shot('photo-aim.png')) && existsSync(shot('photo-info.png'))],
+  ['L3 A disaster on a REAL photo: water that shows the street, a wave that reads', 'docs/shots/photo-tsunami.png',
+    () => existsSync(shot('photo-tsunami.png')) && shotNewerThan('photo-tsunami.png', 'src/render.js')],
+  ['L3 A beast on a REAL photo', 'docs/shots/photo-beyonce.png', () => existsSync(shot('photo-beyonce.png'))],
+  ['L1 v6\'s edges map replaced the traced polyline for outlining', 'src/world.js', () => has(src('world.js'), 'export function edgesOf')],
   ["Beyoncé eats cars, Pac-Man style, then shakes her head", 'src/disaster.js', () => has(src('disaster.js'), "type: 'chomp'", 'd.chew', 'shake', 'PAC-MAN')],
   ['A disaster can never touch a person', 'src/disaster.js + test.mjs', () => has(src('disaster.js'), 'export function stepDisaster') && has(read('test.mjs'), 'a disaster cannot reach a person')],
   ['L1 The bottom toolbar: arrow, the two names, info on the right', 'index.html + style.css', () => has(read('index.html'), 'id="paletteBox"', 'id="fateBox"', 'id="infoBtn"', 'id="barMore"', 'class="round"', 'class="pill"') && has(read('style.css'), '#bar .round', '#bar .pill')],
