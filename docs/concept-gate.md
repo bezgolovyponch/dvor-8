@@ -63,3 +63,19 @@ the canvas, every threshold here is a guess and the gate says so.
 **Next action, and it is the first one:** `tools/photo-shot.mjs` gains a canvas dump (`window.__canvasDump`), the
 gate reads it, and the thresholds are set from the v6 screen rendered on this machine — not from a photograph of
 it.
+
+
+## The gate has a defect of its own: it measures TRANSIENT overlays
+
+Two runs of the same code, the same photograph and the same route produced **59% flat / 3 sky entries** and then
+**16% flat / 14 sky entries**. The code did not change between them. What changed is what was on the canvas at the
+instant of the dump: the news ticker, the scan wipe and the banner are drawn OVER the yard, and the ticker sits in
+the top fifth — exactly where the gate measures the sky.
+
+So the gate's numbers are only comparable when the frame is CLEAN. Until it excludes the overlay regions (or the
+harness dumps the frame with overlays suppressed), a before/after comparison can show a change that is a banner.
+That is a fault in the measuring instrument, and it is recorded here rather than averaged away.
+
+Second defect, same run: **a patch of mine failed to apply** (a syntax error in the script that was to change the
+road), and the gate was read as if it had. The lesson is the one this file keeps teaching: a measurement is only
+evidence when the thing measured is known to be the thing changed.
