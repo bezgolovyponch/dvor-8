@@ -71,6 +71,10 @@ export const progress = (album) => ({ have: Object.keys(album.kinds).length, of:
 export function shareText({ things, score, combo, metres, day, url }) {
   const row = things.slice(0, SHARE_MAX).map((t) => (t.gone ? SIGN[t.kind] || '▪' : '⬜')).join('');
   const down = things.filter((t) => t.gone).length;
-  return [`ДВОР-8 · ${dayLabel(day)} · ${down}/${things.length}`, row,
-    `${score} очков · комбо x${combo}${metres ? ` · ${metres} м по улице` : ''}`, url].filter(Boolean).join('\n');
+  // THE TAG IS THE POINT OF SENDING IT. A card that arrives in a family chat says where you were and what you
+  // did to it; the tag goes on the picture AND in the text, because a caption is what gets read in the preview.
+  return [`Я ЗДЕСЬ · I AM HERE`,
+    `ДВОР-8 · ${dayLabel(day)} · ${down}/${things.length}`, row,
+    `${score} очков · комбо x${combo}${metres ? ` · ${metres} м по улице` : ''}`,
+    `#ЯЗДЕСЬ #IAMHERE`, url].filter(Boolean).join('\n');
 }

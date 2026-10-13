@@ -1232,8 +1232,15 @@ check('what is kept survives being stored and read back, and rubbish in storage 
   && progress(makeAlbum('nonsense')).have === 0 && makeAlbum({ kinds: { dragon: 4, car: -1 }, days: ['x'] }).days.length === 0 && progress(makeAlbum({ kinds: { dragon: 4 } })).have === 0);
 check('tomorrow\'s street is not today\'s', daySeed('2026-10-11') !== daySeed('2026-10-12') && daySeed('2026-10-11') === daySeed('2026-10-11') && dayKey(new Date(2026, 9, 11)) === '2026-10-11');
 const line = shareText({ things: [{ kind: 'car', gone: true }, { kind: 'bench', gone: false }, { kind: 'car', gone: true }], score: 2450, combo: 5, metres: 37, day: '2026-10-11', url: 'https://example.org/' });
-check('the line to show someone says what the yard held and what became of it, and nothing about where it is', line.split('\n').length === 4 && line.includes('🚗⬜🚗') && line.includes('2/3') && line.includes('2450') && line.includes('37 м') && line.includes('11.10'), line.split('\n')[1]);
-check('it is never longer than a yard, and leaves out a walk that was not taken', [...shareText({ things: Array.from({ length: 30 }, () => ({ kind: 'car', gone: true })), score: 1, combo: 1, metres: 0, day: '2026-10-11', url: '' }).split('\n')[1]].length === SHARE_MAX
+// THE TAG LEADS. What arrives in a family chat is read as a preview first, so the first line is the claim about
+// the place - "Я ЗДЕСЬ · I AM HERE" - and the yard's own account follows it, with the hashtags at the end where
+// a chat client will link them. The rest of the property is unchanged: what the yard held, what became of it,
+// the score, the walk that was taken, the date, and nothing about where the place actually is.
+check('the line to show someone LEADS WITH THE TAG, then says what the yard held and what became of it',
+  line.split('\n').length === 6 && line.startsWith('Я ЗДЕСЬ') && line.includes('I AM HERE') && line.includes('#ЯЗДЕСЬ')
+  && line.includes('🚗⬜🚗') && line.includes('2/3') && line.includes('2450') && line.includes('37 м') && line.includes('11.10'),
+  line.split('\n')[1]);
+check('it is never longer than a yard, and leaves out a walk that was not taken', [...shareText({ things: Array.from({ length: 30 }, () => ({ kind: 'car', gone: true })), score: 1, combo: 1, metres: 0, day: '2026-10-11', url: '' }).split('\n')[2]].length === SHARE_MAX
   && !shareText({ things: [], score: 1, combo: 1, metres: 0, day: '2026-10-11', url: '' }).includes(' м'));
 
 // ---- the news over the yard ----------------------------------------------------------------------------

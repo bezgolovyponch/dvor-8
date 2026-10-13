@@ -58,6 +58,7 @@ let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
 const styleChoice = new URLSearchParams(location.search).get('style') || 'flat';
 let weather = makeWeather('clear');               // the day's sky (weather.js)
 let disaster = null;                              // the sky misbehaving (disaster.js), or null
+let beforeCanvas = null;                          // the photograph the yard came from, for the card's БЫЛО half
 let hand = 'stone', item = THROWABLES.stone;      // hand/item: what you THROW
 let clock = 0, scanT = 0, endIn = 0, last = performance.now();
 let motion = viewMotion(filter, 0, calm), shake = { x: 0, y: 0 };
@@ -260,6 +261,13 @@ function build(rgba, w, h, dets, big = null, drawn = false) {
     }
   }
   if (!regions.length) return false;
+  // The "before" half of the shared card: the photograph at the picture's own size, kept until the card is made.
+  {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(rgba), w, h), 0, 0);
+    beforeCanvas = c;
+  }
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
   yard = { rgba, w, h, st, regions, owner, home: yardFrom({ w, h, idx: st.idx, palette: st.palette, regions, owner }), more: [] };
   begin();
@@ -985,13 +993,20 @@ function copy(text) {
   return ok;
 }
 async function share(picture) {
+  // The photograph the yard was built from, kept for the card's "before" half. It is the player's own picture and
+  // it never leaves the device except inside this card.
+  const beforeShot = beforeCanvas || null;
   if (!result || !world) return;
   const text = shareText({ ...result, url: /^https:/.test(location.href) ? location.href.split(/[?#]/)[0] : '' });
   try {
     // Inside the Android app the page has neither a share sheet nor a download of its own: the app is asked.
     const app = window.DvorApp;
     if (picture) {
-      const card = postcard(world, `ДВОР-8 · ${mark.words}`, text.split('\n')[2]);
+      // THE CARD THAT GOES OUT: the tag, the photograph it came from, the yard as it was left, and the run.
+      const card = postcard(world, `ДВОР-8 · ${mark.words}`, text.split('\n')[2], {
+        tag: 'Я ЗДЕСЬ', tagEn: 'I AM HERE',
+        before: beforeShot, footnote: `#ЯЗДЕСЬ #IAMHERE · ${mark.flowers ? `цветов ${mark.flowers} · ` : ''}${mark.holes ? `проломов ${mark.holes} · ` : ''}${world.score} очков`,
+      });
       if (app?.sharePicture(card.toDataURL('image/png').split(',')[1], `dvor-8-${result.day}.png`, text)) { $('shared').textContent = 'картинка сохранена в галерею: Pictures/DVOR-8'; return; }
       const blob = await new Promise((done) => card.toBlob(done, 'image/png'));
       const file = new File([blob], `dvor-8-${result.day}.png`, { type: 'image/png' });

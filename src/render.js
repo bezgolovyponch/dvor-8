@@ -514,8 +514,8 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
 // The first yard as it now stands, enlarged, with the result written under it: a picture to keep or send.
 // It is the game's picture, not the photograph — 192 pixels across, so a number plate is two pixels and a
 // face is four.
-export function postcard(world, title, line) {
-  const { sw, h, idx, rubble, palette, paint } = world, k = 3, foot = 104;
+export function postcard(world, title, line, opts = {}) {
+  const { sw, h, idx, rubble, palette, paint } = world, k = opts.scale || 3, foot = opts.foot || 148;
   const small = makeBuffer(sw, h), d = small.image.data;
   for (let y = 0, o = 0; y < h; y += 1) for (let x = 0; x < sw; x += 1, o += 4) {
     const p = y * world.w + x, c = palette[rubble[p] !== 255 ? rubble[p] : idx[p]];
@@ -533,16 +533,61 @@ export function postcard(world, title, line) {
   for (const b of world.blooms) for (const px of bloomPixels(palette, STEPS, b, 0)) put(px);
   small.ctx.putImageData(small.image, 0, 0);
   const card = document.createElement('canvas');
-  card.width = sw * k; card.height = h * k + foot;
+  const band = opts.band !== false ? 86 : 0;                 // the tag band, at the top
+  card.width = sw * k; card.height = h * k + foot + band;
   const c = card.getContext('2d');
   c.fillStyle = '#12052e'; c.fillRect(0, 0, card.width, card.height);
   c.imageSmoothingEnabled = false;
-  c.drawImage(small.canvas, 0, 0, sw * k, h * k);
+
+  // THE TAG. A card that goes into WhatsApp or Telegram is a claim about a place: "I AM HERE" over the yard that
+  // was just wrecked. It is the largest thing on the card on purpose - bigger than the score, bigger than the
+  // title - because it is the part another person reads before they read anything else.
+  if (band) {
+    const tag = opts.tag || 'Я ЗДЕСЬ';
+    const tagEn = opts.tagEn || 'I AM HERE';
+    c.fillStyle = '#f0286e'; c.fillRect(0, 0, card.width, band);
+    c.fillStyle = '#12052e'; c.fillRect(0, band - 6, card.width, 6);
+    c.textBaseline = 'middle';
+    c.font = 'italic 900 46px "Arial Black", Impact, sans-serif';
+    c.fillStyle = '#12052e'; c.fillText(tag, 17, band / 2 + 2);
+    const wTag = c.measureText(tag).width;
+    c.font = '900 30px "Arial Black", Impact, sans-serif';
+    c.fillStyle = '#ffffff'; c.fillText(tagEn, 17 + wTag + 14, band / 2 + 2);
+    c.textBaseline = 'top';
+  }
+
+  // BEFORE AND AFTER, side by side. The photograph the yard came from, small, next to what was made of it: the
+  // destruction only reads as destruction when there is something to compare it with, and the comparison is the
+  // whole reason to send the card.
+  // THE YARD FIRST, then the photograph as an INSET on top of it. The first version drew the inset before the
+  // yard and the yard covered it: a card that shows before and after has to put the small one in front.
+  c.imageSmoothingEnabled = false;
+  c.drawImage(small.canvas, 0, band, sw * k, h * k);
+  c.font = '700 15px ui-monospace, Menlo, monospace';
+  c.fillStyle = '#fff6c2'; c.fillText('СТАЛО', 10, band + h * k - 22);
+  if (opts.before) {
+    const bw = Math.round(card.width * 0.30), bh = Math.round((bw / sw) * h);
+    const bx = 8, by = band + 8;
+    c.save();
+    c.imageSmoothingEnabled = true;
+    c.drawImage(opts.before, bx, by, bw, bh);
+    c.imageSmoothingEnabled = false;
+    c.strokeStyle = '#ffffff'; c.lineWidth = 4; c.strokeRect(bx, by, bw, bh);
+    c.fillStyle = 'rgba(18,5,46,0.85)'; c.fillRect(bx, by + bh - 24, bw, 24);
+    c.font = '700 15px ui-monospace, Menlo, monospace';
+    c.fillStyle = '#fff6c2'; c.fillText('БЫЛО', bx + 5, by + bh - 19);
+    c.restore();
+  }
+  const y0 = band + h * k;
   c.textBaseline = 'top';
   c.font = 'italic 900 40px "Arial Black", Impact, sans-serif';
-  c.fillStyle = '#f0286e'; c.fillText(title, 19, h * k + 17);
-  c.fillStyle = '#ffffff'; c.fillText(title, 16, h * k + 14);
+  c.fillStyle = '#f0286e'; c.fillText(title, 19, y0 + 17);
+  c.fillStyle = '#ffffff'; c.fillText(title, 16, y0 + 14);
   c.font = '700 19px ui-monospace, Menlo, Consolas, monospace';
-  c.fillStyle = '#fff6c2'; c.fillText(line, 16, h * k + 68, card.width - 32);
+  c.fillStyle = '#fff6c2'; c.fillText(line, 16, y0 + 68, card.width - 32);
+  if (opts.footnote) {
+    c.font = '700 16px ui-monospace, Menlo, Consolas, monospace';
+    c.fillStyle = '#b39ddb'; c.fillText(opts.footnote, 16, y0 + 96, card.width - 32);
+  }
   return card;
 }
