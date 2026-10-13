@@ -143,7 +143,12 @@ export function scorchMap(table) {
 export const LOOKS = {
   sober:      {},
   weed:       { sat: 1.60, toward: '#39ff14', mix: 0.07, drift: 0.05, driftRate: 0.6 },
-  alcohol:    { sat: 0.75, toward: '#ff9a3c', mix: 0.28 },
+  // The seventh ramp (flat.js: `dusk`, the violet a shadow is made of) changed what this look has to fight:
+  // mixing toward a saturated orange RAISES the saturation of a low-saturation violet, and at mix 0.28 the
+  // alcohol palette came out MORE saturated than the sober one — measured 0.2876 against 0.2774 — which breaks
+  // D17's promise that a drunk view is warmer AND washed out. The mix carries the wash, not the chroma scale:
+  // at 0.22 the palette is 0.2568 against 0.2774 and still 4.3x warmer. Re-measured, not guessed.
+  alcohol:    { sat: 0.72, toward: '#ff9a3c', mix: 0.22 },
   depression: { sat: 0.10, light: 0.70, toward: '#33405c', mix: 0.22 },
 };
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));

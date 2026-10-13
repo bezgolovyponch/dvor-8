@@ -40,6 +40,7 @@ That is the whole style. Everything below is the reason for each clause and the 
 | 3c | texture | A rough, large surface takes the adjacent tone of its own ramp in a fixed 8x8 ordered pattern | Material: grass, gravel, leaves, cloud |
 | 4 | line layer | A border is drawn if the pair of shapes behind it is supported by the photograph's ink or by a large value difference | Structure, and only structure |
 | 5 | roles | Sky, foliage, pane | Three named priors that choose a ramp and a tone; never a name shown to the player |
+| 6 | marks | The pixels the detector found are segmented apart from their ground, never absorbed, and never painted the same colour as what they stand on | A thing the player is meant to hit has to be a thing in the picture |
 
 ### The six ramps and the reserved band
 
@@ -50,7 +51,24 @@ earth    hue  28   shadow  52  highlight  16      soil, brick, dry grass
 stone    hue  40   shadow  65  highlight  30      concrete, kerb, painted wall
 metal    hue 220   shadow 240  highlight 210      cold grey: asphalt, glass, sky in overcast
 warm     hue   8   shadow  32  highlight   3      the sunset, a red car, a lit facade
+dusk     hue 264   shadow 288  highlight 252      the violet a shadow is made of
 ```
+
+**A seventh ramp re-tunes a look, and that was measured rather than assumed.** Adding `dusk` changed what the
+alcohol filter has to fight: mixing toward a saturated orange RAISES the saturation of a low-saturation violet,
+and at its old mix the alcohol palette came out *more* saturated than the sober one (0.2876 against 0.2774),
+breaking D17's promise that a drunk view is warmer **and** washed out. The mix carries the wash, not the chroma
+scale; at 0.22 the palette measures 0.2568 against 0.2774 and is still four times warmer. The test that caught
+it is the one that has held that promise since the second build.
+
+`dusk` is the last colour the palette can hold. `src/palette.js` lays a street out as `SIZE` = 30 entries for the
+first yard and 28 for each one after it, so a fixed table of seven ramps of four tones plus the two structural
+entries is exactly thirty — the whole block, and no room for an eighth. What it buys: the pixel-art convention
+that a shadow moves toward blue-violet had nowhere to land with six ramps, so every shaded surface was painted
+with the cold grey of the metal ramp. What it costs: nothing measurable. Value correlation, structure capture
+and ink share are unchanged to two decimals with it and without it; the number of palette entries a photograph
+actually uses rises (18 / 15 / 12 on the three test photographs against 16 / 16 / 10), and the largest single
+colour falls from 24.7% to 18.7% on the sunset photograph. A test holds the table inside the block.
 
 Tones are spaced at HSL lightness 0.15 / 0.35 / 0.56 / 0.80, the shadow end carrying more saturation than the
 light end, and the light end keeping most of its colour: an earlier version washed the top tone toward white
@@ -72,6 +90,8 @@ anything.
 | Value must not be reordered by colour | SOURCED | Gooch et al., Color2Gray, 2005 — the chroma-induced change to lightness is bounded, default alpha = 10 of 100 |
 | No dithering as a way to fake a mid-tone | SOURCED | Gerstner et al., *Pixelated Image Abstraction*, NPAR 2012: "uniform dithering can introduce undesired textures to surfaces" |
 | Dither PATTERN as a material signifier | SOURCED as documented practice | the pixel-art convention table in `docs/style.md` F26 |
+| Dither as a GRADIENT | **tried, measured, removed** | ordered two-level quantisation across a surface's own range was implemented and rendered: at sky densities it is a checkerboard, 74-95% of the frame came out dithered, and the value correlation fell from 0.93 to 0.85 on one photograph. More tones is the honest cure for a gradient; at four tones a ramp is better left flat |
+| Detector-masked segmentation | **the project's own seam** | the boxes come from MediaPipe through `src/objects.js`; using the object's own pixels as a segmentation barrier is this project's assembly |
 | A fixed palette shared by every image | SOURCED as practice | Obra Dinn's fixed 8-bit → 1-bit pipeline; UFO 50's single 32-colour palette |
 | Atmospheric perspective: far surfaces lighter | SOURCED as pictorial convention | standard practice; **no printed algorithm with parameters was found**, so the implementation here is the project's own |
 | Light direction from the bright side of the sky | **the project's own**, stated as a prior | single-image light estimation in the literature is learned, not model-free |
@@ -238,7 +258,7 @@ expensive from full resolution and is only viable as the last 2-4x step.
 ## 6. How to reproduce every number here
 
 ```
-node test.mjs                                     # 231 checks, must be 0 FAIL
+node test.mjs                                     # 235 checks, must be 0 FAIL
 node tools/monetisation-check.mjs                 # 29 checks, must be 0 FAIL
 python3 tools/serve.py 4312
 BASE=http://127.0.0.1:4312/ node --experimental-websocket tools/check.mjs out photos-test/a.jpg
@@ -248,7 +268,7 @@ BASE=http://127.0.0.1:4312/ node --experimental-websocket tools/check.mjs out ph
 
 | Check | Result |
 |---|---|
-| `node test.mjs` | 231 PASS, 0 FAIL (two of them new: the reserved band, and value grouping) |
+| `node test.mjs` | 235 PASS, 0 FAIL (new since the first draft: the reserved band, value grouping, a found thing survives and is painted apart, the palette fits a street block) |
 | `node tools/monetisation-check.mjs` | 29 PASS, 0 FAIL |
 | `tools/check.mjs` on a real photograph | exit 0, 4 targets, no page errors |
 | `tools/walk-check.mjs`, `folk-check.mjs`, `news-check.mjs`, `pop-check.mjs`, `paint-check.mjs` | all exit 0, no page errors |

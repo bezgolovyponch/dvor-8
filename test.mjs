@@ -130,8 +130,21 @@ check('no colour in the yard comes near the hues that mean "interactive"', (() =
 // clear step in value must not be painted the same colour: with the line layer thinned, the tone is the only
 // thing holding them apart, and a wall and the house in front of it become one silhouette without it.
 check('two touching shapes the photograph separates by value are never painted the same', (() => {
-  const label = st.regions.label, paint = new Int32Array(st.regions.nr).fill(-1);
-  for (let i = 0; i < N; i += 1) if (st.idx[i] !== OUT_OF) paint[label[i]] = st.idx[i];
+  // A region is a SET of colours now, not one colour: a gradient or a rough surface is painted with two
+  // adjacent tones of its own ramp. "Painted the same" therefore means the same set, which is the honest
+  // comparison and the one that would catch two shapes that really are indistinguishable.
+  const label = st.regions.label, paint = [];
+  for (let i = 0; i < N; i += 1) {
+    if (st.idx[i] === OUT_OF) continue;
+    const r = label[i];
+    (paint[r] = paint[r] || new Set()).add(st.idx[i]);
+  }
+  const same = (a, b) => {
+    const A = paint[a], B = paint[b];
+    if (!A || !B || A.size !== B.size) return false;
+    for (const v of A) if (!B.has(v)) return false;
+    return true;
+  };
   const pairs = new Map();
   for (let y = 0; y < H; y += 1) for (let x = 0; x < W; x += 1) {
     const i = y * W + x, a = label[i];
@@ -145,7 +158,7 @@ check('two touching shapes the photograph separates by value are never painted t
     const a = Math.floor(k / 1e6), b = k % 1e6;
     if (Math.abs(st.regions.luma[a] - st.regions.luma[b]) / 255 < 0.12) continue;
     checked += 1;
-    if (paint[a] === paint[b]) failed += 1;
+    if (same(a, b)) failed += 1;
   }
   return checked > 20 && failed === 0;
 })(), `${st.regions.nr} regions`);
@@ -518,10 +531,17 @@ const TOP = bandTop(w);
   // (2) THE STRUCTURAL ENTRIES ARE THE LAST TWO, NOT THE CONSTANTS. The outline and the void are at COLOURS
   // and COLOURS+1 for the median-cut route, and at different indices for a shorter palette; looking them up
   // by the constant wrote past the end and drew things in an undefined colour.
+  // The point of this check is that the structural entries are found by POSITION, never by the COLOURS
+  // constant: code that walks the palette must ask the palette. It used to prove that by pointing out that a
+  // flat palette is a different LENGTH from the median-cut one; the flat palette is now exactly thirty entries,
+  // which is the same length as SIZE, so the proof is stated directly instead — a palette is asked for its own
+  // last two entries whatever length it is, and both a long one and a short one are put through it.
+  const short = [0, 1, 2].map((n) => [n, n, n]).concat([[11, 0, 24], [4, 0, 10]]);
   check('the outline and the void are the palette\'s last two entries, whatever its length',
-    stf.palette.length !== 30 && flatMod.outlineOf(stf.palette) === stf.palette[stf.palette.length - 2]
-    && flatMod.voidOf(stf.palette) === stf.palette[stf.palette.length - 1],
-    `outline at ${stf.palette.length - 2}, not at COLOURS = ${COLOURS}`);
+    flatMod.outlineOf(stf.palette) === stf.palette[stf.palette.length - 2]
+    && flatMod.voidOf(stf.palette) === stf.palette[stf.palette.length - 1]
+    && flatMod.outlineOf(short) === short[short.length - 2] && flatMod.voidOf(short) === short[short.length - 1],
+    `outline at ${stf.palette.length - 2} of ${stf.palette.length}, and at 3 of 5`);
 
   // (3) PAINT LANDED ON THE SKY. takesPaint reads `!what || what[i] !== SKY`, so a null material map means
   // every pixel takes paint. The map is now derived from flat's own ramps, and the sky is in it.
@@ -609,8 +629,15 @@ const TOP = bandTop(w);
   check('a region the photograph does not make rough is exactly ONE colour',
     [...perRegion.values()].every((v) => v.size === 1), `${[...perRegion.values()].filter((v) => v.size > 1).length} textured of ${perRegion.size}`);
   check('the palette is a FIXED structure of ramps and tones, not a cut of the photograph',
-    st.palette.length === flat.RAMPS.length * flat.STEPS + 2 && flat.RAMPS.length === 6 && flat.STEPS === 4,
+    st.palette.length === flat.RAMPS.length * flat.STEPS + 2 && flat.STEPS === 4,
     `${flat.RAMPS.length} ramps x ${flat.STEPS} tones + outline + void = ${st.palette.length}`);
+  // AND IT MUST FIT IN THE BLOCK A STREET RESERVES FOR ONE PHOTOGRAPH. src/palette.js lays a street out as
+  // SIZE entries for the first yard and COLOURS for each one after it; a fixed table longer than that block
+  // would run into the next photograph's colours and a paint splat would come out as another yard's sky. The
+  // seventh ramp spent the last four entries the block had: thirty is both the palette and the block.
+  check('the fixed table fits inside the block a street reserves for one photograph',
+    st.palette.length <= SIZE && flat.RAMPS.length * flat.STEPS + 2 <= SIZE,
+    `${st.palette.length} entries of ${SIZE}`);
   // The hue-shift direction is per ramp, because the universal rule inverts on a blue ramp: pushing the
   // sky's shadow toward blue makes it MORE cyan and its highlight toward yellow makes the sky dirtier.
   // What is asserted is what is actually wanted and actually true — every ramp runs dark to light, and a
@@ -634,6 +661,38 @@ const TOP = bandTop(w);
     used.size >= 4, `${used.size} palette entries used`);
   check('the transition is deterministic: the same photograph twice is the same scene',
     flat.render(src, W3, H3).idx.join() === st.idx.join());
+}
+
+// ---- a thing the detector found is painted as a thing ---------------------------------------------------
+// The painter is told one thing about the player's world: where the found things are. It is not told what they
+// are. What the mark buys is that a thing survives the orphan stage and is never painted the same colour as
+// what it stands on, which is the difference between a grey car on grey asphalt being in the picture and not.
+{
+  const flat = await import('./src/flat.js');
+  const W4 = 96, H4 = 64;
+  const src = new Uint8ClampedArray(W4 * H4 * 4);
+  // a ground, and a car of the SAME luminance (127.8 against 128) and a slightly different colour: no value
+  // rule and no ink rule can tell them apart, so only the mark can
+  const car = { x0: 40, y0: 30, x1: 43, y1: 33 };
+  for (let y = 0; y < H4; y += 1) for (let x = 0; x < W4; x += 1) {
+    const i = (y * W4 + x) * 4;
+    const c = (x >= car.x0 && x <= car.x1 && y >= car.y0 && y <= car.y1) ? [150, 120, 110] : [128, 128, 128];
+    src[i] = c[0]; src[i + 1] = c[1]; src[i + 2] = c[2]; src[i + 3] = 255;
+  }
+  const mark = new Uint8Array(W4 * H4);
+  for (let y = car.y0; y <= car.y1; y += 1) for (let x = car.x0; x <= car.x1; x += 1) mark[y * W4 + x] = 1;
+  const at = (st, x, y) => st.idx[y * W4 + x];
+  const inCar = (st) => at(st, car.x0 + 1, car.y0 + 1);
+  const ground = (st) => at(st, 8, 8);
+  const plain = flat.render(src, W4, H4, { minRegionShare: 0.004 });
+  const marked = flat.render(src, W4, H4, { marks: mark, minRegionShare: 0.004 });
+  check('a small thing the same colour as its ground is absorbed when nothing marks it (the failure)',
+    inCar(plain) === ground(plain), 'orphan absorbed');
+  check('a thing the detector found is not absorbed, and is painted apart from its ground',
+    inCar(marked) !== ground(marked), `car ${inCar(marked)} vs ground ${ground(marked)}`);
+  check('and the ground stays ONE colour: only the thing is painted apart, not its surroundings',
+    at(marked, 2, 2) === at(marked, W4 - 3, 2) && at(marked, 2, H4 - 3) === at(marked, W4 - 3, H4 - 3)
+    && at(marked, car.x0 - 3, car.y0 + 1) === at(marked, 2, 2));
 }
 
 // The ink pass is GONE, and its checks went with it. It drew structure lines over a quantised photograph;

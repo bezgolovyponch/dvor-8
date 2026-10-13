@@ -70,6 +70,13 @@ export const RAMPS = [
   { name: 'stone', hue: 40, sat: 0.15 },
   { name: 'metal', hue: 220, sat: 0.10 },
   { name: 'warm', hue: 8, sat: 0.44 },
+  // THE VIOLET RAMP, and it is the last colour the palette can hold: seven ramps of four tones plus the two
+  // structural entries is thirty, which is exactly the block a street reserves for one photograph
+  // (src/palette.js: SIZE = 30, and the next photograph starts at 30). The pixel-art convention is that a
+  // shadow moves toward blue-violet; with only six ramps that convention had nowhere to land, so every shaded
+  // surface was painted with the cold grey of the metal ramp. This is where the shaded side of a building, the
+  // dark half of a street canyon and the deep folds of foliage go.
+  { name: 'dusk', hue: 264, sat: 0.12 },
 ];
 export const STEPS = 4;
 export const OUTLINE = [11, 0, 24];
@@ -177,7 +184,7 @@ export function rampFor(colour) {
 }
 
 /** Step 1: over-segment. Felzenszwalb & Huttenlocher, IJCV 2004. */
-export function segment(rgba, w, h, k = 300) {
+export function segment(rgba, w, h, k = 300, marks = null) {
   const n = w * h;
   const parent = new Int32Array(n), size = new Int32Array(n).fill(1), diff = new Float32Array(n);
   for (let i = 0; i < n; i += 1) parent[i] = i;
@@ -189,6 +196,13 @@ export function segment(rgba, w, h, k = 300) {
       const nx = x + dx, ny = y + dy;
       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
       const j = ny * w + nx;
+      // A THING THE DETECTOR FOUND IS SEGMENTED APART FROM ITS GROUND, and this is where that has to happen.
+      // Felzenszwalb's predicate merges a small region into a large one very early, while every fragment is
+      // still tiny, so a grey car on grey asphalt was gone before the merge or the orphan stage could protect
+      // it — measured: with the mark and without it, the car was painted the same colour as the road. A barrier
+      // across the mask boundary costs nothing and makes the guarantee real: a found thing is always its own
+      // shape in the picture.
+      if (marks && marks[i] !== marks[j]) continue;
       edges.push([Math.abs(rgba[i * 4] - rgba[j * 4]) + Math.abs(rgba[i * 4 + 1] - rgba[j * 4 + 1]) + Math.abs(rgba[i * 4 + 2] - rgba[j * 4 + 2]), i, j]);
     }
   }
@@ -305,7 +319,7 @@ export function lightFrom(rgba, w, h) {
  *     photograph's own ink along the shared border pushes apart two regions that look alike but are divided
  *     by a real line in the photograph.
  */
-export function merge(rgba, lab, count, w, h, target, trace = null, tone = 95, inkMap = null, cap = 150, inkWeight = 2.6, inkBarrier = 0.45, maxRegion = 0.16) {
+export function merge(rgba, lab, count, w, h, target, trace = null, tone = 95, inkMap = null, cap = 150, inkWeight = 2.6, inkBarrier = 0.45, maxRegion = 0.16, marks = null) {
   const n = w * h;
   const cur = new Int32Array(count);
   const sizes = new Int32Array(count), sr = new Float64Array(count), sg = new Float64Array(count), sb = new Float64Array(count);
@@ -316,6 +330,14 @@ export function merge(rgba, lab, count, w, h, target, trace = null, tone = 95, i
   }
   const find = (x) => { let r = x; while (cur[r] !== r) r = cur[r]; while (cur[x] !== r) { const nx = cur[x]; cur[x] = r; x = nx; } return r; };
   const mean = (r) => (sizes[r] ? [sr[r] / sizes[r], sg[r] / sizes[r], sb[r] / sizes[r]] : [0, 0, 0]);
+
+  // A THING THE DETECTOR FOUND IS NOT SWALLOWED BY A SURFACE. The orphan stage downstream keeps a small thing
+  // only if it also CONTRASTS with its neighbour, and a grey car on grey asphalt does not contrast: measured
+  // with the mark and without it, the car was merged into the road before the orphan stage ever saw it. So the
+  // rule belongs here: a marked region may merge with another marked region, and a marked fragment may absorb
+  // its own fragments, but it may not be absorbed into a surface.
+  const held = new Uint8Array(count);
+  if (marks) for (let i = 0; i < n; i += 1) if (marks[i]) held[find(lab[i])] = 1;
 
   // ONE MAP, TWO NUMBERS IN IT. The border length and the ink summed along that border are packed into a
   // single integer — length * 65536 + inkSum — so the table is rebuilt once per merge instead of twice.
@@ -350,6 +372,7 @@ export function merge(rgba, lab, count, w, h, target, trace = null, tone = 95, i
       const ra = find(Math.floor(k / count)), rb = find(k % count);
       if (ra === rb) continue;
       if (sizes[ra] > BIG && sizes[rb] > BIG) continue;   // two surfaces touching, not a fragment to absorb
+      if (marks && held[ra] !== held[rb] && (sizes[ra] > BIG || sizes[rb] > BIG)) continue;   // a found thing stays
       // NO SURFACE MAY SWALLOW THE PICTURE. The merge only insisted that ONE side of a pair be small, so a
       // field could keep absorbing fragments until it was three fifths of the frame: measured on the aerial
       // photograph, one green region of 58% and nothing else in the lower half of the picture. A flat shape
@@ -386,6 +409,7 @@ export function merge(rgba, lab, count, w, h, target, trace = null, tone = 95, i
     cur[small] = big;
     sizes[big] += sizes[small];
     sr[big] += sr[small]; sg[big] += sg[small]; sb[big] += sb[small];
+    if (held[small]) held[big] = 1;
     sizes[small] = 0;
     const nextBorders = new Map();
     for (const [k, packed] of borders) {
@@ -411,7 +435,7 @@ export const mergeTone = (rgba, lab, count, w, h, target, tone) => merge(rgba, l
  * neighbour, in which case it is a thing (a sun, a headlight, a road marking, the wheel of a bicycle) and it
  * is kept. Revision 1 absorbed by size alone, which is why the setting sun was painted out of its own picture.
  */
-function absorbOrphans(rgba, dense, w, h, minRegion, keepContrast) {
+function absorbOrphans(rgba, dense, w, h, minRegion, keepContrast, marks = null) {
   const n = w * h;
   const ids = new Map();
   for (let i = 0; i < n; i += 1) if (!ids.has(dense[i])) ids.set(dense[i], ids.size);
@@ -427,6 +451,12 @@ function absorbOrphans(rgba, dense, w, h, minRegion, keepContrast) {
   }
   const find = (x) => { let r = x; while (cur[r] !== r) r = cur[r]; return r; };
   const mean = (r) => [sr[r] / Math.max(1, size[r]), sg[r] / Math.max(1, size[r]), sb[r] / Math.max(1, size[r])];
+  // A THING THE DETECTOR FOUND IS NEVER ABSORBED. The contrast rule below keeps a small bright or dark thing,
+  // but a grey car on grey asphalt is neither: it is the same colour as its neighbour and was swallowed, which
+  // is why the parked cars of two of the three test photographs were invisible in the painted yard. What the
+  // detector found is a thing the player is meant to see and hit, so its pixels are held whatever their colour.
+  const held = new Uint8Array(nr);
+  if (marks) for (let i = 0; i < n; i += 1) if (marks[i]) held[find(lab[i])] = 1;
   for (let pass = 0; pass < 3; pass += 1) {
     const touch = new Map();
     for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
@@ -440,6 +470,7 @@ function absorbOrphans(rgba, dense, w, h, minRegion, keepContrast) {
     }
     if (!touch.size) break;
     for (const [r, nb] of touch) {
+      if (held[find(r)]) continue;                          // found by the detector: it stays
       let best = -1, bestScore = -1;
       for (const [q, cnt] of nb) { if (size[q] === 0) continue; const s = cnt * 1000 + size[q]; if (s > bestScore) { bestScore = s; best = q; } }
       if (best < 0) continue;
@@ -465,7 +496,7 @@ export function render(rgba, w, h, opts = {}) {
   const {
     target = 190, k = 300, tone = 110, cap = 130, inkWeight = 2.6, inkBarrier = 0.45, maxRegion = 0.16,
     lineInk = 0.20, lineValue = 0.15, minRegionShare = 0.0012, keepContrast = 80,
-    atmosphere = true, faceWeight = 0.35, inkSigma = 1.0, texture = true,
+    atmosphere = true, faceWeight = 0.35, inkSigma = 1.0, texture = true, marks = null,
   } = opts;
   const table = tones();
   const palette = [];
@@ -477,14 +508,14 @@ export function render(rgba, w, h, opts = {}) {
   const inkMap = ink(rgba, w, h, inkSigma);
   const light = lightFrom(rgba, w, h);
 
-  const { lab, count } = segment(rgba, w, h, k);
-  const merged = merge(rgba, lab, count, w, h, target, null, tone, inkMap, cap, inkWeight, inkBarrier, maxRegion);
+  const { lab, count } = segment(rgba, w, h, k, marks);
+  const merged = merge(rgba, lab, count, w, h, target, null, tone, inkMap, cap, inkWeight, inkBarrier, maxRegion, marks);
   const denseIn = new Int32Array(n);
   {
     const ids = new Map();
     for (let i = 0; i < n; i += 1) { if (!ids.has(merged[i])) ids.set(merged[i], ids.size); denseIn[i] = ids.get(merged[i]); }
   }
-  const dense = absorbOrphans(rgba, denseIn, w, h, Math.max(8, Math.round(n * minRegionShare)), keepContrast);
+  const dense = absorbOrphans(rgba, denseIn, w, h, Math.max(8, Math.round(n * minRegionShare)), keepContrast, marks);
 
   // ---- what each surviving region is, from its own pixels -----------------------------------------------
   const ids = new Map();
@@ -494,11 +525,15 @@ export function render(rgba, w, h, opts = {}) {
   for (let i = 0; i < n; i += 1) reg[i] = ids.get(dense[i]);
   const size = new Int32Array(nr), box = new Int32Array(nr * 4);
   const sr = new Float64Array(nr), sg = new Float64Array(nr), sb = new Float64Array(nr), sumLum = new Float64Array(nr);
+  const minL = new Float64Array(nr).fill(999), maxL = new Float64Array(nr);
   for (let r = 0; r < nr; r += 1) { box[r * 4] = w; box[r * 4 + 1] = h; box[r * 4 + 2] = -1; box[r * 4 + 3] = -1; }
   for (let i = 0; i < n; i += 1) {
     const r = reg[i], x = i % w, y = (i / w) | 0;
     size[r] += 1; sr[r] += rgba[i * 4]; sg[r] += rgba[i * 4 + 1]; sb[r] += rgba[i * 4 + 2];
-    sumLum[r] += 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
+    const pl = 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
+    sumLum[r] += pl;
+    if (pl < minL[r]) minL[r] = pl;
+    if (pl > maxL[r]) maxL[r] = pl;
     if (x < box[r * 4]) box[r * 4] = x;
     if (y < box[r * 4 + 1]) box[r * 4 + 1] = y;
     if (x > box[r * 4 + 2]) box[r * 4 + 2] = x;
@@ -546,6 +581,13 @@ export function render(rgba, w, h, opts = {}) {
   const span = Math.max(12, hiV - loV);
   const norm = new Float64Array(nr);
   for (let r = 0; r < nr; r += 1) norm[r] = Math.max(0, Math.min(1, (luma[r] - loV) / span));
+
+  // WHICH REGIONS ARE THINGS THE DETECTOR FOUND. The boxes arrive normalised; a region is marked when any of
+  // its pixels falls inside one. This is not a material and not a name: it is the one thing the painter is
+  // told about the player's world, and all it buys is that the thing is not painted the same colour as what
+  // it stands on.
+  const marked = new Uint8Array(nr);
+  if (marks) for (let i = 0; i < n; i += 1) if (marks[i]) marked[reg[i]] = 1;
 
   const ramp = new Int32Array(nr), role = new Int8Array(nr);
   // ROUGHNESS IS MEASURED INSIDE THE SURFACE, NOT ON ITS OUTLINE. The first version averaged the ink over
@@ -635,15 +677,19 @@ export function render(rgba, w, h, opts = {}) {
     // The pairs are worked through in order of how badly the palette is failing to separate them: the
     // photograph's own difference, minus the difference the palette actually paints. A pair the photograph
     // divides and the palette does not is the pair that has to move.
-    const want = (a, b) => (Math.abs(luma[a] - luma[b]) / 255) - (Math.abs(paint[a] - paint[b]) / 255);
+    // A pair with a found thing on one side is worked through first and is separated even when the photograph
+    // itself does not separate the two: a car the same grey as the road it is parked on is still a car.
+    const want = (a, b) => (marked[a] !== marked[b] ? 1 : 0) + (Math.abs(luma[a] - luma[b]) / 255) - (Math.abs(paint[a] - paint[b]) / 255);
     near.sort((p, q) => want(q[0], q[1]) - want(p[0], p[1]));
     const taken = (r, t) => {
       for (const q of adj[r]) if (ramp[q] === ramp[r] && toneArr[q] === t) return true;
       return false;
     };
     for (const [a, b] of near) {
-      if (Math.abs(luma[a] - luma[b]) / 255 < 0.09) continue;       // the photograph agrees: one value
-      if (Math.abs(paint[a] - paint[b]) / 255 >= 0.075) continue;   // the palette already tells them apart
+      const isThing = marked[a] !== marked[b];
+      if (!isThing && Math.abs(luma[a] - luma[b]) / 255 < 0.09) continue;   // the photograph agrees: one value
+      const apart = Math.abs(paint[a] - paint[b]) / 255;
+      if (apart >= (isThing ? 0.03 : 0.075)) continue;                      // already told apart
       const dark = luma[a] < luma[b] ? a : b, lightr = dark === a ? b : a;
       if (toneArr[lightr] < STEPS - 1 && !taken(lightr, toneArr[lightr] + 1)) { toneArr[lightr] += 1; paint[lightr] = 0.299 * table[ramp[lightr]][toneArr[lightr]][0] + 0.587 * table[ramp[lightr]][toneArr[lightr]][1] + 0.114 * table[ramp[lightr]][toneArr[lightr]][2]; }
       else if (toneArr[dark] > 0 && !taken(dark, toneArr[dark] - 1)) { toneArr[dark] -= 1; paint[dark] = 0.299 * table[ramp[dark]][toneArr[dark]][0] + 0.587 * table[ramp[dark]][toneArr[dark]][1] + 0.114 * table[ramp[dark]][toneArr[dark]][2]; }
@@ -663,6 +709,14 @@ export function render(rgba, w, h, opts = {}) {
   // "even, uniform" surfaces while irregular or dense patterns mean "rough" ones — grass, gravel, foliage,
   // worn asphalt. A flat palette has no other way to say "this is a field and not a painted floor", and the
   // alternative — more tones — is exactly what the six-ramp palette exists to refuse.
+  //
+  // A GRADIENT DITHER WAS TRIED AND REMOVED, and it is worth recording why. Ordered two-level quantisation
+  // across a surface's own range — density from lightness, an 8x8 threshold — reproduces a gradient with two
+  // entries of one ramp, and it was implemented and measured. At the densities a sky produces it is a
+  // CHECKERBOARD, and a 192-pixel sky covered in a 50% checker reads as a halftone print, not as pixel art:
+  // measured on the three photographs, 74-95% of the frame came out dithered and the value correlation fell
+  // (0.93 to 0.85 on one of them). More tones is the honest cure for a gradient; a dither is not, and this
+  // route would rather stay flat than look like a screened photograph.
   //
   // So: a region that is (a) big enough to read as a surface, (b) ROUGH by the photograph's own ink energy,
   // and (c) not sky, not a pane and not an object, is painted with the two ADJACENT tones of its OWN ramp,
@@ -692,8 +746,7 @@ export function render(rgba, w, h, opts = {}) {
     // courtyard before a single pixel was written.
     for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
       const i = y * w + x, r = reg[i];
-      if (texAlt[r] < 0) continue;
-      if (BAYER[((y & 7) << 3) | (x & 7)] < texCut[r]) idx[i] = texAlt[r];
+      if (texAlt[r] >= 0 && BAYER[((y & 7) << 3) | (x & 7)] < texCut[r]) idx[i] = texAlt[r];
     }
   }
 

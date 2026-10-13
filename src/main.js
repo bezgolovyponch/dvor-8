@@ -208,7 +208,11 @@ function withWindows(seg, st, w, h, big, photo) {
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
 function build(rgba, w, h, dets, big = null) {
-  const st = styliseFlat(rgba, w, h);
+  // THE THINGS THE DETECTOR FOUND ARE HANDED TO THE PAINTER, and this is the only thing the painter is told
+  // about the player's world. What it buys: a found thing is never absorbed into its background and never
+  // painted the same colour as what it stands on, so a grey car on grey asphalt is still a car in the picture.
+  // It invents nothing — the boxes come from the detector, and a box that finds nothing marks nothing.
+  const st = styliseFlat(rgba, w, h, { marks: dets });
   const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big, rgba);
   if (!regions.length) return false;
   // `more` are the photographs added afterwards: they are the player's, so «ЕЩЁ РАЗ» keeps them
@@ -395,7 +399,7 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
-  const st = styliseFlat(shot.rgba, w, h), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
+  const st = styliseFlat(shot.rgba, w, h, { marks: found.kept }), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);
