@@ -359,6 +359,16 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   const { idx, rubble, photo, sw, paint } = world, W = world.w, H = world.h;
   const w = cam.w, h = cam.h, cx = cam.x, cy = cam.y;
   const d = buf.image.data;
+  // THE BUFFER IS CLEARED BEFORE THE PICTURE IS PAINTED INTO IT. The paint loop writes the camera's window of
+  // the yard; anything outside that window kept LAST FRAME'S pixels, and on the constructive route (whose yard is
+  // painted from shapes, not from a photograph) that showed up as a slab of the previous picture across the top
+  // of the screen - the fault the creator photographed. A frame must start empty.
+  {
+    const VOID = pal[pal.length - 1] || [11, 0, 24];
+    for (let i = 0; i < d.length; i += 4) {
+      d[i] = VOID[0]; d[i + 1] = VOID[1]; d[i + 2] = VOID[2]; d[i + 3] = 255;
+    }
+  }
   const focus = scanY === null ? mode.focus : null;
   const r2 = focus ? (focus.radius * Math.min(sw, H)) ** 2 : 0;
   const fxx = fx.focus.x, fyy = fx.focus.y;
@@ -366,7 +376,19 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     const y = vy + cy, real = scanY !== null && y > scanY;
     for (let vx = 0; vx < w; vx += 1, o += 4) {
       const x = vx + cx;
-      if (real && x < sw) { const q = (y * sw + x) * 4; d[o] = photo[q]; d[o + 1] = photo[q + 1]; d[o + 2] = photo[q + 2]; d[o + 3] = 255; continue; }
+      // THE SCAN WIPE SHOWS THE YARD, DIMMED — NOT THE RAW PHOTOGRAPH. Above the scan line the game used to draw
+      // the photograph at full colour, so the top of the screen was a slab of unprocessed camera image with a hard
+      // seam against the built yard below: to the creator it looked like the renderer had failed. The wipe now
+      // shows THE SAME YARD, darker, so the line reads as "not looked at yet" rather than as a different picture.
+      if (real) {
+        const s2 = y * W + Math.min(W - 1, x);
+        const base = pal[rubble[s2] !== 255 ? rubble[s2] : idx[s2]] || [12, 6, 30];
+        // ONE BRIGHTNESS FOR THE WHOLE FRAME. Dimming one side of the scan line made a hard seam across the
+        // picture and read as a rendering fault; the line itself and the banner are what say "still searching".
+        const k = 1;
+        d[o] = base[0] * k; d[o + 1] = base[1] * k; d[o + 2] = base[2] * k; d[o + 3] = 255;
+        continue;
+      }
       let src = y * W + x, dim = 1;
       if (focus) {
         const dist = (x - fxx) ** 2 + (y - fyy) ** 2;

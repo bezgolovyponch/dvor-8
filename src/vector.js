@@ -223,7 +223,7 @@ export function trace(rgba, w, h, opts = {}) {
   const shapeRgba = en.rgba;
   const clean = { ...CLEAN, ...(opts.clean || {}) };
   const n = w * h;
-  const idx = new Uint8Array(n);
+  const idx = new Uint8Array(n).fill(255);          // 255 = "not painted yet"; palette indices are 0..49
 
   // ---- 1. sky, foliage, and everything else, by hue and smoothness --------------------------------------
   const src = new Uint8ClampedArray(rgba.buffer ? rgba.buffer : rgba, rgba.byteOffset || 0, n * 4);
@@ -943,6 +943,25 @@ export function trace(rgba, w, h, opts = {}) {
     if (y <= 0 || y >= h - 1) continue;
     if (sky[y * w + x]) continue;
     idx[y * w + x] = OUT; linePixels += 1;
+  }
+
+  // NOTHING UNPAINTED LEAVES THIS FUNCTION. Any pixel still at the sentinel - a hole in the shape labels, an
+  // edge of the frame, a region the passes disagreed about - takes the colour of the nearest painted pixel in
+  // its own row, and if the row has none, of the row above. The alternative is index 0, which is a dark blue
+  // slab over the top of the picture, and that is exactly what was on screen.
+  {
+    let filled = 0;
+    for (let y = 0; y < h; y += 1) {
+      let carry = -1;
+      for (let x = 0; x < w; x += 1) { const p2 = y * w + x; if (idx[p2] === 255) { if (carry >= 0) { idx[p2] = carry; filled += 1; } } else carry = idx[p2]; }
+      carry = -1;
+      for (let x = w - 1; x >= 0; x -= 1) { const p2 = y * w + x; if (idx[p2] === 255) { if (carry >= 0) { idx[p2] = carry; filled += 1; } } else carry = idx[p2]; }
+    }
+    for (let x = 0; x < w; x += 1) for (let y = 1; y < h; y += 1) {
+      const p2 = y * w + x;
+      if (idx[p2] === 255) { idx[p2] = idx[p2 - w]; filled += 1; }
+    }
+    if (filled) sky.__filled = filled;
   }
 
   return {
