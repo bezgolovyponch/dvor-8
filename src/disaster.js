@@ -24,6 +24,7 @@
 // the one thing this project has refused from the beginning.
 
 import { STEPS } from './flat.js';
+import { wreckAlong } from './world.js';
 
 export const DISASTERS = {
   hurricane: {
@@ -233,7 +234,7 @@ export function stepDisaster(d, world, dt, rnd) {
       if (r.gone || r.kind === 'window') continue;
       if (r.y + r.h * 0.6 < line) continue;                 // above the water: it survives
       r.gone = true; r.hits = r.hp;
-      wrecks(world, r);
+      wrecks(world, r, { x: r.cx, y: line + r.h * 0.2 }, 1.4);
       out.push({ type: 'drown', target: r });
     }
     if (d.water > 0.05 && rnd() < dt * spec.foam) out.push({ type: 'foam', line });
@@ -253,7 +254,8 @@ export function stepDisaster(d, world, dt, rnd) {
       const target = under[0] || null;
       if (target) {
         target.gone = true; target.hits = target.hp;
-        wrecks(world, target);
+        // the foot lands where the thing is, and the blow is a kaiju's
+        wrecks(world, target, { x: Math.min(target.x + target.w, Math.max(target.x, cx)), y: target.cy }, 2);
         d.stomped += 1;
       }
       out.push({ type: 'stomp', at: { x: cx, y: feet }, target });
@@ -273,7 +275,8 @@ export function stepDisaster(d, world, dt, rnd) {
       const target = cars.sort((a, b) => Math.abs(a.cx - cx) - Math.abs(b.cx - cx))[0] || null;
       if (target) {
         target.gone = true; target.hits = target.hp;
-        wrecks(world, target);
+        // the bite takes the near end of the thing, which is where a mouth would reach it
+        wrecks(world, target, { x: target.cx, y: target.cy }, 1.6);
         d.eaten += 1;
       }
       d.mouth = 1;
@@ -301,17 +304,10 @@ export function stepDisaster(d, world, dt, rnd) {
  * tone down the thing's own ramp, a ragged hole where the blow landed, and the void only at the centre of it.
  * A disaster uses that language like every other hitter.
  */
-function wrecks(world, region) {
-  const voidI = world.palette.length - 1;
-  const cx = region.cx, cy = region.cy;
-  const R = Math.max(2, Math.min(10, Math.sqrt(region.area) / 3));
-  region.pixels.forEach((p, n) => {
-    const x = p % world.w, y = (p / world.w) | 0;
-    const d = Math.hypot(x - cx, y - cy);
-    if (d <= R * 0.5) world.rubble[p] = voidI;                        // torn out
-    else if (d <= R || (x * 3 + y * 5) % 7 === 0) world.rubble[p] = world.dent[world.idx[p]] || voidI;
-    else world.idx[p] = world.dent[world.idx[p]] ?? world.idx[p];     // the rest is one tone down: a wreck
-  });
+function wrecks(world, region, at = null, strength = 1) {
+  // The game's own damage path, in the thing's own border (world.wreckAlong): a disaster hits exactly the way a
+  // thrown stone does, only harder. It is the same call, so a kaiju cannot invent a rule of its own.
+  return wreckAlong(world, region, at, strength);
 }
 
 export const beastAt = (d, world) => {

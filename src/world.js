@@ -8,6 +8,94 @@ import { STEPS } from './flat.js';
 import { mulberry32 } from './rng.js';
 import { makeDecals } from './decal.js';
 
+// ---- AN OBJECT'S OWN BORDER, AND DAMAGE THAT FOLLOWS IT -----------------------------------------------
+//
+// The audit's piece B, assembled from two functions that already existed for the scenery: a Moore boundary
+// trace and a Ramer-Douglas-Peucker simplification. Here they work on a REGION's own pixel list - the thing the
+// detector found and the game gave hit points to - so the game finally knows the SHAPE of what it is breaking
+// instead of only its box. Piece C (world.chip) then tears along that shape, and a disaster (piece D) calls the
+// same path a thrown stone does.
+
+/** The region's outline as a simplified closed polyline. Empty if the region has no pixels. */
+export function borderOf(world, region) {
+  const { w } = world;
+  const inR = new Set(region.pixels);
+  if (!inR.size) return [];
+  const has = (x, y) => inR.has(y * w + x);
+  let sx = -1, sy = -1;
+  for (const p of region.pixels) {
+    const x = p % w, y = (p / w) | 0;
+    if (sx < 0 || y < sy || (y === sy && x < sx)) { sx = x; sy = y; }
+  }
+  const N = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+  const pts = [];
+  let cx = sx, cy = sy, dir = 6;
+  const guard = 8 * (region.pixels.length + 8);
+  for (let n = 0; n < guard; n += 1) {
+    pts.push([cx, cy]);
+    let found = false;
+    for (let k = 0; k < 8; k += 1) {
+      const d = (dir + 5 + k) % 8;
+      const nx = cx + N[d][0], ny = cy + N[d][1];
+      if (has(nx, ny)) { cx = nx; cy = ny; dir = d; found = true; break; }
+    }
+    if (!found) break;
+    if (cx === sx && cy === sy && pts.length > 3) break;
+  }
+  if (pts.length < 4) return pts;
+  // simplify: a border of a thing at this scale is a handful of straight runs
+  const keep = new Uint8Array(pts.length);
+  keep[0] = 1; keep[pts.length - 1] = 1;
+  const tol = 1.4, stack = [[0, pts.length - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop();
+    const [ax, ay] = pts[a], [bx, by] = pts[b];
+    const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
+    let far = -1, fd = tol;
+    for (let i = a + 1; i < b; i += 1) {
+      const d = Math.abs((pts[i][0] - ax) * dy - (pts[i][1] - ay) * dx) / len;
+      if (d > fd) { fd = d; far = i; }
+    }
+    if (far > 0) { keep[far] = 1; stack.push([a, far], [far, b]); }
+  }
+  return pts.filter((_, i) => keep[i]);
+}
+
+/** Is a point inside a closed polyline? Even-odd, which is all a border needs. */
+export function insideBorder(poly, x, y) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * PIECE D: a bang on a thing, in the thing's OWN SHAPE. One tone down its own ramp everywhere the blow reaches,
+ * a hole torn out along the border where it landed, and the void only at the centre - never a black box, which
+ * is what "wrecked" looked like before (D48, and the audit's row 26).
+ */
+export function wreckAlong(world, region, at = null, strength = 1) {
+  const poly = borderOf(world, region);
+  const cx = at ? at.x : region.cx, cy = at ? at.y : region.cy;
+  const R = Math.max(2, Math.min(12, (Math.sqrt(region.area) / 3) * strength));
+  const voidI = world.palette.length - 1;
+  let torn = 0, dented = 0;
+  for (const p of region.pixels) {
+    const x = p % world.w, y = (p / world.w) | 0;
+    const d = Math.hypot(x - cx, y - cy);
+    const onBorder = poly.length > 3 && !insideBorder(poly, x, y);
+    if (d <= R * 0.5) { world.rubble[p] = voidI; torn += 1; continue; }
+    if (d <= R || (onBorder && (x * 3 + y * 5) % 3 === 0)) {
+      world.rubble[p] = world.dent[world.idx[p]] ?? voidI; torn += 1;
+    } else {
+      world.idx[p] = world.dent[world.idx[p]] ?? world.idx[p]; dented += 1;
+    }
+  }
+  return { poly, torn, dented };
+}
+
 // ---- THE ENVIRONMENT IS DESTRUCTIBLE TOO ------------------------------------------------------------------
 //
 // Until this, only the things the detector found could be hit: a car, a bench, a window. Everything else in the

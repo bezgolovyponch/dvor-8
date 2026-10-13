@@ -880,6 +880,35 @@ const TOP = bandTop(w);
       > straightness(en.line, W6, H6, 0, 0, W6, H6), 'the wall edge beats the average');
 }
 
+// ---- an object's own border, and damage that follows it (the audit's pieces B, C, D) -------------------
+{
+  const { borderOf, insideBorder, wreckAlong } = await import('./src/world.js');
+  const w4 = yard();
+  const car = byKind(w4, 'car');
+  const poly = borderOf(w4, car);
+  // The border must be a real polygon: closed, simplified (a handful of corners, not one per pixel), and
+  // enclosing the thing - its centre inside, a point well outside it outside.
+  check('a thing the detector found has a BORDER, not only a box: a closed simplified polyline round its pixels',
+    poly.length >= 4 && poly.length < car.area / 20 && poly.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+    && insideBorder(poly, car.cx, car.cy) && !insideBorder(poly, car.x + car.w + 8, car.y + car.h + 8),
+    `${poly.length} corners around ${car.area} pixels`);
+  const xs = poly.map((q) => q[0]), ys = poly.map((q) => q[1]);
+  check('and the border really wraps the thing: it spans its own extent',
+    Math.min(...xs) <= car.x + 1 && Math.max(...xs) >= car.x + car.w - 2
+    && Math.min(...ys) <= car.y + 1 && Math.max(...ys) >= car.y + car.h - 2,
+    `x ${Math.min(...xs)}-${Math.max(...xs)}, y ${Math.min(...ys)}-${Math.max(...ys)}`);
+
+  const before = Int32Array.from(car.pixels.map((p) => w4.idx[p]));
+  const hit = wreckAlong(w4, car, { x: car.cx, y: car.cy }, 2);
+  const stillDark = car.pixels.filter((p, i) => w4.idx[p] === before[i]).length;
+  check('a hit wrecks it IN ITS OWN SHAPE: the blow is torn out, and most of the thing is dented one tone down rather than deleted',
+    hit.torn > 4 && hit.dented > hit.torn && stillDark < car.pixels.length * 0.2 && w4.rubble.some((v) => v !== 255),
+    `${hit.torn} torn, ${hit.dented} dented, ${stillDark} untouched`);
+  check('and nothing turns into a black box: no more than a fifth of the thing is void',
+    car.pixels.filter((p) => w4.rubble[p] === w4.palette.length - 1).length < car.pixels.length * 0.2,
+    `${car.pixels.filter((p) => w4.rubble[p] === w4.palette.length - 1).length} void of ${car.pixels.length}`);
+}
+
 // ---- the info button: a true fact, random, never the same theme twice ---------------------------------
 {
   const lore = await import('./src/lore.js');
