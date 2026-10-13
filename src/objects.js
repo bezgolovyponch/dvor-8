@@ -75,6 +75,26 @@ export function toRegions(dets, rgba, w, h) {
     const ring = [];
     for (let x = x0 - 2; x <= x1 + 2; x += 1) for (const y of [y0 - 2, y1 + 2]) if (x >= 0 && y >= 0 && x < w && y < h) ring.push((y * w + x) * 4);
     for (let y = y0 - 2; y <= y1 + 2; y += 1) for (const x of [x0 - 2, x1 + 2]) if (x >= 0 && y >= 0 && x < w && y < h) ring.push((y * w + x) * 4);
+    // THE CUT-OUT, WITH AN ADAPTIVE CUT. A fixed "30 units from the background" test fails on a car whose paint
+    // is close to the road, and the old code then fell back to THE WHOLE BOX - which is why every outline in the
+    // game was a rectangle: `edgesOf` was faithfully tracing a box, because the region's pixels WERE a box. The
+    // cut is now taken from the ring's OWN distances (the 70th percentile, widened), so a busy background is cut
+    // hard and a flat one is cut gently, and there is no fallback to a box.
+    const ringDist = [];
+    for (let k = 0; k < ring.length; k += 3) {
+      const q = ring[k];
+      let best = 1e9;
+      for (let j = 0; j < ring.length; j += 3) {
+        if (j === k) continue;
+        const r0 = ring[j], dr = rgba[q] - rgba[r0], dg = rgba[q + 1] - rgba[r0 + 1], db = rgba[q + 2] - rgba[r0 + 2];
+        const dist = dr * dr + dg * dg + db * db;
+        if (dist < best) best = dist;
+      }
+      ringDist.push(best);
+    }
+    ringDist.sort((x, y) => x - y);
+    const spread = ringDist.length ? ringDist[Math.floor(ringDist.length * 0.7)] : 900;
+    const CUT = Math.max(18 * 18, spread * 1.3);
     const unlike = (p) => {
       let best = 1e9;
       for (let k = 0; k < ring.length; k += 3) {
@@ -82,7 +102,7 @@ export function toRegions(dets, rgba, w, h) {
         const dist = dr * dr + dg * dg + db * db;
         if (dist < best) best = dist;
       }
-      return best > 30 * 30;
+      return best > CUT;
     };
     const round = (x, y) => {   // inside the rounded box
       const r = Math.min(bw, bh) * 0.28, ax = Math.min(x - x0, x1 - x), ay = Math.min(y - y0, y1 - y);
@@ -93,9 +113,22 @@ export function toRegions(dets, rgba, w, h) {
       const p = y * w + x;
       if (owner[p] === -1 && round(x, y) && (ring.length === 0 || unlike(p * 4))) pixels.push(p);
     }
-    if (pixels.length < bw * bh * 0.4) {
+    // NO FALLBACK TO THE BOX. If the cut kept too little, the thing is cut at the LOOSEST threshold that keeps a
+    // majority of the box interior - never the box itself, because the box is what made every outline a rectangle.
+    if (pixels.length < bw * bh * 0.25) {
+      const loose = Math.max(10 * 10, spread);
       pixels = [];
-      for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) { const p = y * w + x; if (owner[p] === -1 && round(x, y)) pixels.push(p); }
+      for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
+        const p = y * w + x;
+        if (owner[p] !== -1 || !round(x, y)) continue;
+        let best = 1e9;
+        for (let k = 0; k < ring.length; k += 3) {
+          const q = ring[k], dr = rgba[p] - rgba[q], dg = rgba[p + 1] - rgba[q + 1], db = rgba[p + 2] - rgba[q + 2];
+          const dist = dr * dr + dg * dg + db * db;
+          if (dist < best) best = dist;
+        }
+        if (best > loose) pixels.push(p);
+      }
     }
     if (pixels.length < 12) continue;
     const id = regions.length;
