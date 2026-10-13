@@ -9,7 +9,7 @@ import { textWidth } from './font.js';
 import { PAINTS, COVER } from './decal.js';
 import { bloomPixels, parcelPixels } from './kind.js';
 import { weatherTable } from './weather.js';
-import { beastPixels, beastAt } from './disaster.js';
+import { beastPixels, beastAt, eventSprite } from './disaster.js';
 import { disasterTable, DISASTERS as DISASTERS_LOOK } from './disaster.js';
 import { RAMPS, STEPS } from './flat.js';
 
@@ -519,6 +519,18 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
         if (world.rubble[p] !== 255) continue;
         ctx.fillStyle = css(((x * 7 + y * 13) % 11 === 0 && y < line + 3) ? foam : water);
         ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    // THE EVENT SPRITE, from the v6 screen: a spiral for the hurricane, a wave for the tsunami, both with the
+    // one-pixel outline that makes them belong to the picture instead of floating over it.
+    if (!spec.beast) {
+      const sp = eventSprite(pal, disaster.kind, 32);
+      const fx2 = disaster.kind === 'hurricane'
+        ? { x: world.w * Math.max(0.06, Math.min(0.94, disaster.front)), y: world.h * 0.34 }
+        : { x: world.w * 0.7, y: world.h * (1 - disaster.water) - 20 };
+      for (const q of sp) {
+        ctx.fillStyle = q.rgb || css(pal[q.i]);
+        ctx.fillRect(fx2.x + q.x, fx2.y + q.y, 1, 1);
       }
     }
     const at = beastAt(disaster, world);

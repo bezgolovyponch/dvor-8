@@ -1038,6 +1038,22 @@ const TOP = bandTop(w);
     'ruins remain');
 }
 
+// ---- the v6 event sprites: a spiral and a wave, each with the one-pixel outline ----------------------
+{
+  const { eventSprite } = await import('./src/disaster.js');
+  const pal9 = (await import('./src/flat.js')).paletteOf();
+  const OUT9 = pal9.length - 2;
+  const hue = eventSprite(pal9, 'hurricane'), wave = eventSprite(pal9, 'tsunami');
+  check('the hurricane is a SPIRAL and the tsunami a WAVE, both ported from the v6 screen (source named in disaster.js)',
+    hue.length > 200 && wave.length > 300 && hue.some((q) => q.x < 0) && hue.some((q) => q.x > 0),
+    `hurricane ${hue.length} px, tsunami ${wave.length} px`);
+  check('and each carries the ONE-PIXEL OUTLINE, v6\'s own rule: a filled pixel with an empty neighbour becomes ink',
+    hue.filter((q) => q.i === OUT9).length > 40 && wave.filter((q) => q.i === OUT9).length > 40,
+    `${hue.filter((q) => q.i === OUT9).length} and ${wave.filter((q) => q.i === OUT9).length} outline pixels`);
+  check('the sprites are drawn in the game\'s own palette, not in v6\'s literals',
+    [...hue, ...wave].every((q) => q.i >= 0 && q.i < pal9.length), 'every pixel is a palette entry');
+}
+
 // ---- requirements 28 and 29: the storm rolls the cars and takes the windows with it -------------------
 {
   const { rollOver, wreckAlong, borderOf } = await import('./src/world.js');

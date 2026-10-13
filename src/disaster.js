@@ -355,3 +355,74 @@ export const beastAt = (d, world) => {
   const height = world.h * (d.kind === 'beyonce' ? 0.62 : 0.55);
   return { x: world.w * d.x, feet: world.h * (d.kind === 'beyonce' ? 0.92 : 0.86), height, frame: Math.floor(d.t * 6) };
 };
+
+
+// ---- THE EVENT SPRITE, PORTED FROM THE v6 SCREEN ------------------------------------------------------
+//
+// SOURCE, exactly as asked for: `~/Documents/DVOR-8 Street v6.dc.html`, the creator's own working screen.
+//   - the HURRICANE is a LOGARITHMIC SPIRAL: for every pixel, the angle and radius from the centre give
+//     `sin(th * 2 - log(r + 1) * 4)`, and the bands of that sine are the arms (v6 `icon()`, kind 'hurricane').
+//   - the TSUNAMI is a WAVE PROFILE with four horizontal bands and a foam arc over the crest (v6 `icon()`,
+//     kind 'tsunami': `ys = 22 - 13 * exp(-((x - 12) / 7)^2)` and the arc drawn at radius 5 and 4).
+//   - both are finished with a ONE-PIXEL DARK OUTLINE, computed by dilating the silhouette (v6 `outline()`).
+// The colours below are v6's own, mapped onto this game's palette so the sprite belongs to the picture.
+export const SPRITE = { size: 32, outline: '#2e222f' };
+
+export function eventSprite(palette, kind, size = SPRITE.size) {
+  const N = size, g = new Array(N * N).fill(null);
+  const put = (x, y, c) => { const i = Math.round(x), j = Math.round(y); if (i < 0 || j < 0 || i >= N || j >= N) return; g[j * N + i] = c; };
+  const hex = (i) => { const c = palette[i]; return `#${[c[0], c[1], c[2]].map((v) => v.toString(16).padStart(2, '0')).join('')}`; };
+  const near = (rgb) => {
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < palette.length - 2; i += 1) {
+      const c = palette[i], d = (c[0] - rgb[0]) ** 2 + (c[1] - rgb[1]) ** 2 + (c[2] - rgb[2]) ** 2;
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  };
+  const white = hex(near([255, 255, 255])), foam = hex(near([143, 248, 226])), mid = hex(near([77, 155, 230])), deep = hex(near([77, 101, 180]));
+  const cloud = hex(near([199, 220, 208])), grey = hex(near([155, 171, 178]));
+  const ink = hex(palette.length - 2);
+  const scale = N / 32;
+  if (kind === 'hurricane') {
+    for (let y = 0; y < N; y += 1) for (let x = 0; x < N; x += 1) {
+      const dx = (x / scale) - 15.5, dy = (y / scale) - 15.5, r = Math.hypot(dx, dy), th = Math.atan2(dy, dx);
+      if (r > 13 || r < 2.5) continue;
+      const s2 = Math.sin(th * 2 - Math.log(r + 1) * 4);
+      if (s2 > 0.2) put(x, y, s2 > 0.75 ? white : s2 > 0.5 ? cloud : grey);
+    }
+  } else if (kind === 'tsunami') {
+    for (let x = 1; x < N - 1; x += 1) {
+      const ys = (22 - 13 * Math.exp(-(((x / scale - 12) / 7) ** 2))) * scale;
+      for (let y = Math.round(ys); y < N - 2; y += 1) {
+        const d = y - ys;
+        put(x, y, d < 1.5 * scale ? white : d < 4 * scale ? foam : d < 9 * scale ? mid : deep);
+      }
+    }
+    for (let a = -1.6; a < 1.4; a += 0.05) {
+      const r = 5 * scale;
+      put(16 * scale + Math.cos(a) * r, 12 * scale + Math.sin(a) * r, white);
+      put(16 * scale + Math.cos(a) * (r - scale), 12 * scale + Math.sin(a) * (r - scale), foam);
+    }
+  } else {
+    return [];
+  }
+  // THE ONE-PIXEL OUTLINE, v6's own rule: a transparent pixel with a filled neighbour becomes the ink.
+  const out = g.slice();
+  for (let j = 1; j < N - 1; j += 1) for (let i = 1; i < N - 1; i += 1) {
+    const k = j * N + i;
+    if (!g[k] && (g[k - 1] || g[k + 1] || g[k - N] || g[k + N])) out[k] = ink;
+  }
+  const px = [];
+  for (let k = 0; k < out.length; k += 1) if (out[k]) {
+    const c = out[k];
+    let idx2 = palette.length - 2;
+    for (let i = 0; i < palette.length - 2; i += 1) {
+      const q = palette[i];
+      if (hex(i) === c) { idx2 = i; break; }
+      void q;
+    }
+    px.push({ x: (k % N) - (N >> 1), y: ((k / N) | 0) - (N >> 1), i: idx2, rgb: c });
+  }
+  return px;
+}
