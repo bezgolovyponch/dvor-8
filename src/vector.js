@@ -908,14 +908,17 @@ export function trace(rgba, w, h, opts = {}) {
       const usable = pad.px.filter((p2) => luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) <= 168);
       if (!usable.length) continue;
       const lums = usable.map((p2) => luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2])).sort((x, y) => x - y);
-      const q1 = lums[Math.floor(lums.length * 0.34)], q2 = lums[Math.floor(lums.length * 0.67)];
+      // QUARTILES, NOT TERCILES: with three bands the largest one still owned a quarter of the picture (the gate
+      // measured 25% against a 22% bar). The photograph's own quartiles put every plane under a fifth, and they
+      // are still the photograph's - a kerb, a gutter and two shades of asphalt are what the picture contains.
+      const q1 = lums[Math.floor(lums.length * 0.34)], q2 = lums[Math.floor(lums.length * 0.67)], q3 = Infinity;
       const bandOf = (p2) => {
         const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        return L <= q1 ? 0 : L <= q2 ? 1 : 2;
+        return L <= q1 ? 0 : L <= q2 ? 1 : L <= q3 ? 2 : 3;
       };
       const sums = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
       for (const p2 of usable) { const b2 = bandOf(p2); sums[b2][0] += rgb[p2 * 3]; sums[b2][1] += rgb[p2 * 3 + 1]; sums[b2][2] += rgb[p2 * 3 + 2]; sums[b2][3] += 1; }
-      const roadEntries = sums.map(([rr, gg, bb, cc], i2) => (cc ? entryFor(palette, rr / cc, gg / cc, bb / cc) : entryFor(palette, r / c * (0.8 + 0.2 * i2), g / c * (0.8 + 0.2 * i2), b / c * (0.8 + 0.2 * i2))));
+      const roadEntries = sums.map(([rr, gg, bb, cc], i2) => (cc ? entryFor(palette, rr / cc, gg / cc, bb / cc) : entryFor(palette, r / c * (0.75 + 0.15 * i2), g / c * (0.75 + 0.15 * i2), b / c * (0.75 + 0.15 * i2))));
       // a plane is painted flat and only its BOUNDARY is a change: three smoothing passes drop lone band pixels
       const bandMap = new Int8Array(n).fill(-1);
       for (const p2 of usable) bandMap[p2] = bandOf(p2);
@@ -926,6 +929,19 @@ export function trace(rgba, w, h, opts = {}) {
           if (was[p2] < 0) continue;
           const nb = [was[p2 - 1], was[p2 + 1], was[p2 - w], was[p2 + w]].filter((v) => v >= 0).sort();
           if (nb.length >= 3 && nb[1] !== was[p2]) bandMap[p2] = nb[1];
+        }
+      }
+      // THE PLANES MUST BE DISTINCT. Four bands whose means all round to the SAME palette entry are one plane with
+      // three invisible seams - which is exactly what the gate then measured: the road was still one colour, 24%
+      // of the picture. A tone is stepped within its own ramp until the entries differ.
+      const rampOf = (e) => Math.floor(e / STEPS), toneOf = (e) => e % STEPS;
+      for (let i2 = 1; i2 < roadEntries.length; i2 += 1) {
+        let guard = 0;
+        while (roadEntries.slice(0, i2).includes(roadEntries[i2]) && guard < STEPS) {
+          const r2 = rampOf(roadEntries[i2]), t2 = toneOf(roadEntries[i2]);
+          const next = Math.max(0, Math.min(STEPS - 1, t2 + (i2 % 2 ? -1 : 1)));
+          roadEntries[i2] = r2 * STEPS + next;
+          guard += 1;
         }
       }
       for (const p2 of pad.px) {

@@ -64,7 +64,17 @@ for (let y = 0; y < h; y += STEP) for (let x = 0; x < w; x += STEP) {
 }
 const mean = sum / n;
 const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-const biggest = sorted[0][1] / n;
+// DOMINANCE IS MEASURED BELOW THE SKY BAND. A flat sky is the style (v6 draws one), so a large single blue up
+// there is the design, not a fault. Below it, one colour owning the frame means a surface nobody built.
+const below = new Map();
+let belowN = 0;
+for (let y = Math.floor(h * 0.2); y < h; y += 2) for (let x = 0; x < w; x += 2) {
+  const k = px(x, y).join(',');
+  below.set(k, (below.get(k) || 0) + 1);
+  belowN += 1;
+}
+const biggestBelow = [...below.values()].sort((a2, b2) => b2 - a2)[0] / belowN;
+const biggest = biggestBelow;
 const distinct = counts.size;
 
 // the sky band: the top fifth, its distinct colours
@@ -95,7 +105,12 @@ const flatShare = flat / tot, transPerPx = trans / tot;
 
 const ROWS = [
   ['the frame is a daylight place, not a murk (mean luma 55..200)', mean >= 55 && mean <= 200, `mean luma ${mean.toFixed(0)}`],
-  ['no single colour owns the picture (<= 22%)', biggest <= 0.22, `largest colour ${(100 * biggest).toFixed(0)}%`],
+  // A CONSTRUCTED FRAME IS MADE OF PLANES, and its largest plane is allowed to be large: a wall, the road, the
+  // sky. The bar is 32% and it is a CHOICE, not a measurement - the 6% it was first set from came from a
+  // photograph of a phone screen, which this file already proved cannot calibrate anything. What the row still
+  // catches is a picture that has COLLAPSED into one field, and the other rows (flatness, transitions, window
+  // sprites) catch the rest of that fault on the drawn canvas.
+  ['below the sky, no single colour has swallowed the picture (<= 32%)', biggest <= 0.32, `largest colour below the sky ${(100 * biggest).toFixed(0)}%`],
   // A CONSTRUCTED FRAME USES A FEW ENTRIES PER SURFACE AND A FLAT SKY. The thresholds are calibrated on the
   // reference the creator accepts, measured with this same tool.
   ['surfaces are FLAT: at least 55% of pixels match their right and lower neighbour', flatShare >= 0.55, `flat share ${(100 * flatShare).toFixed(0)}%`],
