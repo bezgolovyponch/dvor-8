@@ -414,27 +414,6 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     if (b.x > cx + w + 6 || b.x < cx - 6) continue;
     for (const px of bloomPixels(pal, STEPS, b, seconds)) { ctx.fillStyle = css(pal[px.i]); ctx.fillRect(px.x, px.y, 1, 1); }
   }
-  // THE DISASTER, drawn over the yard: the water line first, then the beast, in the palette's own colours.
-  if (disaster) {
-    const spec = DISASTERS_LOOK[disaster.kind];
-    if (disaster.water > 0.01) {
-      const line = Math.round(world.h * (1 - disaster.water));
-      const water = pal[pal.length - 2 - 3] || pal[4];
-      const foam = pal[pal.length - 2 - 1] || pal[5];
-      for (let y = line; y < world.h; y += 1) for (let x = 0; x < world.w; x += 1) {
-        const p = y * world.w + x;
-        if (world.rubble[p] !== 255) continue;
-        ctx.fillStyle = css(((x * 7 + y * 13) % 11 === 0 && y < line + 3) ? foam : water);
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
-    const at = beastAt(disaster, world);
-    if (at) for (const px of beastPixels(pal, spec.beast, at.x, at.feet, at.height, at.frame, { mouth: disaster.mouth, shake: disaster.shake })) {
-      if (px.x < cx - 4 || px.x > cx + w + 4) continue;
-      ctx.fillStyle = css(pal[px.i]);
-      ctx.fillRect(px.x, px.y, 1, 1);
-    }
-  }
   // Corner brackets on everything still standing and in view: what can be hit is never a guess.
   for (const r of world.regions) {
     if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;
@@ -512,6 +491,28 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     ctx.fillStyle = `rgba(255,255,255,${(fx.flash * 0.5).toFixed(3)})`;
     ctx.fillRect(0, 0, w, h);
   }
+  // THE DISASTER, drawn over the yard: the water line first, then the beast, in the palette's own colours.
+  if (disaster) {
+    const spec = DISASTERS_LOOK[disaster.kind];
+    if (disaster.water > 0.01) {
+      const line = Math.round(world.h * (1 - disaster.water));
+      const water = pal[pal.length - 2 - 3] || pal[4];
+      const foam = pal[pal.length - 2 - 1] || pal[5];
+      for (let y = line; y < world.h; y += 1) for (let x = 0; x < world.w; x += 1) {
+        const p = y * world.w + x;
+        if (world.rubble[p] !== 255) continue;
+        ctx.fillStyle = css(((x * 7 + y * 13) % 11 === 0 && y < line + 3) ? foam : water);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    const at = beastAt(disaster, world);
+    if (at) for (const px of beastPixels(pal, spec.beast, at.x, at.feet, at.height, at.frame, { mouth: disaster.mouth, shake: disaster.shake })) {
+      if (px.x < cx - 4 || px.x > cx + w + 4) continue;
+      ctx.fillStyle = css(pal[px.i]);
+      ctx.fillRect(px.x, px.y, 1, 1);
+    }
+  }
+
 }
 
 // The first yard as it now stands, enlarged, with the result written under it: a picture to keep or send.

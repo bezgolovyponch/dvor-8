@@ -142,3 +142,24 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 .palette .chip i { font-style: normal; font-size: 9px; opacity: .78; letter-spacing: .01em; }
 .palette .chip.on { outline: 2px solid #fff; }
 #paletteWhy { margin-top: 6px; }
+
+/* ---- THE TOOLBAR (the bar at the bottom) ---------------------------------------------------------------
+   Appended here because THIS is the stylesheet. The first attempt at these rules was written into index.html,
+   where there is no <style> element at all: they did nothing, and the toolbar came out as a cramped centred
+   column. That is the whole reason it "would not take the styles", and it is exactly the kind of fault only a
+   look at the screen finds. */
+#bar { display: flex; flex-direction: row; align-items: flex-start; justify-content: flex-start;
+  gap: 8px; width: 100%; box-sizing: border-box; padding: 6px 10px 10px; text-align: left; }
+#bar .barDrop { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; text-align: left; }
+#bar details.fold { flex: 1 1 auto; min-width: 0; margin: 0; text-align: left; }
+#bar .pill { display: flex; align-items: center; justify-content: space-between; width: 100%;
+  box-sizing: border-box; padding: 9px 11px; background: #1d0745; border: 2px solid var(--purple, #5b2ea6);
+  color: #fff; list-style: none; font: 900 15px "Arial Black", Impact, sans-serif; }
+#bar details[open] > .pill { border-color: var(--pink, #f0286e); }
+#bar .round { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--pink, #f0286e);
+  background: #1d0745; color: #fff; font: 900 18px "Arial Black", Impact, sans-serif; display: flex;
+  align-items: center; justify-content: center; padding: 0; }
+#bar .round[aria-pressed="true"] { background: var(--pink, #f0286e); color: #12052e; }
+#bar.hidden .barDrop { display: none; }
+#bar .palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; text-align: left; }
+#bar .row { display: flex; flex-wrap: wrap; gap: 4px; text-align: left; }

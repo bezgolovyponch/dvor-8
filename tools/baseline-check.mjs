@@ -6,11 +6,19 @@
 //
 // Run: node tools/baseline-check.mjs        (add --json for machine output)
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 
 const read = (p) => (existsSync(new URL(`../${p}`, import.meta.url)) ? readFileSync(new URL(`../${p}`, import.meta.url), 'utf8') : '');
 const src = (f) => read(`src/${f}`);
 const has = (text, ...needles) => needles.every((n) => text.includes(n));
+
+// L3 — APPEARANCE. A row may require a PICTURE that a human can open, and it fails if the picture is missing or
+// older than the code it is supposed to show. This is the level that was missing when a mechanism could "pass"
+// while nothing was on screen.
+const shot = (name) => new URL(`../docs/shots/${name}`, import.meta.url);
+const shotNewerThan = (name, code) => {
+  try { return statSync(shot(name)).mtimeMs >= statSync(new URL(`../${code}`, import.meta.url)).mtimeMs; } catch { return false; }
+};
 
 const ROWS = [
   ['DVOR-8: a photographed yard becomes a level', 'src/detect.js', () => has(src('detect.js'), 'ObjectDetector', 'detectAll')],
@@ -29,7 +37,8 @@ const ROWS = [
   ['OPEN: Godzilla and Beyoncé are drawn on screen (code exists, screen does not)', 'src/disaster.js + a screenshot', () => src('disaster.js').includes("UNREALISED = ['godzilla', 'beyonce']") === false],
   ["Beyoncé eats cars, Pac-Man style, then shakes her head", 'src/disaster.js', () => has(src('disaster.js'), "type: 'chomp'", 'd.chew', 'shake', 'PAC-MAN')],
   ['A disaster can never touch a person', 'src/disaster.js + test.mjs', () => has(src('disaster.js'), 'export function stepDisaster') && has(read('test.mjs'), 'a disaster cannot reach a person')],
-  ['The bottom bar: weapon, disaster, info, expand circle', 'index.html', () => has(read('index.html'), 'id="paletteBox"', 'id="fateBox"', 'id="infoBtn"', 'id="barMore"', 'class="round"')],
+  ['L1 The bottom toolbar: arrow, the two names, info on the right', 'index.html + style.css', () => has(read('index.html'), 'id="paletteBox"', 'id="fateBox"', 'id="infoBtn"', 'id="barMore"', 'class="round"', 'class="pill"') && has(read('style.css'), '#bar .round', '#bar .pill')],
+  ['L3 The toolbar LOOKS like a toolbar: a picture proves it', 'docs/shots/toolbar.png', () => existsSync(shot('toolbar.png')) && shotNewerThan('toolbar.png', 'style.css')],
   ['Info button: true facts, random, never the same theme twice', 'src/lore.js', () => has(src('lore.js'), 'export const FACTS', 'export function factFor', 'theme') && has(src('main.js'), 'factFor')],
   ['The share card carries Я ЗДЕСЬ · I AM HERE, before and after', 'src/render.js', () => has(src('render.js'), 'I AM HERE', "'БЫЛО'", "'СТАЛО'")],
   ['The share text leads with the tag and ends with hashtags', 'src/album.js', () => has(src('album.js'), '#ЯЗДЕСЬ', 'I AM HERE')],
