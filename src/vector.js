@@ -838,17 +838,35 @@ export function trace(rgba, w, h, opts = {}) {
       const body = entryFor(palette, mean[0], mean[1], mean[2]);
       const glass = entryFor(palette, mean[0] * 0.55, mean[1] * 0.58, mean[2] * 0.66);
       const lit = entryFor(palette, Math.min(255, mean[0] * 1.2), Math.min(255, mean[1] * 1.2), Math.min(255, mean[2] * 1.2));
+      // THE TEMPLATE, from the reference the creator's own screen cites (v6: "one template for all cars,
+      // inspired by the exaggerated vehicles in Metal Slug"): a 4-TONE RAMP from the thing's paint colour, a
+      // DIAGONAL WINDSHIELD GLINT, and an AMBER RUNNING LIGHT on the outer edge - on top of the 1-px outline the
+      // edges map already draws. Nothing here is a model of a car; it is the four things that make a car read.
+      const ramp = Math.floor(body / STEPS);
+      const tone = (n) => ramp * STEPS + Math.max(0, Math.min(STEPS - 1, n));
+      const paintRamp = [tone(1), tone(2), tone(3), tone(4)];               // dark under, light above
+      const glint = tone(5);
+      const amber = entryFor(palette, 240, 176, 64);
       // THE BORDER OF THE CUT-OUT, traced and simplified: the car's own outline, not the box's
       const part = { id: 0, px: [], area: count, minX: box.minX, maxX: box.maxX, minY: box.minY, maxY: box.maxY };
       for (let p2 = 0; p2 < n; p2 += 1) if (inside[p2]) part.px.push(p2);
       const poly = simplify(outline(inside, w, h, 1, part), 1.6);
+      const bw2 = Math.max(1, box.maxX - box.minX), bh2 = Math.max(1, box.maxY - box.minY);
       for (const p2 of part.px) {
         const x = p2 % w, y = (p2 / w) | 0;
         let border = false;
         for (const q of [p2 - 1, p2 + 1, p2 - w, p2 + w]) if (q < 0 || q >= n || !inside[q]) { border = true; break; }
         if (border) { idx[p2] = OUT2; continue; }
         const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        idx[p2] = L < meanL - 18 ? glass : L > meanL + 24 ? lit : body;
+        const up = (y - box.minY) / bh2;                                   // 0 at the top of the thing
+        const across = (x - box.minX) / bw2;
+        if (L < meanL - 18) { idx[p2] = glass; continue; }                 // its own dark part: glass
+        // the glint: one diagonal band across the upper third, the lightest tone of the same ramp
+        if (up < 0.42 && Math.abs(across - (0.5 + (up - 0.2) * 0.6)) < 0.12) { idx[p2] = glint; continue; }
+        // the running light: amber at the two outer edges, a little below the middle
+        if (up > 0.5 && up < 0.68 && (across < 0.06 || across > 0.94)) { idx[p2] = amber; continue; }
+        // and the body is a RAMP, not a flat tone: dark under, light above
+        idx[p2] = paintRamp[Math.max(0, Math.min(3, Math.round((1 - up) * 3)))];
       }
       // ONE PIXEL OF OUTLINE ALONG THE TRACED POLYLINE, so the silhouette is the car and not its pixel noise
       for (let i = 0; i < poly.length; i += 1) {
