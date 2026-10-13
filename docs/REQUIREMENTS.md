@@ -27,8 +27,8 @@ work, never after.
 | 19 | Apply the scene analysis; enhance first; shadows secondary | DONE | `src/enhance.js`, facade rhythm, Lite2 |
 | 20 | The r9 formula | DONE | `src/vector.js` |
 | 21 | Visually appealing destruction + share tag I AM HERE | DONE | card with Я ЗДЕСЬ · I AM HERE |
-| 22 | Disasters: hurricane, tsunami, Godzilla, Beyoncé | **PARTLY** — hurricane and tsunami ship as fronts; the two walking beasts are withdrawn until their draw pass is found, and a baseline row fails on purpose | remains: the beast draw pass |
-| 23 | Pac-Man-style side view, head shake | **PARTLY** — chomp and head shake are implemented; the sprite is still a front-on column profile rather than a side view with a bite wedge | remains: the side-view sprite |
+| 22 | Disasters: hurricane, tsunami, Godzilla, Beyoncé | DONE | all four ship. The fault that hid the beasts was an `if (at)` guard in the renderer swallowing a null: `beastAt()` was returning null whenever the active disaster was a hurricane, and nothing said so. The draw now reports itself (`window.__beast`: 3358 pixels, 0 skipped, 0 bad colours) |
+| 23 | Pac-Man-style side view, head shake | **PARTLY** — chomp, head shake and the bite wedge are implemented; the silhouette is now tall and narrow (Beyoncé 64x310 px, ratio 0.21; Godzilla 48x309, 0.16), which is what a side view needs, but it is still built from a column profile rather than drawn as a side view with a face and limbs | remains: the drawn side view |
 | 24 | Toolbar: arrow, name + dropdown, no word "weapon", disasters, info right | DONE | L3 `docs/shots/toolbar.png` |
 | 25 | Info: pick an object, true random fact, always a different theme, **and the object must be OUTLINED** | DONE | the thing's own border (`world.borderOf`) is drawn as a dashed help outline for six seconds while the answer is on screen; facts unchanged |
 | 26 | Disaster destruction with borders, decomposed, reusing verified pieces | DONE | `borderOf` + `wreckAlong`; disasters call the same path |

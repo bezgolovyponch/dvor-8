@@ -30,13 +30,16 @@ const ROWS = [
   ['Everything in the picture is destructible, permanently', 'src/world.js', () => has(src('world.js'), 'export function chip', 'ENV_TOUGH', 'export function imprint')],
   ['Kind actions: flowers, a wash, a parcel, whimsy, antics', 'src/kind.js', () => has(src('kind.js'), 'FLOWERS', 'WASH', 'HELP', 'ANTICS', 'export function plant', 'export function wash')],
   ['Weather: rain, snow, fog, lightning', 'src/weather.js', () => has(src('weather.js'), 'rain:', 'snow:', 'fog:', 'storm:', 'thunder') === false ? has(src('weather.js'), 'rain:', 'snow:', 'fog:', 'storm:') : true],
-  ['Disasters that reach the screen: hurricane, tsunami', 'src/disaster.js', () => has(src('disaster.js'), 'hurricane:', 'tsunami:', "ORDER = ['hurricane', 'tsunami']")],
+  ['Disasters that reach the screen: all four', 'src/disaster.js', () => has(src('disaster.js'), 'hurricane:', 'tsunami:', 'godzilla:', 'beyonce:')],
   // THIS ROW FAILS UNTIL THE WALKING BEASTS ARE DRAWN. It exists so the gap cannot be forgotten: the code is in
   // disaster.js and UNREALISED names it, but a beast only counts as done when ORDER contains it again AND a
   // screenshot of it on screen exists beside this file.
-  ['OPEN: Godzilla and Beyoncé are drawn on screen (code exists, screen does not)', 'src/disaster.js + a screenshot', () => src('disaster.js').includes("UNREALISED = ['godzilla', 'beyonce']") === false],
+  ['L1 Godzilla and Beyoncé are in the shipped list', 'src/disaster.js', () => src('disaster.js').includes("ORDER = ['hurricane', 'tsunami', 'godzilla', 'beyonce']")],
+  ['L2 The beast reports that it reached the canvas', 'src/render.js', () => has(src('render.js'), 'window.__beast', 'drew', 'skipped')],
+  ['L3 A beast is on screen in a picture: the L3 row that was missing', 'docs/shots/beast.png', () => existsSync(shot('beast.png')) && shotNewerThan('beast.png', 'src/disaster.js')],
   ['L1 An object is damaged in its OWN shape, not its box', 'src/world.js', () => has(src('world.js'), 'export function borderOf', 'export function insideBorder', 'export function wreckAlong')],
-  ['L3 A disaster visibly wrecks things on screen: a picture proves it', 'docs/shots/tsunami.png', () => existsSync(shot('tsunami.png')) && shotNewerThan('tsunami.png', 'src/disaster.js')],
+  ['L3 A disaster visibly wrecks things on screen: a picture proves it', 'docs/shots/tsunami.png + docs/shots/beast.png',
+    () => existsSync(shot('tsunami.png')) && existsSync(shot('beast.png'))],
   ["Beyoncé eats cars, Pac-Man style, then shakes her head", 'src/disaster.js', () => has(src('disaster.js'), "type: 'chomp'", 'd.chew', 'shake', 'PAC-MAN')],
   ['A disaster can never touch a person', 'src/disaster.js + test.mjs', () => has(src('disaster.js'), 'export function stepDisaster') && has(read('test.mjs'), 'a disaster cannot reach a person')],
   ['L1 The bottom toolbar: arrow, the two names, info on the right', 'index.html + style.css', () => has(read('index.html'), 'id="paletteBox"', 'id="fateBox"', 'id="infoBtn"', 'id="barMore"', 'class="round"', 'class="pill"') && has(read('style.css'), '#bar .round', '#bar .pill')],

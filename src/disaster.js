@@ -61,8 +61,10 @@ export const DISASTERS = {
 // The creator's rule is the right one and is followed here: DO NOT APPLY MECHANICS YOU CANNOT REALISE. So the
 // beasts are out of the shipped list; the code stays, marked, and the baseline carries a row that fails until
 // they are drawn and a screenshot proves it.
-export const ORDER = ['hurricane', 'tsunami'];
-export const UNREALISED = ['godzilla', 'beyonce'];
+export const ORDER = ['hurricane', 'tsunami', 'godzilla', 'beyonce'];
+// Nothing is unrealised any more: the beasts were hidden by a guard, not by a missing sprite. The list stays so
+// the baseline row that watched for this cannot be quietly deleted.
+export const UNREALISED = [];
 // How often the sky does something inexcusable. Christmas-tree rare on an ordinary day, because a yard that is
 // always being eaten is a yard nobody looks at; the drawer can summon one on purpose.
 export const CHANCE = 0.12;
@@ -182,11 +184,16 @@ export function beastPixels(palette, kind, cx, feetY, height, frame = 0, pose = 
   const h = Math.max(12, Math.round(height));
   const scale = h / rows.length;
   for (let r = 0; r < rows.length; r += 1) {
-    const half = Math.max(1, Math.round(rows[r] * (h / 40) * 0.9));
+    // A SIDE VIEW IS TALL AND NARROW. The first sprite was half as wide as it was tall, so on screen it read as
+    // horizontal stripes across the wall rather than as a figure. The width now comes from the profile with a
+    // much smaller factor, and the head rows keep their own, narrower, width.
+    const half = Math.max(1, Math.round(rows[r] * (h / 40) * 0.34));
     const y = Math.round(feetY - (rows.length - r) * scale);
     const isHead = r >= rows.length - headRows;
     const shifted = isHead ? shakeX : 0;                      // only the head shakes: the body keeps walking
     const t = r / (rows.length - 1);
+    // an arm at the profile's widest point: one of the two things that make a silhouette read as a person
+    const arm = kind === 'beyonce' && t > 0.5 && t < 0.62;
     // the legs: below a fifth of the height, the body splits and the two columns alternate
     const walk = kind === 'beyonce' ? 2 : 1;
     const legGap = t < 0.16 ? Math.round(1 + walk * Math.abs(Math.sin(frame * 0.7)) * half * 0.5) : 0;
@@ -199,7 +206,7 @@ export function beastPixels(palette, kind, cx, feetY, height, frame = 0, pose = 
       const plate = kind !== 'beyonce' && t > 0.3 && t < 0.85 && dx >= half - 2 && (r + frame) % 3 !== 0;
       const hair = kind === 'beyonce' && t > 0.88;
       const face = t > 0.93 && Math.abs(dx) <= 1;
-      px.push({ x, y, i: face ? eye : plate || hair ? accent : dx < 0 ? dark : body });
+      px.push({ x, y, i: face ? eye : plate || hair ? accent : (arm && Math.abs(dx) === half) ? dark : dx < 0 ? dark : body });
     }
   }
   return px;

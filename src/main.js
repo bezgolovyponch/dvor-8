@@ -1099,6 +1099,7 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
       disaster = kind ? makeDisaster(kind, rnd) : null;
       $('fateNow').textContent = kind ? DISASTERS[kind].ru : 'ЯСНО';
       $('fateWhy').textContent = kind ? DISASTERS[kind].why : 'обычный день: двор такой, каким его сфотографировали';
+      if (typeof window !== 'undefined') window.__fate = { kind, beast: DISASTERS[kind] ? DISASTERS[kind].beast || null : null, stage };
       if (kind) { note(DISASTERS[kind].line); pop(DISASTERS[kind].ru, world ? world.w / 2 : 0, world ? world.h * 0.3 : 0, 'warn'); }
       const box2 = $('fateBox');
       if (box2) box2.open = false;                        // the choice is made: close the dropdown

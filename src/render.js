@@ -522,11 +522,19 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
       }
     }
     const at = beastAt(disaster, world);
-    if (at) for (const px of beastPixels(pal, spec.beast, at.x, at.feet, at.height, at.frame, { mouth: disaster.mouth, shake: disaster.shake })) {
-      if (px.x < cx - 4 || px.x > cx + w + 4) continue;
+    const bx = at ? beastPixels(pal, spec.beast, at.x, at.feet, at.height, at.frame, { mouth: disaster.mouth, shake: disaster.shake }) : [];
+    let drew = 0, skipped = 0, badColour = 0;
+    if (at) for (const px of bx) {
+      if (px.x < cx - 4 || px.x > cx + w + 4) { skipped += 1; continue; }
+      if (!pal[px.i]) { badColour += 1; continue; }
       ctx.fillStyle = css(pal[px.i]);
       ctx.fillRect(px.x, px.y, 1, 1);
+      drew += 1;
     }
+    // A ONE-LINE PROOF THAT THE BEAST REACHED THE CANVAS. It is here because this exact fault - a beast whose
+    // pixels were correct and which never appeared, hidden behind an `if (at)` guard - cost two rounds. The hook
+    // is read by tools/baseline-check.mjs and by the harness, and it is cheap.
+    if (typeof window !== 'undefined') window.__beast = { kind: disaster.kind, n: bx.length, drew, skipped, badColour };
   }
 
 }
