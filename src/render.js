@@ -9,6 +9,8 @@ import { textWidth } from './font.js';
 import { PAINTS, COVER } from './decal.js';
 import { bloomPixels, parcelPixels } from './kind.js';
 import { weatherTable } from './weather.js';
+import { beastPixels, beastAt } from './disaster.js';
+import { disasterTable, DISASTERS as DISASTERS_LOOK } from './disaster.js';
 import { RAMPS, STEPS } from './flat.js';
 
 // A GAME PIXEL IS PX PICTURE PIXELS (view.js). The picture doubled so that a photograph keeps its detail;
@@ -349,11 +351,11 @@ function rail(c, w, h, hideT = 1) {
 
 // scanY: null once the scan is over; before that, everything below it is still the photograph.
 // cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
-export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0, weather = null }) {
+export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0, weather = null, disaster = null }) {
   // The table the picture is drawn through: the mode's look first, then the weather's. Both are whole-screen
   // moods and both are table transforms, which is the rule the NES decided for this project (D1) — a filter is
   // a different table, and so is a sky.
-  const pal = weatherTable(lookThrough(world.palette, filter, seconds), weather);
+  const pal = disasterTable(weatherTable(lookThrough(world.palette, filter, seconds), weather), disaster ? disaster.kind : null);
   const { idx, rubble, photo, sw, paint } = world, W = world.w, H = world.h;
   const w = cam.w, h = cam.h, cx = cam.x, cy = cam.y;
   const d = buf.image.data;
@@ -411,6 +413,27 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   for (const b of world.blooms) {
     if (b.x > cx + w + 6 || b.x < cx - 6) continue;
     for (const px of bloomPixels(pal, STEPS, b, seconds)) { ctx.fillStyle = css(pal[px.i]); ctx.fillRect(px.x, px.y, 1, 1); }
+  }
+  // THE DISASTER, drawn over the yard: the water line first, then the beast, in the palette's own colours.
+  if (disaster) {
+    const spec = DISASTERS_LOOK[disaster.kind];
+    if (disaster.water > 0.01) {
+      const line = Math.round(world.h * (1 - disaster.water));
+      const water = pal[pal.length - 2 - 3] || pal[4];
+      const foam = pal[pal.length - 2 - 1] || pal[5];
+      for (let y = line; y < world.h; y += 1) for (let x = 0; x < world.w; x += 1) {
+        const p = y * world.w + x;
+        if (world.rubble[p] !== 255) continue;
+        ctx.fillStyle = css(((x * 7 + y * 13) % 11 === 0 && y < line + 3) ? foam : water);
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+    const at = beastAt(disaster, world);
+    if (at) for (const px of beastPixels(pal, spec.beast, at.x, at.feet, at.height, at.frame)) {
+      if (px.x < cx - 4 || px.x > cx + w + 4) continue;
+      ctx.fillStyle = css(pal[px.i]);
+      ctx.fillRect(px.x, px.y, 1, 1);
+    }
   }
   // Corner brackets on everything still standing and in view: what can be hit is never a guess.
   for (const r of world.regions) {

@@ -32,6 +32,7 @@ import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomB
 import { STEPS } from './flat.js';
 import { chip, surfaceAt, imprint } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
+import { DISASTERS, ORDER as DISASTER_ORDER, makeDisaster, rollDisaster, stepDisaster, beastPixels, beastAt } from './disaster.js';
 import { makeWindow, hitWindow, shards } from './glass.js';
 import { PAINTS, stamp, lay } from './decal.js';
 import { spawn, fling, PRESETS } from './parts.js';
@@ -56,6 +57,7 @@ let stage = 'title';    // title → detect → scan → play → done   (or →
 let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
 const styleChoice = new URLSearchParams(location.search).get('style') || 'flat';
 let weather = makeWeather('clear');               // the day's sky (weather.js)
+let disaster = null;                              // the sky misbehaving (disaster.js), or null
 let hand = 'stone', item = THROWABLES.stone;      // hand/item: what you THROW
 let clock = 0, scanT = 0, endIn = 0, last = performance.now();
 let motion = viewMotion(filter, 0, calm), shake = { x: 0, y: 0 };
@@ -271,6 +273,11 @@ function begin() {
   // weather, and the players comparing a day are comparing the same thing. Announced once, in the note.
   weather = makeWeather(rollFor(daySeed(today), rnd));
   if (weather.kind !== 'clear') note(`${weatherLine(weather)} — ${WEATHERS[weather.kind].why}`);
+  // THE DAY CAN ALSO GO WRONG. Rare, deterministic by date (D28) like the street and the sky, and it can be
+  // summoned from the drawer for anyone who does not want to wait for their yard to be eaten.
+  const rolled = rollDisaster(daySeed(today), rnd);
+  disaster = rolled ? makeDisaster(rolled, rnd) : null;
+  if (disaster) note(`${DISASTERS[disaster.kind].line}`);
   top = bandTop(world); ended = false; stomps = 0;
   clearSky(sky, skyLines());
   folk = makeFolk(); paintHide(); hideT = 0;
@@ -533,6 +540,69 @@ function hit(t, hx, hy, damage, comboTime) {
   return res;
 }
 
+// WHAT THE DISASTER DID, answered. Spectacle, permanent damage, and not one point taken from the player: a
+// stomp that breaks a thing is worth points while it lasts, because the yard is being destroyed either way and
+// the player may as well be paid for the show.
+function summonDisaster() {
+  const kind = DISASTER_ORDER[Math.floor(rnd() * DISASTER_ORDER.length) % DISASTER_ORDER.length];
+  disaster = makeDisaster(kind, rnd);
+  note(`${DISASTERS[kind].line}`);
+  pop(DISASTERS[kind].ru, world.w / 2, world.h * 0.3, 'warn');
+  fx.flash = 0.8;
+  sfx.thunder();
+}
+
+function disasterSays(ev) {
+  const spec = disaster ? DISASTERS[disaster.kind] : null;
+  if (ev.type === 'over') { pop('КОНЕЦ', world.w / 2, world.h * 0.4, 'tag'); disaster = null; return; }
+  if (ev.type === 'gust') {
+    fx.shake = Math.max(fx.shake, 1.5);
+    spawn(fx, cam.x + rnd() * cam.w, cam.y + cam.h * (0.3 + rnd() * 0.5), { ...PRESETS.dust, rgb: rnd() < 0.5 ? '#d8cba8' : '#8a7f63' }, rnd);
+    return;
+  }
+  if (ev.type === 'foam') {
+    spawn(fx, cam.x + rnd() * cam.w, ev.line, { ...PRESETS.paint, rgb: '#eaf6ff', settle: false }, rnd);
+    return;
+  }
+  if (ev.type === 'drown') {
+    burst(fx, ev.target.pixels.slice(0, 40).map((p) => ({ x: p % world.w, y: (p / world.w) | 0, c: world.palette.length - 1, floor: world.h })), ev.target.cx, ev.target.cy, rnd, 60);
+    pop('СМЫЛО', ev.target.cx, ev.target.cy, 'warn');
+    world.score += spec ? spec.points : 0;
+    return;
+  }
+  if (ev.type === 'stomp') {
+    fx.shake = 7; fx.trauma = 1; fx.flash = 0.5;
+    sfx.thunder();
+    for (let n = 0; n < 10; n += 1) world.rubble[Math.min(world.rubble.length - 1, Math.round(ev.at.y + n * 2) * world.w + Math.round(ev.at.x + (rnd() - 0.5) * 24))] = world.palette.length - 1;
+    if (ev.target) { pop('РАЗДАВИЛ', ev.target.cx, ev.target.cy, 'warn'); world.score += (spec ? spec.points : 0) * 2; }
+    navigator.vibrate?.(40);
+    return;
+  }
+  if (ev.type === 'chomp') {
+    sfx.break(3); fx.shake = 5; navigator.vibrate?.(30);
+    burst(fx, Array.from({ length: 16 }, (_, n) => ({ x: ev.at.x, y: ev.at.y, c: 0, rgb: n % 3 ? '#ffd23f' : '#ff6fa8', floor: world.h })), ev.at.x, ev.at.y, rnd, 70);
+    pop(ev.target ? `СЪЕЛА ${(ev.target.label || '').toUpperCase()}` : 'АМ!', ev.at.x, ev.at.y, 'warn');
+    pop('АМ!', ev.at.x + 10, ev.at.y - 10);
+    world.score += spec ? spec.points : 0;
+    world.antics = (world.antics || 0) + 1;
+    return;
+  }
+  if (ev.type === 'beam') {
+    fx.flash = 1; fx.shake = 6; sfx.siren();
+    // the breath burns a line across the yard: everything the line crosses is scorched, permanently
+    const y0 = Math.round(ev.at.y);
+    for (let x = 0; x < world.w; x += 1) {
+      const y = Math.round(y0 + Math.sin(x / 40) * 3);
+      for (let d2 = 0; d2 < 3; d2 += 1) {
+        const p = Math.min(world.idx.length - 1, Math.max(0, (y + d2) * world.w + x));
+        world.rubble[p] = world.palette.length - 1;
+      }
+    }
+    pop('ЛУЧ', ev.at.x, ev.at.y, 'warn');
+    note('годзилла дыхнул: полоса выжжена поперёк двора, и она останется');
+  }
+}
+
 // What the weather did, answered: a flash, thunder, and one standing thing left blackened. There is no path
 // from here to a person — a strike is chosen from the world's things — and nothing is taken from the player.
 function weatherSays(ev) {
@@ -768,6 +838,7 @@ function frame(now) {
       tick(world, dt);
       stepBlooms(world, dt);
       for (const ev of stepWeather(weather, world, fx, dt, rnd, { x: cam.x, y: cam.y, w: cam.w, h: cam.h })) weatherSays(ev);
+      if (disaster) for (const ev of stepDisaster(disaster, world, dt, rnd)) disasterSays(ev);
       stepDrink(drink, dt);
       if (me?.down) walk(dt);
       if (stepSky(sky, dt, cam.w)) sfx.fly();
@@ -939,6 +1010,7 @@ async function share(picture) {
     if (error.name !== 'AbortError') $('shared').textContent = copy(text) ? 'строка скопирована — вставь её куда хочешь' : text;
   }
 }
+$('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisaster(); });
 $('shareBtn').addEventListener('click', () => share(false));
 $('cardBtn').addEventListener('click', () => share(true));
 $('albumBtn').addEventListener('click', () => { paintAlbum(); cards('album'); });

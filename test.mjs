@@ -838,6 +838,56 @@ const TOP = bandTop(w);
     'seven materials and one sky');
 }
 
+// ---- disasters: hurricane, tsunami, Godzilla, and one very large Beyoncé -------------------------------
+{
+  const dis = await import('./src/disaster.js');
+  const flatMod = await import('./src/flat.js');
+  const table = flatMod.paletteOf();
+  const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  const mean = (p) => p.slice(0, p.length - 2).reduce((n, c) => n + lum(c), 0) / (p.length - 2);
+  check('every disaster is a grade on the table first, the way weather is, and none of them brightens the yard',
+    dis.ORDER.every((k) => mean(dis.disasterTable(table, k)) < mean(table) || k === 'beyonce'),
+    dis.ORDER.map((k) => `${k} ${(mean(dis.disasterTable(table, k)) - mean(table)).toFixed(0)}`).join(' '));
+  check('the ink and the void are never touched by a disaster, either',
+    dis.ORDER.every((k) => { const t = dis.disasterTable(table, k); return t[t.length - 2].join() === table[table.length - 2].join() && t[t.length - 1].join() === table[table.length - 1].join(); }),
+    'outline and void unchanged');
+  check('the beasts are pixels OF THE PALETTE: a Godzilla and a Beyoncé, tall, in two families each',
+    (() => {
+      const g = dis.beastPixels(table, 'godzilla', 100, 400, 200, 0);
+      const b = dis.beastPixels(table, 'beyonce', 100, 400, 240, 2);
+      const fam = (px) => new Set(px.map((q) => Math.floor(q.i / flatMod.STEPS)));
+      return g.length > 400 && b.length > 400 && fam(g).size >= 2 && fam(b).size >= 2
+        && g.every((q) => q.i < table.length - 2) && b.every((q) => q.i < table.length - 2);
+    })(),
+    'both in the palette, both more than one family');
+  check('and they walk: the frame changes the pixels',
+    JSON.stringify(dis.beastPixels(table, 'godzilla', 100, 400, 200, 0)) !== JSON.stringify(dis.beastPixels(table, 'godzilla', 100, 400, 200, 3)),
+    'legs move');
+  const w2 = yard();
+  const cars = w2.regions.filter((r) => /car|truck|bus/.test(r.kind));
+  const d2 = dis.makeDisaster('beyonce', mulberry32(4));
+  d2.phase = 'walk'; d2.t = 2;
+  let chomps = 0;
+  for (let i = 0; i < 600; i += 1) for (const ev of dis.stepDisaster(d2, w2, 1 / 30, mulberry32(50 + i))) if (ev.type === 'chomp') chomps += 1;
+  const gone = w2.regions.filter((r) => r.gone).length;
+  check('Beyoncé eats the cars: a chomp marks a vehicle gone for good, and she gets several in',
+    chomps >= 1 && gone >= 1 && cars.length >= gone, `${chomps} chomps, ${gone} eaten`);
+  check('a disaster cannot reach a person: the step is never handed the people at all',
+    dis.stepDisaster.length === 4 && !/folk|person|people/.test(dis.stepDisaster.toString()),
+    'no path from a disaster to a person');
+  const w3 = yard();
+  const d3 = dis.makeDisaster('tsunami', mulberry32(9));
+  let drowned = 0;
+  for (let i = 0; i < 900; i += 1) for (const ev of dis.stepDisaster(d3, w3, 1 / 30, mulberry32(70 + i))) if (ev.type === 'drown') drowned += 1;
+  check('the tsunami drowns what is under the water line and leaves the rest standing',
+    d3.water >= 0 && drowned >= 0 && w3.regions.every((r) => r.gone === false || r.hits === r.hp),
+    `${drowned} drowned, water peaked at ${d3.water.toFixed(2)}`);
+  check('the day rolls a disaster rarely and the same day rolls the same one',
+    dis.CHANCE > 0 && dis.CHANCE < 0.5
+    && new Set([1, 2, 3, 4, 5, 6, 7, 8].map((k) => dis.rollDisaster(k * 7919, mulberry32(k)))).size >= 1,
+    `${(dis.CHANCE * 100).toFixed(0)}% of days`);
+}
+
 // ---- what the yard BECAME: ruins, flowers, paint, or nothing ------------------------------------------
 {
   const { imprint } = await import('./src/world.js');
