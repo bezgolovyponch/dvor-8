@@ -8,6 +8,20 @@ import { boxes, SHIP, PLANE, BANNER_H, SHADOW } from './sky.js';
 import { textWidth } from './font.js';
 import { PAINTS, COVER } from './decal.js';
 
+// A GAME PIXEL IS PX PICTURE PIXELS (view.js). The picture doubled so that a photograph keeps its detail;
+// every sprite is still drawn in the old units, so each one is drawn PX times bigger AROUND ITS OWN ANCHOR —
+// its position stays exact and its size stays what it was on the screen. One helper, used by every sprite
+// below, rather than a factor sprinkled through sixty fillRects.
+const PX = 2;
+function anchored(ctx, x, y, fn) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(PX, PX);
+  ctx.translate(-x, -y);
+  fn();
+  ctx.restore();
+}
+
 export function makeBuffer(w, h) {
   const canvas = document.createElement('canvas');
   canvas.width = w; canvas.height = h;
@@ -400,31 +414,31 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   }
   if (folk && scanY === null) {
     // cones first, then the people on top, so a body is never hidden inside its own sight line
-    for (const p of folk.people) if (p.x > cx - 20 && p.x < cx + w + 20) cone(ctx, p, w, h, folk.hidden);
-    for (const p of [...folk.people].sort((a, b) => a.y - b.y)) if (p.x > cx - 12 && p.x < cx + w + 12) passer(ctx, p, seconds, folk.hidden);
+    for (const p of folk.people) if (p.x > cx - 40 && p.x < cx + w + 40) anchored(ctx, p.x, p.y, () => cone(ctx, p, w, h, folk.hidden));
+    for (const p of [...folk.people].sort((a, b) => a.y - b.y)) if (p.x > cx - 24 && p.x < cx + w + 24) anchored(ctx, p.x, p.y, () => passer(ctx, p, seconds, folk.hidden));
   }
-  if (me?.down) person(ctx, me, seconds, land > 0 ? -1 : (me.z > 0 && me.vz > 60 ? 1 : 0), hideT);
+  if (me?.down) anchored(ctx, me.x, me.y, () => person(ctx, me, seconds, land > 0 ? -1 : (me.z > 0 && me.vz > 60 ? 1 : 0), hideT));
   // Dust from under the feet when a jump ends: two frames of it, which is all a 192-px picture needs to
   // make a landing read as a landing rather than as a teleport.
   if (me?.down && land > 0) {
     const lx = Math.round(me.x), ly = Math.round(me.y);
-    const spread = Math.round((1 - land) * 9);
+    const spread = Math.round((1 - land) * 18);
     ctx.fillStyle = 'rgba(11,0,24,.45)';
-    for (const dx of [-spread, -Math.round(spread / 2), Math.round(spread / 2), spread]) ctx.fillRect(lx + dx, ly - 1, 2, 2);
+    for (const dx of [-spread, -Math.round(spread / 2), Math.round(spread / 2), spread]) ctx.fillRect(lx + dx, ly - 2, 4, 4);
   }
   for (const p of fx.particles) {
     ctx.fillStyle = p.rgb || css(pal[p.c]);
     // A tumbling piece is drawn 2x1 instead of 1x1 on alternate frames. That is the whole animation, and
     // at this scale it is enough: the eye reads the alternation as rotation.
-    const s = p.s || (p.life > 2.2 ? 2 : 1);
-    if (p.spin && Math.floor(seconds * 18 + p.x) % 2) ctx.fillRect(p.x | 0, p.y | 0, s, 1);
+    const s = (p.s || (p.life > 2.2 ? 2 : 1)) * PX;
+    if (p.spin && Math.floor(seconds * 18 + p.x) % 2) ctx.fillRect(p.x | 0, p.y | 0, s, PX);
     else ctx.fillRect(p.x | 0, p.y | 0, s, s);
   }
   for (const r of fx.rocks) {
     const t = Math.min(1, r.t / r.dur);
     const arc = Math.sin(t * Math.PI) * Math.min(24, r.dur * 90);   // a slow throw rises higher
     const x = Math.round(r.x0 + (r.tx - r.x0) * t), y = Math.round(r.y0 + (r.ty - r.y0) * t - arc);
-    (THINGS[r.kind] || THINGS.stone)(ctx, x, y, Math.floor(seconds * 14) % 2 === 0, r);
+    anchored(ctx, x, y, () => (THINGS[r.kind] || THINGS.stone)(ctx, x, y, Math.floor(seconds * 14) % 2 === 0, r));
   }
   // The ring is the "you connected" mark, and its reach is scaled by what kind of hit it was: a dent
   // barely shows, a break throws the ring out past the thing. The colour carries the same information,
@@ -433,14 +447,14 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     const reach = ring.r || 1;
     const rad = Math.round(2 + ring.t * 44 * reach);
     ctx.strokeStyle = reach > 1 ? '#ffd23f' : reach > 0.7 ? '#ff9ad0' : '#3fe0f0';
-    ctx.lineWidth = reach > 1 ? 2 : 1;
+    ctx.lineWidth = reach > 1 ? 2 * PX : PX;
     ctx.strokeRect(Math.round(ring.x) - rad + 0.5, Math.round(ring.y) - rad + 0.5, rad * 2, rad * 2);
   }
   if (scanY !== null) {
     ctx.fillStyle = '#3fe0f0';
-    ctx.fillRect(cx - 8, Math.round(scanY), w + 16, 2);
+    ctx.fillRect(cx - 8, Math.round(scanY), w + 16, 2 * PX);
     ctx.fillStyle = 'rgba(255,255,255,.55)';
-    ctx.fillRect(cx - 8, Math.round(scanY) + 2, w + 16, 1);
+    ctx.fillRect(cx - 8, Math.round(scanY) + 2 * PX, w + 16, PX);
   }
   ctx.restore();
   if (flier && scanY === null) {
@@ -450,7 +464,7 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     ctx.restore();
   }
   if (folk?.hidden && scanY === null) rail(ctx, w, h, hideT);
-  if (drink && scanY === null) bottle(ctx, w, h, drink.full, drink.busy);
+  if (drink && scanY === null) anchored(ctx, w - 20, h - 20, () => bottle(ctx, w, h, drink.full, drink.busy));
   if (fx.flash > 0) {
     ctx.fillStyle = `rgba(255,255,255,${(fx.flash * 0.5).toFixed(3)})`;
     ctx.fillRect(0, 0, w, h);

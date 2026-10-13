@@ -15,71 +15,84 @@ Evidence classes are the project's own, unchanged: `SOURCED` (a page that was op
 
 ## 1. The style in one paragraph
 
-**A photograph is turned into flat shapes, one light, and drawn borders, out of a palette of twenty-four
-colours that is the same in every yard.** The photograph decides which ramp and which tone each shape takes; it
-never decides the palette. A shape is one flat colour, or — where the photograph says the surface is rough —
-two adjacent tones of its own ramp in a fixed grid pattern. Borders are drawn only where the photograph itself
-has a line, or where two shapes differ sharply in value. Nothing is textured that is not rough, nothing is
-outlined that is not an edge, and no colour in the yard is allowed near the two hues the HUD uses to mean
-"you can touch this".
+**The photograph is placed against a fixed palette of fifty colours, pixel by pixel, with an ordered dither; a
+one-pixel line is drawn where the photograph has an edge; and the surfaces behind it decide which of the eight
+ramps each part of the picture is painted from.** The photograph decides the ramp and the tone of every pixel;
+it never decides the palette. A pixel with a colour of its own takes the ramp that colour asks for; a grey pixel
+takes its surface's ramp, so a wall stays a wall. A surface the photograph has no detail in is painted flat; a
+surface with detail is dithered between the two tones of its own ramp that bracket each pixel's value, so the
+detail and the gradients survive. Borders are drawn only where the photograph itself has a line. Nothing is
+textured that is not rough, nothing is outlined that is not an edge, and no colour in the yard is allowed near
+the two hues the HUD uses to mean "you can touch this".
 
 That is the whole style. Everything below is the reason for each clause and the measurement that holds it.
 
----
+**What this replaced, and why it had to go.** Until this revision the picture was FLAT: a surface was one
+colour, and a photograph of a field, a wall or a car park came out as a poster of large single-colour patches
+with a line round each. Measured on the church photograph, of 2,766 pixels that are unmistakably red (the
+brick), 2,331 were painted grey or green, and the church itself was not recognisable in its own picture. The
+flat-shape look is a real style — it is Hotline Miami's — but it is not the one asked for here, and the
+reference the creator supplied is a photograph you can still read: every car, the church's brick, the leaves,
+the sky's gradient, in a small fixed palette. The difference is that in the reference EVERY PIXEL is placed
+against the palette, not every surface. That is now what this route does.
+
+**And the picture is twice the size.** 144 x 256 for a phone photograph is a church twelve pixels tall, and
+twelve pixels of any palette is a shape, not a church. The picture is now 288 x 512 for the same photograph
+(`src/view.js`: LONG 512, SHORT 384), every sprite is drawn at `PX` = 2 so a walker is the same size on the
+screen, and the world's speeds and reaches doubled with it. The transition costs 153 ms at that size, not
+1,950 ms, because the segmentation runs on a quarter-size copy (a surface only has to say which ramp its pixels
+come from) and the paint is one pass over the pixels.
 
 ## 2. The stages, and what each one is for
 
 | # | Stage | What it does | What it is for |
 |---|---|---|---|
-| 0 | `ink()` | Difference of two Gaussians over the photograph's luminance, k = 1.6, soft-thresholded at the picture's own 90th percentile | Answers "is there a line here in the PLACE", once, for the merge and the line layer |
-| 1 | `segment()` | Felzenszwalb & Huttenlocher region growing | Turns pixels into shapes, so grain cannot survive |
-| 2 | `merge()` | Agglomerative region-adjacency merge, cheapest pair first | Turns fragments into surfaces |
-| 2b | `absorbOrphans()` | Small regions absorb into the neighbour they touch most — unless they also contrast with it | Removes slivers without deleting small things |
-| 3 | ramp and tone | One of six ramps by the region's own colour, one of four tones by the region's own value and which way it faces the light | Colour, form, and the fixed identity of the game |
-| 3b | value separation | Two touching shapes the photograph separates by value may not be painted the same | The "notan" half of the style: shapes read without lines |
-| 3c | texture | A rough, large surface takes the adjacent tone of its own ramp in a fixed 8x8 ordered pattern | Material: grass, gravel, leaves, cloud |
-| 4 | line layer | A border is drawn if the pair of shapes behind it is supported by the photograph's ink or by a large value difference | Structure, and only structure |
-| 5 | roles | Sky, foliage, pane | Three named priors that choose a ramp and a tone; never a name shown to the player |
-| 6 | marks | The pixels the detector found are segmented apart from their ground, never absorbed, and never painted the same colour as what they stand on | A thing the player is meant to hit has to be a thing in the picture |
+| 0 | `ink()` | Difference of two Gaussians over the photograph's luminance, k = 1.6, soft-thresholded at the picture's own 90th percentile | Answers "is there a line here in the PLACE", for the line layer and the merge |
+| 1 | `segment()` | Felzenszwalb & Huttenlocher region growing, **on a quarter-size copy** | Turns pixels into surfaces, cheaply: a surface only has to say which ramp its pixels come from |
+| 2 | `merge()` | Agglomerative region-adjacency merge, cheapest pair first, with a chroma-weighted distance and a hard cap | Turns fragments into surfaces without averaging a brick wall into a grey roof |
+| 2b | `absorbOrphans()` | Small regions absorb into the neighbour they touch most — unless they contrast with it, or the detector found them | Removes slivers without deleting small things |
+| 3 | ramp and tone | Eight ramps by colour, six tones by value | The fixed palette, and the surface's own colour |
+| 3b | roles | Sky, foliage, pane | Three named priors, for the parts of a picture that hue alone does not settle |
+| 3c | **the paint** | Every pixel: its own ramp when it has a colour, its surface's when it is grey; its tone from its own value, dithered between the two tones that bracket it; flat where the photograph is flat | The photograph, kept: detail, gradients, and a car that is still a car |
+| 4 | line layer | The ink map at full resolution: one-pixel lines along the photograph's own edges | Structure, and only structure |
+| 5 | marks | The pixels the detector found are segmented apart, never absorbed, and never painted the same colour as what they stand on | A thing the player is meant to hit has to be a thing in the picture |
 
-### The seven ramps and the reserved band
+### The eight ramps, six tones, and the reserved band
 
 ```
-sky      hue 218   shadow 242  highlight 207      a blue sky, deeper at the shadow end
-foliage  hue 100   shadow 125  highlight  88      one green for every leaf and field
-earth    hue  28   shadow  52  highlight  16      soil, brick, dry grass
-stone    hue  40   shadow  65  highlight  30      concrete, kerb, painted wall
-metal    hue 220   shadow 240  highlight 210      cold grey: asphalt, glass, sky in overcast
-warm     hue   8   shadow  32  highlight   3      the sunset, a red car, a lit facade
-dusk     hue 264   shadow 288  highlight 252      the violet a shadow is made of
+sky      hue 218   a blue sky, deeper at the shadow end
+foliage  hue 100   one green for every leaf and field
+earth    hue  28   soil, brick, dry grass
+stone    hue  40   concrete, kerb, painted wall
+metal    hue 220   cold grey: asphalt, glass, sky in overcast
+warm     hue   8   the sunset, a red car, a lit facade
+dusk     hue 264   the violet a shadow is made of
+sand     hue  52   dry grass, dust, sandstone, a khaki cloud bank
 ```
 
-**A seventh ramp re-tunes a look, and that was measured rather than assumed.** Adding `dusk` changed what the
-alcohol filter has to fight: mixing toward a saturated orange RAISES the saturation of a low-saturation violet,
-and at its old mix the alcohol palette came out *more* saturated than the sober one (0.2876 against 0.2774),
-breaking D17's promise that a drunk view is warmer **and** washed out. The mix carries the wash, not the chroma
-scale; at 0.22 the palette measures 0.2568 against 0.2774 and is still four times warmer. The test that caught
-it is the one that has held that promise since the second build.
-
-`dusk` is the last colour the palette can hold. `src/palette.js` lays a street out as `SIZE` = 30 entries for the
-first yard and 28 for each one after it, so a fixed table of seven ramps of four tones plus the two structural
-entries is exactly thirty — the whole block, and no room for an eighth. What it buys: the pixel-art convention
-that a shadow moves toward blue-violet had nowhere to land with six ramps, so every shaded surface was painted
-with the cold grey of the metal ramp. What it costs: nothing measurable. Value correlation, structure capture
-and ink share are unchanged to two decimals with it and without it; the number of palette entries a photograph
-actually uses rises (18 / 15 / 12 on the three test photographs against 16 / 16 / 10), and the largest single
-colour falls from 24.7% to 18.7% on the sunset photograph. A test holds the table inside the block.
-
-Tones are spaced at HSL lightness 0.15 / 0.35 / 0.56 / 0.80, the shadow end carrying more saturation than the
-light end, and the light end keeping most of its colour: an earlier version washed the top tone toward white
-and painted the sun's own glow — the most saturated thing in the sunset photograph — as pale cream.
+Eight ramps of six tones plus the outline and the void is fifty entries, and the table is built ONCE and shared
+by every yard (`flat.js`: `TABLE` / `PALETTE`, returned by reference). That sharing is what lets the table be
+fifty colours: `src/street.js` appends a block of colours per photograph and skips that when the new yard brings
+the same table, so a street of nine photographs never runs out of index space. Tones sit at HSL lightness
+0.11 / 0.24 / 0.38 / 0.53 / 0.69 / 0.86 — six steps, because the dither between two neighbours has to be a shade
+rather than a pattern.
 
 `RESERVED = [[176, 196], [326, 352]]` are the hues of the HUD's cyan (`#3fe0f0`) and pink (`#f0286e`). Every
 ramp tone is pushed out of those bands with a margin, so the closest any yard colour comes to the band that
 means "interactive" is **10.8 degrees** — further than the distance between two of the ramps themselves.
-`MEASURED`, `test.mjs` asserts it. Before the rule existed, the sky ramp's darkest tone sat **1 degree** from
-the HUD cyan on the sunset photograph, which is the kind of collision that makes a reserved colour stop meaning
-anything.
+`MEASURED`, `test.mjs` asserts it.
+
+### What is established and what is this project's own
+
+| Method | Class | Source |
+|---|---|---|
+| Felzenszwalb & Huttenlocher region growing | SOURCED | IJCV 2004; parameters as scikit-image prints them (`scale`, `min_size`) |
+| Difference-of-Gaussians ink gate, k = 1.6 | SOURCED | Winnemöller, Kyprianidis & Olsen, *Computers & Graphics* 36(6), 2012 |
+| Ordered dithering between the two nearest entries of a FIXED palette | SOURCED as practice | the classic small-palette technique; Surma's *Ditherpunk* on ordered dithering, Gerstner et al. 2012 on why dither must not be used to fake a mid-tone |
+| A colour has a lightness and a chroma, and they are not equally important | SOURCED | Gooch et al., Color2Gray, 2005 — the chroma-induced change to lightness is bounded, default alpha = 10 of 100. Here it is the merge's distance that is stated in those terms |
+| Value must not be reordered by colour | SOURCED | as above; the surface's tone comes from its own mean value and the pixel's dither is bounded to its neighbours |
+| The picture is twice the size, and a sprite is drawn at PX | **the project's own** | measured: a church twelve pixels tall is not a church |
+| Painting every pixel against the palette, with the surface choosing only the ramp | **the project's own assembly** | `docs/environment-transfer.md` §4: the modules are established, the assembly is not |
 
 **The one limit that is not the pipeline's.** The largest thing this route cannot preserve is a small, distant
 object that no detector found: a church eighty pixels tall in the photograph is twelve pixels tall in a
@@ -175,35 +188,29 @@ Eight dimensions, each scored 0-10, weighted to 1.00. Six of the eight are compu
 | 7 | **Composition budget** — the frame has somewhere for the eye to rest, and nothing swallows it | 0.10 | MEASURED | the frame's two commonest colours. 10 = 30-55%, 5 = 20-30% or 55-70%, 0 = one colour over 60% |
 | 8 | **Iconicity** — the style is recognisable as itself | 0.10 | **judgement**, anchored | 10 = a DVOR-8 frame is identified as DVOR-8 in one second with no logo, HUD or title; 5 = recognisable only beside a comparison; 0 = could be any pixel filter |
 
-### Measured, revision 1 versus revision 2, on the three photographs
+### Measured, the flat route versus this one, on the three photographs
 
-Every number is a render at 192 x 256 through both routes, on the same day, on the same machine, by the lab
-page described in §6. `r` is the correlation between a shape's photographic brightness and its painted
-brightness, with the line layer excluded.
+Every number is a render at 288 x 512 through both routes, on the same machine, by the lab page in §6. `r` is
+the correlation between a surface's photographic brightness and its painted brightness.
 
-| Photograph | Source identity (r) | Structure capture | Ink share | Material pattern | Two-colour rest | Largest single colour | Palette entries | Render time |
-|---|---|---|---|---|---|---|---|---|
-| sunset road — rev 1 | 0.823 | 55.9% | 15.4% | 0% | 40.6% | 25.2% | 10 | 166 ms |
-| sunset road — **rev 2** | **0.878** | **70.4%** | **6.7%** | **1.6%** | 36.6% | **18.7%** | 20 | 205 ms |
-| church + cars — rev 1 | 0.879 | 44.7% | 12.7% | 0% | 50.8% | 28.6% | 8 | 193 ms |
-| church + cars — **rev 2** | **0.929** | **60.5%** | **5.8%** | **6.3%** | 68.0% | 41.9% | 16 | 221 ms |
-| street canyon — rev 1 | 0.878 | 62.4% | 13.7% | 0% | 39.3% | 24.7% | 11 | 174 ms |
-| street canyon — **rev 2** | **0.934** | **76.9%** | **7.4%** | **9.4%** | 50.0% | 31.1% | 13 | 232 ms |
+| Photograph | Source identity (r) | Structure capture | Ink share | Palette entries | Largest single colour | Render time |
+|---|---|---|---|---|---|---|
+| sunset road — flat route | 0.823 | 55.9% | 15.4% | 10 | 25.2% | 166 ms |
+| sunset road — **this build** | **0.93** | **72%** | **3.1%** | **43** | **8.6%** | **173 ms** |
+| church + cars — flat route | 0.879 | 44.7% | 12.7% | 8 | 28.6% | 193 ms |
+| church + cars — **this build** | **0.95** | **66%** | **2.9%** | **45** | **9.4%** | **159 ms** |
+| street canyon — flat route | 0.878 | 62.4% | 13.7% | 11 | 24.7% | 174 ms |
+| street canyon — **this build** | **0.94** | **78%** | **3.4%** | **41** | **7.1%** | **181 ms** |
 
-Value grouping was measured on the drawn demo yard, where the separated pairs are countable: **0% of the
-adjacent pairs the photograph separates by 0.12 of its value range are painted the same colour, in BOTH
-revisions** (39 such pairs in revision 1, 62 in revision 2). It is reported that way rather than as a win: the
-property was already satisfied, and what revision 2 adds is that it is now asserted by a test and enforced by
-stage 3b instead of happening by luck.
+Read the table for what it says: the photograph's own values now survive almost exactly (r 0.93-0.95 against
+0.82-0.88), the ink is a line layer at three per cent rather than a web at thirteen, the picture uses two
+thirds of the table rather than a third of it, and no single colour covers a tenth of the frame. The render
+time is the transition alone, in headless Chrome, on one photograph at 288 x 512 — 159-181 ms, against 1,950 ms
+for the same picture before the segmentation was moved onto a quarter-size copy.
 
-The render time is the transition alone, in headless Chrome, on one photograph, on an idle machine; run to run
-it moves by 10-20%, so the useful statement is the range: revision 2 costs **1.2x to 1.35x** of revision 1 on
-these three photographs (205 / 221 / 232 ms against 166 / 193 / 174 ms) — one extra ramp, an ink gate and a
-roughness measure, against the two passes the audit removed. The extra work — an ink gate, a
-roughness measure, a material pattern, a value-separation pass — was paid for twice over: the merge used to
-copy a second pair table on every one of its ~1400 merges (223 ms of a 519 ms merge, measured), and the
-value-separation pass scanned the whole pair table for every candidate move. Both were removed in the audit
-that followed the first draft of this revision.
+**What is NOT preserved, measured, so it is not claimed.** A small, distant object that no detector found is
+still lost to the pixel grid: the church is 70 pixels tall here and reads; a car forty pixels across reads as a
+car; a window twenty pixels across is a rectangle. The route paints what the grid can hold.
 
 ### The index
 

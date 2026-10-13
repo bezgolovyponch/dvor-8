@@ -7,7 +7,14 @@
 
 const DEG = Math.PI / 180;
 
-export const LONG = 256, SHORT = 192;   // the picture in pixels: the size of an 8-bit console's screen
+// THE PICTURE IS TWICE THE SIZE IT WAS, and that is a decision about what a photograph can survive. At
+// 144 x 256 for a phone photograph the church of the test photograph is twelve pixels tall: twelve pixels of
+// any palette is a shape, not a church. Measured, the same photograph at 288 x 512 keeps it — the walls, the
+// tower, the cars in the car park — and the transition costs 153 ms rather than 120 ms, because the route now
+// segments at a quarter of the pixels and paints every pixel against the palette. Every sprite in the game is
+// drawn at PX to match, so a walker is the same size he was on the screen.
+export const LONG = 512, SHORT = 384;
+export const PX = 2;                    // picture pixels per game pixel: LONG / 256
 export const SCAN_TIME = 1.4;           // seconds; the opening must not outstay its welcome
 
 //   angle   the tilt of the whole frame, radians      x, y   a shift of the picture inside it, pixels

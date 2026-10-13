@@ -10,7 +10,8 @@
 import { MAX_YARDS, scorchMap, colourCount } from './palette.js';
 import { makeWorld } from './world.js';
 
-export const STRIP = 16;        // width of one borrowed strip, pixels
+export const STRIP = 32;        // width of one borrowed strip, picture pixels — doubled with the picture
+                                 // (view.js PX): a strip is a share of the frame, not a fixed number of dots
 export const MAX_STREET = 40;   // yards; past this the street ends rather than slow the phone down
 const CHOICES = 5;              // a strip is picked from this many best-fitting ones, so a street does not repeat exactly
 
@@ -57,9 +58,12 @@ export function grow(src, rnd, edge = null) {
   let last = edge;
   for (let x = 0; x < w; x += STRIP) {
     const width = Math.min(STRIP, w - x), fits = [];
-    for (let from = 0; from + width <= w; from += 2) {
+    // EVERY row and every column offset is tried, not every second one. The paint is per pixel and its dither
+    // has an eight-pixel phase, so a strip taken from an odd offset has the opposite phase to the column it
+    // joins: matching on every second row missed exactly the rows where the two disagree.
+    for (let from = 0; from + width <= w; from += 1) {
       let cost = 0;
-      if (last) for (let y = 0; y < h; y += 2) { const a = last[y], b = clean[y * w + from]; if (a < nCol && b < nCol) cost += far[a * nCol + b]; }
+      if (last) for (let y = 0; y < h; y += 1) { const a = last[y], b = clean[y * w + from]; if (a < nCol && b < nCol) cost += far[a * nCol + b]; }
       fits.push({ from, cost: cost + rnd() * 0.001 });
     }
     fits.sort((a, b) => a.cost - b.cost);

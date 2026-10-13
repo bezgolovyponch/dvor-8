@@ -29,7 +29,7 @@ export const MODES = {
   },
   alcohol: {
     label: 'алкоголь', thing: 'бутылка', hint: 'бьёт всё вокруг, но рука гуляет · глоток — шире взрыв, хуже рука · пустую бросай',
-    flight: 0.16, damage: 1, scatter: 10, splash: 22, chain: 0, cooldown: 0, combo: 2.5, focus: { radius: 0, out: 'soft' },
+    flight: 0.16, damage: 1, scatter: 20, splash: 44, chain: 0, cooldown: 0, combo: 2.5, focus: { radius: 0, out: 'soft' },
     why: 'Power for accuracy: the bottle bursts over everything near where it lands, and it does not land where you pointed.',
   },
   depression: {
@@ -38,7 +38,9 @@ export const MODES = {
     why: 'Narrow and heavy: you see one small patch at a time and must look for things, and each throw is slow and final.',
   },
 };
-export const CHAIN_RANGE = 80;   // how far a skipping thing will reach for its next target, pixels
+export const CHAIN_RANGE = 160;  // how far a skipping thing will reach for its next target, picture pixels —
+                                 // doubled with the picture (view.js PX), so the slipper still reaches the
+                                 // next thing in the yard rather than falling short of it
 
 const gap = (r, x, y) => Math.hypot(Math.max(r.x - x, 0, x - (r.x + r.w)), Math.max(r.y - y, 0, y - (r.y + r.h)));
 

@@ -77,8 +77,12 @@ export const RAMPS = [
   // surface was painted with the cold grey of the metal ramp. This is where the shaded side of a building, the
   // dark half of a street canyon and the deep folds of foliage go.
   { name: 'dusk', hue: 264, sat: 0.12 },
+  // SAND is the eighth: dry grass, dust, sandstone, the khaki of a cloud bank at sunset. Without it those go
+  // to `earth`, which is redder, or to `stone`, which is greyer, and a photograph of a dry field comes out
+  // either too red or too cold.
+  { name: 'sand', hue: 52, sat: 0.30 },
 ];
-export const STEPS = 4;
+export const STEPS = 6;
 export const OUTLINE = [11, 0, 24];
 // THE RESERVED BAND. In this game's own HUD, pink and cyan mean "you can touch this": the brackets round a
 // target, the pips that count its hits, the stick and the bar. Nothing in the yard may wear them, or the one
@@ -119,7 +123,10 @@ export function tones() {
       // The four tones are spaced to be told apart after the picture has been shrunk to a phone: 0.15, 0.35,
       // 0.57 and 0.82 in HSL lightness. An even 0.16-0.84 spacing left the two middle tones too close in
       // luma once the ramps were laid side by side, which is a difference the eye loses at 3x zoom.
-      const l = [0.15, 0.35, 0.56, 0.80][i] ?? (0.16 + t * 0.68);
+      // Six tones, and the ladder is why a gradient can be painted without a dither: the gap between two
+      // neighbouring tones is about 0.15 of lightness, which is a step the eye reads as the same surface
+      // turning, not as two surfaces. With four tones the gap was 0.21 and every step was a visible band.
+      const l = [0.11, 0.24, 0.38, 0.53, 0.69, 0.86][i] ?? (0.16 + t * 0.68);
       // HUE SHIFT: a shadow moves +24 degrees round the wheel and a highlight -12, which is the pixel-art
       // convention of a shadow turning toward blue-violet and a highlight toward yellow.
       //
@@ -137,7 +144,7 @@ export function tones() {
       // photograph, the sun's own glow — the most saturated thing in the picture — was painted as pale cream,
       // because a fully washed top tone cannot hold orange. 1.15 - t*0.28 keeps the ramp rising in lightness
       // while the colour survives it.
-      const sat = r.sat * (1.15 - t * 0.28);
+      const sat = r.sat * (1.20 - t * 0.36);
       out.push(hsl2rgb(hue, sat, l));
     }
     return out;
@@ -225,6 +232,33 @@ export function segment(rgba, w, h, k = 300, marks = null) {
   return { lab, count: next };
 }
 
+/**
+ * A BOX DOWNSAMPLE, for the copy the segmentation works on.
+ *
+ * Why there is a copy at all: the segmentation and its merge are the only super-linear stages in the route,
+ * and they are now far finer than the picture needs them to be, because the PAINT is per pixel. Measured at
+ * 288 x 512: 1,950 ms with the segmentation at full size, of which the merge is over 1,500. At half size the
+ * same photograph costs about 700 ms and the painted picture is indistinguishable, because a surface only has
+ * to say which ramp its pixels come from — the detail comes from the photograph, pixel by pixel.
+ */
+export function boxDown(src, w, h, dw, dh, channels = 1) {
+  const out = new Float64Array(dw * dh * channels);
+  for (let y = 0; y < dh; y += 1) {
+    const y0 = Math.floor((y * h) / dh), y1 = Math.max(y0 + 1, Math.floor(((y + 1) * h) / dh));
+    for (let x = 0; x < dw; x += 1) {
+      const x0 = Math.floor((x * w) / dw), x1 = Math.max(x0 + 1, Math.floor(((x + 1) * w) / dw));
+      let n = 0;
+      const acc = new Float64Array(channels);
+      for (let yy = y0; yy < y1; yy += 1) for (let xx = x0; xx < x1; xx += 1) {
+        n += 1;
+        for (let c = 0; c < channels; c += 1) acc[c] += src[(yy * w + xx) * channels + c];
+      }
+      for (let c = 0; c < channels; c += 1) out[(y * dw + x) * channels + c] = n ? acc[c] / n : 0;
+    }
+  }
+  return out;
+}
+
 /** A separable Gaussian blur of one Float32Array channel. Used by the ink gate and nothing else. */
 function blur(src, w, h, sigma) {
   const r = Math.max(1, Math.ceil(sigma * 2.5));
@@ -310,6 +344,27 @@ export function lightFrom(rgba, w, h) {
 }
 
 /**
+ * HOW DIFFERENT TWO COLOURS ARE, for the merge and only for the merge.
+ *
+ * The plain sum of the channel differences is dominated by lightness, and that is what let a grey roof and a
+ * red brick wall merge: measured on the church photograph, 2,766 pixels are unmistakably red (r > 1.3 g and
+ * r > 1.3 b) and only 231 of them came out of the route painted with a warm, earth or sand ramp — 2,331 came
+ * out STONE. A grey [140,140,140] and a brick [150,90,70] are 130 apart in the sum metric, which is exactly
+ * the tolerance, so the brick was inside the roof's region and the region's mean colour is grey.
+ *
+ * A colour has two parts and they are not equally important when the question is "is this the same surface":
+ * the lightness (how much light it returns) and the chroma (what it does to the light). So the distance is
+ * stated in those terms — lightness plus twice the opponent-chroma distance — and a grey and a brick are then
+ * 194 apart, well past a tolerance of 130. Two greys of different lightness are unchanged.
+ */
+const colourDistance = (a, b) => {
+  const la = 0.299 * a[0] + 0.587 * a[1] + 0.114 * a[2], lb = 0.299 * b[0] + 0.587 * b[1] + 0.114 * b[2];
+  const dL = Math.abs(la - lb);
+  const dC = Math.abs((a[0] - la) - (b[0] - lb)) + Math.abs((a[2] - la) - (b[2] - lb));
+  return dL + 2 * dC;
+};
+
+/**
  * Step 2: reduce the over-segmentation by merging similar ADJACENT regions.
  *
  * THREE THINGS STOP IT, and all three are needed:
@@ -380,7 +435,7 @@ export function merge(rgba, lab, count, w, h, target, trace = null, tone = 95, i
       // environment standard is explicit that a frame of one saturated area has no focal point at all.
       if (sizes[ra] + sizes[rb] > n * maxRegion) continue;
       const ma = mean(ra), mb = mean(rb);
-      const d = Math.abs(ma[0] - mb[0]) + Math.abs(ma[1] - mb[1]) + Math.abs(ma[2] - mb[2]);
+      const d = colourDistance(ma, mb);
       // THE CHEAP TESTS COME FIRST AND THE SECOND MAP IS READ LAST. `inks` is a second Map keyed the same way
       // as `borders`, and reading it for every pair of every merge cost about 3.5 million extra lookups on a
       // courtyard — measured at roughly 150 ms of a 640 ms transition. The pairs that reach the ink test are
@@ -492,28 +547,89 @@ function absorbOrphans(rgba, dense, w, h, minRegion, keepContrast, marks = null)
  * Returns the palette index per pixel, the palette itself, and the regions with their bounding boxes, which
  * is what the object layer needs to find windows and walls.
  */
+// THE TABLE IS BUILT ONCE AND SHARED BY EVERY YARD, and that is a change with a consequence worth stating:
+// `src/street.js` extends a street by appending a block of colours per photograph, and it skips that when the
+// new yard brings the SAME palette object. Returning the same table every time is therefore what lets the
+// table be any size at all — fifty colours instead of thirty — without a street of nine photographs running
+// out of index space. The photograph still chooses which ramp and which tone; it never chooses the palette.
+const TABLE = tones();
+const PALETTE = (() => {
+  const p = [];
+  for (const ramp of TABLE) for (const c of ramp) p.push(c);
+  p.push(OUTLINE, [4, 0, 10]);          // the outline and the void are ALWAYS the last two entries
+  return p;
+})();
+export const paletteOf = () => PALETTE;
+
+/**
+ * Which ramp ONE PIXEL is painted from: its own colour when it has one, its surface's when it does not.
+ *
+ * The threshold is a chroma of 0.18. Below it a pixel is grey — a wall, asphalt, a white cloud — and grey
+ * pixels belong to whatever surface they are part of, because two greys two degrees apart in hue are the same
+ * grey and painting them from different ramps would speckle the surface. Above it the pixel has a colour of
+ * its own, and averaging it into its surface is how a red brick church came out grey-green in a green field.
+ */
+const adjacent = (a, b) => !(a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0);
+const CHROMA_ENOUGH = 0.18;
+const pixelRampOf = (R, G, B, r) => {
+  const mx = Math.max(R, G, B), mn = Math.min(R, G, B);
+  if (!mx || (mx - mn) / mx < CHROMA_ENOUGH) return -1;
+  return rampFor([R, G, B]).ramp;
+};
+
 export function render(rgba, w, h, opts = {}) {
   const {
-    target = 190, k = 300, tone = 110, cap = 130, inkWeight = 2.6, inkBarrier = 0.45, maxRegion = 0.16,
+    // k is Felzenszwalb's tolerance, and at the low-resolution copy the segmentation runs on it is the
+    // difference between 1,400 fragments and 1,150 — the merge has to eat every one of them, at a cost of the
+    // whole pair table per merge. Measured on the demo yard at 384 x 512: k = 300 → 353 ms and 126 surfaces,
+    // k = 700 → 127 ms and 107. Same picture, three times faster, so the picture reaches the player sooner.
+    target = null, k = 700, tone = 110, cap = 130, inkWeight = 2.6, inkBarrier = 0.45, maxRegion = 0.16,
     lineInk = 0.20, lineValue = 0.15, minRegionShare = 0.0012, keepContrast = 80,
-    atmosphere = true, faceWeight = 0.35, inkSigma = 1.0, texture = true, marks = null,
+    atmosphere = true, faceWeight = 0.35, inkSigma = 1.0, marks = null, inkLine = 0.72,
   } = opts;
-  const table = tones();
-  const palette = [];
-  for (const ramp of table) for (const c of ramp) palette.push(c);
-  // THE OUTLINE AND THE VOID ARE APPENDED EXACTLY ONCE, here, and their positions are the LAST TWO entries.
-  palette.push(OUTLINE, [4, 0, 10]);
+  const table = TABLE, palette = PALETTE;
   const n = w * h;
+  // ONE SHAPE PER ~320 PIXELS, so the picture keeps the same grain at any size: a budget of 200 shapes was
+  // chosen for a 144 x 256 yard, and at 288 x 512 the same 200 shapes are four times too coarse — the church
+  // of the test photograph comes out as one blob. The merge still stops when the photograph stops offering
+  // similar neighbours, so this is a ceiling rather than a quota.
+  const shapes = target ?? Math.max(120, Math.min(900, Math.round(n / 320)));
 
   const inkMap = ink(rgba, w, h, inkSigma);
   const light = lightFrom(rgba, w, h);
 
-  const { lab, count } = segment(rgba, w, h, k, marks);
-  const merged = merge(rgba, lab, count, w, h, target, null, tone, inkMap, cap, inkWeight, inkBarrier, maxRegion, marks);
+  const segLong = opts.segLong ?? 224;
+  const k2 = Math.min(1, segLong / Math.max(w, h));
+  const sw = Math.max(48, Math.round(w * k2)), sh = Math.max(48, Math.round(h * k2));
+  const atSegScale = sw === w && sh === h;
+  const small4 = atSegScale ? rgba : (() => {
+    const f = boxDown(rgba, w, h, sw, sh, 4);
+    const out = new Uint8ClampedArray(sw * sh * 4);
+    for (let i = 0; i < sw * sh * 4; i += 1) out[i] = f[i];
+    return out;
+  })();
+  const inkSmallF = atSegScale ? inkMap : boxDown(inkMap, w, h, sw, sh);
+  const inkSmall = atSegScale ? inkMap : Float32Array.from(inkSmallF);
+  const marksSmall = (() => {
+    if (!marks) return null;
+    if (atSegScale) return marks;
+    const m = new Uint8Array(sw * sh);
+    for (let y = 0; y < sh; y += 1) for (let x = 0; x < sw; x += 1) m[y * sw + x] = marks[Math.floor((y * h) / sh) * w + Math.floor((x * w) / sw)];
+    return m;
+  })();
+  const { lab, count } = segment(small4, sw, sh, k, marksSmall);
+  const merged = merge(small4, lab, count, sw, sh, shapes, null, tone, inkSmall, cap, inkWeight, inkBarrier, maxRegion, marksSmall);
   const denseIn = new Int32Array(n);
-  {
+  if (atSegScale) {
     const ids = new Map();
     for (let i = 0; i < n; i += 1) { if (!ids.has(merged[i])) ids.set(merged[i], ids.size); denseIn[i] = ids.get(merged[i]); }
+  } else {
+    const ids = new Map();
+    for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+      const v = merged[Math.min(sh - 1, Math.floor((y * sh) / h)) * sw + Math.min(sw - 1, Math.floor((x * sw) / w))];
+      if (!ids.has(v)) ids.set(v, ids.size);
+      denseIn[y * w + x] = ids.get(v);
+    }
   }
   const dense = absorbOrphans(rgba, denseIn, w, h, Math.max(8, Math.round(n * minRegionShare)), keepContrast, marks);
 
@@ -588,6 +704,20 @@ export function render(rgba, w, h, opts = {}) {
   // it stands on.
   const marked = new Uint8Array(nr);
   if (marks) for (let i = 0; i < n; i += 1) if (marks[i]) marked[reg[i]] = 1;
+
+  // THE PIXEL'S OWN VALUE, for the dither below: the frame's own 2nd and 98th percentile, so one very bright
+  // or very dark pixel cannot squash everything else into the middle of the scale.
+  let pLo = 0, pHi = 255;
+  {
+    const hist = new Int32Array(256);
+    for (let i = 0; i < n; i += 1) hist[Math.min(255, Math.max(0, Math.round(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2])))] += 1;
+    let acc = 0; const lowWant = n * 0.02, highWant = n * 0.98;
+    for (let b = 0; b < 256; b += 1) { acc += hist[b]; if (acc >= lowWant) { pLo = b; break; } }
+    acc = 0;
+    for (let b = 0; b < 256; b += 1) { acc += hist[b]; if (acc >= highWant) { pHi = b; break; } }
+    if (pHi - pLo < 24) { pLo = 0; pHi = 255; }
+  }
+  const pixNorm = new Float64Array(n);
 
   const ramp = new Int32Array(nr), role = new Int8Array(nr);
   // ROUGHNESS IS MEASURED INSIDE THE SURFACE, NOT ON ITS OUTLINE. The first version averaged the ink over
@@ -696,88 +826,104 @@ export function render(rgba, w, h, opts = {}) {
     }
   }
 
-  // paint: every pixel takes its region's colour; the line layer and the texture stage then overwrite pixels
-  const regionOf = new Int32Array(nr);
-  for (let r = 0; r < nr; r += 1) regionOf[r] = ramp[r] * STEPS + toneArr[r];
+  // ---- STAGE 3d: THE PAINT -----------------------------------------------------------------------------
+  //
+  // EVERY PIXEL IS PLACED AGAINST THE PALETTE, and that is the whole look. A surface still decides the RAMP
+  // for the parts of itself that have no colour of their own — a grey wall, grey asphalt, a white cloud are
+  // grey, and letting each of their pixels pick a ramp from a two-degree hue difference would speckle them —
+  // and a pixel that HAS a colour (chroma past 0.18) takes the ramp its own colour asks for. So:
+  //
+  //   ramp  = the pixel's own colour when it has one, otherwise its surface's
+  //   tone  = the pixel's own value in the photograph, dithered between the two tones that bracket it
+  //
+  // Detail survives because a pixel is never rounded to its surface's average; the palette stays fixed because
+  // a pixel can only ever be a tone of one of the eight ramps; gradients come out smooth because the ordered
+  // threshold spends the two tones in proportion to the value between them; and grain cannot scatter the
+  // picture because both choices are made from the fixed table, not from the photograph's palette.
   const idx = new Uint8Array(n);
-  for (let i = 0; i < n; i += 1) idx[i] = regionOf[reg[i]];
+  const scale = (STEPS - 1) / Math.max(24, pHi - pLo);
+  for (let i = 0; i < n; i += 1) {
+    const r = reg[i];
+    const R = rgba[i * 4], G = rgba[i * 4 + 1], B = rgba[i * 4 + 2];
+    const l = 0.299 * R + 0.587 * G + 0.114 * B;
+    const own = pixelRampOf(R, G, B);
+    const here = own < 0 ? ramp[r] : own;
+    let tone;
+    if (maxL[r] - minL[r] < 8) {
+      // A SURFACE THE PHOTOGRAPH ITSELF HAS NO DETAIL IN IS PAINTED FLAT. Without this the tone came from the
+      // pixel's absolute value, and a flat mid-grey wall — whose value sits half way between two tones —
+      // came out as a 50% checkerboard of both: measured on a test picture of two flat greys, one of them was
+      // painted in two colours. A surface with no detail has nothing to dither between, so it takes its own
+      // tone and stays one colour, which is also what keeps a wall a wall.
+      tone = toneArr[r];
+    } else {
+      const t = Math.max(0, Math.min(STEPS - 1, (l - pLo) * scale + face[r] * faceWeight));
+      const t0 = Math.floor(t);
+      const x = i % w, y = (i / w) | 0;
+      const take = (t - t0) > BAYER[((y & 7) << 3) | (x & 7)] / 64;
+      tone = take ? Math.min(STEPS - 1, t0 + 1) : t0;
+    }
+    if (role[r] === PANE_ROLE) tone = Math.min(1, tone);
+    else if (role[r] === SKY_ROLE) tone = Math.max(1, tone);
+    idx[i] = here * STEPS + tone;
+  }
 
-  // ---- STAGE 3c: texture, where the photograph has texture -------------------------------------------------
-  //
-  // THE ONE PLACE THIS STYLE DITHERS, and the rule is narrow on purpose. A material is not only a colour: in
-  // pixel art it is also a PATTERN, and the printed convention is that checkerboard and ordered patterns mean
-  // "even, uniform" surfaces while irregular or dense patterns mean "rough" ones — grass, gravel, foliage,
-  // worn asphalt. A flat palette has no other way to say "this is a field and not a painted floor", and the
-  // alternative — more tones — is exactly what the six-ramp palette exists to refuse.
-  //
-  // A GRADIENT DITHER WAS TRIED AND REMOVED, and it is worth recording why. Ordered two-level quantisation
-  // across a surface's own range — density from lightness, an 8x8 threshold — reproduces a gradient with two
-  // entries of one ramp, and it was implemented and measured. At the densities a sky produces it is a
-  // CHECKERBOARD, and a 192-pixel sky covered in a 50% checker reads as a halftone print, not as pixel art:
-  // measured on the three photographs, 74-95% of the frame came out dithered and the value correlation fell
-  // (0.93 to 0.85 on one of them). More tones is the honest cure for a gradient; a dither is not, and this
-  // route would rather stay flat than look like a screened photograph.
-  //
-  // So: a region that is (a) big enough to read as a surface, (b) ROUGH by the photograph's own ink energy,
-  // and (c) not sky, not a pane and not an object, is painted with the two ADJACENT tones of its OWN ramp,
-  // split by a fixed 8x8 ordered threshold. Nothing else in the picture dithers, no colour outside the
-  // region's own ramp is ever used, and the pattern is locked to the pixel grid, so this is texture and not
-  // noise. A flat region stays exactly one colour — which is what the test that protects this file asserts.
-  if (texture) {
-    const roughs = [...Array(nr).keys()].filter((r) => role[r] !== PANE_ROLE && size[r] > n * 0.01).map((r) => inkEnergy[r]).sort((a, b) => a - b);
-    const roughCut2 = roughs.length ? roughs[Math.floor(roughs.length * 0.45)] : Infinity;
-    const texAlt = new Int16Array(nr).fill(-1), texCut = new Int16Array(nr);
+  // AND A THING THE DETECTOR FOUND IS STILL PAINTED APART FROM ITS GROUND. With the paint per pixel this must
+  // be said again in the new terms, because the value-separation stage that used to say it worked on one tone
+  // per surface and the paint no longer reads that tone. Measured with the mark and without it, a thing whose
+  // colour the palette maps to the same entry as its ground — a grey car on grey asphalt, which is the case
+  // the marks exist for — came out exactly the colour of the road it stands on. So: a marked surface whose
+  // dominant colour is also the dominant colour of an unmarked neighbour moves its own pixels one tone, in its
+  // own ramp, away from the neighbour. One pass over the marked surfaces only.
+  if (marks && nr > 1) {
+    const paintCount = new Map();                      // region -> Map(index -> count)
+    for (let i = 0; i < n; i += 1) {
+      const r = reg[i];
+      if (!paintCount.has(r)) paintCount.set(r, new Map());
+      const m = paintCount.get(r);
+      m.set(idx[i], (m.get(idx[i]) || 0) + 1);
+    }
+    const dominant = (r) => {
+      const m = paintCount.get(r);
+      if (!m) return -1;
+      let best = -1, bestN = -1;
+      for (const [k, c] of m) if (c > bestN) { bestN = c; best = k; }
+      return best;
+    };
+    const boxOf = (r) => ({ x0: box[r * 4], y0: box[r * 4 + 1], x1: box[r * 4 + 2], y1: box[r * 4 + 3] });
     for (let r = 0; r < nr; r += 1) {
-      if (role[r] === PANE_ROLE || size[r] <= n * 0.01) continue;
-      if (inkEnergy[r] < roughCut2 || inkEnergy[r] < 0.06) continue;
-      // Fields, leaves and cloud banks are the things a photograph is rough in, and they are exactly the
-      // things a flat fill lies about. The density stays low: at most a third of a surface, because a dither
-      // that covers half a shape stops being texture and becomes the shape's colour.
-      const density = 0.10 + Math.min(1, (inkEnergy[r] - roughCut2) / Math.max(0.05, roughCut2)) * 0.26;
-      // the neighbour tone is the one the surface is turning AWAY from: up for a lit surface, down for a
-      // shaded one, so the pattern reads as the material catching or losing the light, not as dirt.
-      const t2 = norm[r] >= 0.5 ? Math.min(STEPS - 1, toneArr[r] + 1) : Math.max(0, toneArr[r] - 1);
-      if (t2 === toneArr[r]) continue;
-      texAlt[r] = ramp[r] * STEPS + t2;
-      texCut[r] = Math.round(density * 64);
-    }
-    // ONE sweep of the picture, not one sweep per region: the first version of this looped the whole frame
-    // for every textured region, which is O(regions x pixels) and measured 8.4 million wasted steps on a
-    // courtyard before a single pixel was written.
-    for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
-      const i = y * w + x, r = reg[i];
-      if (texAlt[r] >= 0 && BAYER[((y & 7) << 3) | (x & 7)] < texCut[r]) idx[i] = texAlt[r];
+      if (!marked[r]) continue;
+      const mine = dominant(r);
+      if (mine < 0 || mine >= palette.length - 2) continue;
+      let clash = false;
+      const mineBox = boxOf(r);
+      for (let q = 0; q < nr && !clash; q += 1) if (q !== r && !marked[q] && dominant(q) === mine && adjacent(mineBox, boxOf(q))) clash = true;
+      if (!clash) continue;
+      // the preferred direction is away from the middle, but a surface whose tone is already at the end of its
+      // ramp has only one way to go: the other one. A single direction meant a marked thing at tone 0 was left
+      // exactly the colour of its ground, which is the one case the marks exist for.
+      const order = norm[r] >= 0.5 ? [1, -1] : [-1, 1];
+      let to = -1;
+      for (const mv of order) { const want2 = toneArr[r] + mv; if (want2 >= 0 && want2 < STEPS) { to = ramp[r] * STEPS + want2; break; } }
+      if (to < 0) continue;
+      for (let i = 0; i < n; i += 1) if (reg[i] === r) idx[i] = to;
     }
   }
 
-  // ---- STAGE 4: the line layer, decided per PAIR of regions --------------------------------------------
+  // ---- STAGE 4: the line layer, along the photograph's own edges ---------------------------------------
   //
-  // Revision 1 asked every boundary PIXEL whether it looked like an edge, which produced dotted lines that
-  // wandered and covered 13-15% of the frame. A border belongs to a pair of regions, so the question is asked
-  // once per pair — is this border supported by the photograph's own ink, or by a real difference in value? —
-  // and the answer is applied to the whole border. A line that is drawn is drawn unbroken, and a border
-  // between two fragments of one surface is not drawn at all. That is the whole difference between drawing
-  // the place and drawing the segmentation.
-
-  const draw = new Set();
-  for (const [k, len] of pairs) {
-    const a = Math.floor(k / nr), b = k % nr;
-    const meanInk = (pairInk.get(k) || 0) / Math.max(1, len);
-    const dv = Math.abs(luma[a] - luma[b]) / 255;
-    if (meanInk >= lineInk || dv >= lineValue) draw.add(k);
-  }
+  // The line is drawn where the PHOTOGRAPH has an edge, at the picture's own resolution, and nowhere else. It
+  // used to be the boundary between two surfaces, which was right while a surface was one flat colour — the
+  // border WAS the only structure there was. Now that every pixel is placed against the palette, the surface
+  // boundary is the segmentation's opinion and it is coarse (the segmentation runs at a quarter of the pixels
+  // to keep the transition quick), so drawing it would put a chunky, made-up border over a picture whose real
+  // edges are already there. The ink map is computed at full resolution, so this is one pixel wide, follows
+  // kerbs and rooflines, and never draws a line the photograph does not have.
   const OUT = palette.length - 2;
   let outlinePixels = 0;
-  if (draw.size) {
-    for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
-      const i = y * w + x, r = reg[i];
-      for (const j of [i - 1, i + 1, i - w, i + w]) {
-        const q = reg[j];
-        if (q === r) continue;
-        const k = r < q ? r * nr + q : q * nr + r;
-        if (draw.has(k)) { idx[i] = OUT; outlinePixels += 1; break; }
-      }
-    }
+  for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
+    const i = y * w + x;
+    if (inkMap[i] >= inkLine) { idx[i] = OUT; outlinePixels += 1; }
   }
 
   return {

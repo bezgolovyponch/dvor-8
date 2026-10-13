@@ -7,7 +7,8 @@ import { OUTLINE, VOID, scorchMap } from './palette.js';
 import { mulberry32 } from './rng.js';
 import { makeDecals } from './decal.js';
 
-export const NEAR = 7;             // a tap this close to a thing counts as a tap on it: a finger is not a pixel
+export const NEAR = 14;            // a tap this close to a thing counts as a tap on it: a finger is not a pixel
+                                   // (14 picture pixels — the same finger, on a picture that doubled)
 export const DEBRIS_MAX = 220;     // pieces a broken thing throws; more than this is noise, not impact
 
 export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1 }) {

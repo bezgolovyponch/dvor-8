@@ -5,11 +5,14 @@
 // thing still standing is solid at its own pixels: it is walked round, or jumped — and to land ON one is
 // to stomp it, which is a hit like any other and throws the walker up again.
 
-export const SPEED = 46;     // pixels per second on foot
-export const JUMP = 150;     // speed leaving the ground; with FALL, a jump is about 22 pixels high and 0.6 s long
-export const FALL = 520;
-export const BOUNCE = 125;   // speed off a thing that has just been stomped
-export const CLEAR = 5;      // higher than this, a thing passes underneath
+// These are in PICTURE pixels, and the picture doubled (view.js): so they doubled, and a walker still crosses
+// the yard in the same time, a jump is still the same fraction of the frame, and a thing that is 5 pixels off
+// the ground is still clear. The numbers are the old ones times two, which is why they look arbitrary.
+export const SPEED = 92;     // pixels per second on foot
+export const JUMP = 300;     // speed leaving the ground; with FALL, a jump is about 43 pixels high and 0.6 s long
+export const FALL = 1040;
+export const BOUNCE = 250;   // speed off a thing that has just been stomped
+export const CLEAR = 10;     // higher than this, a thing passes underneath
 
 export function standing(world, x, y) {
   const xi = Math.round(x), yi = Math.round(y);

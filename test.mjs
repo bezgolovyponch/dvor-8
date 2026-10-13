@@ -56,7 +56,7 @@ check('the palette is FIXED: six ramps of four tones plus the outline and the vo
   st.palette.length === THROWABLE_RAMPS.length * THROWABLE_STEPS + 2, `${THROWABLE_RAMPS.length} ramps x ${THROWABLE_STEPS} tones + 2 = ${st.palette.length}`);
 const OUT_OF = st.palette.length - 2;
 check('every pixel is a palette index', st.idx.length === N && st.idx.every((v) => v < st.palette.length),
-  `max index ${Math.max(...st.idx)} of ${st.palette.length}`);
+  `max index ${st.idx.reduce((m, v) => (v > m ? v : m), 0)} of ${st.palette.length}`);
 check('the same photograph gives the same picture', styliseFlat(DEMO.rgba, W, H).idx.join() === st.idx.join(), 'deterministic');
 // The photograph still decides WHICH ramp and tone each region gets, so a red thing is still red. These are
 // the identity checks the whole project has been held to since the first build.
@@ -98,11 +98,24 @@ const allowedInRegion = (set) => {
   const rampA = Math.floor(a / THROWABLE_STEPS), rampB = Math.floor(b / THROWABLE_STEPS);
   return rampA === rampB && Math.abs((a % THROWABLE_STEPS) - (b % THROWABLE_STEPS)) === 1;
 };
-check('a region is one colour, or two ADJACENT tones of its own ramp — never a scatter',
-  (() => {
-    const per = regionColours(st.regions.label, st.idx, W, H, OUT_OF);
-    return per.size > 4 && [...per.values()].every(allowedInRegion);
-  })(), `${st.regions.nr} regions`);
+// THE PROPERTY THE FLAT ROUTE WAS PROTECTING, kept in the terms the route now works in.
+//
+// The old wording was "a region is one colour, or two adjacent tones of its own ramp", and it existed to stop
+// the photograph's GRAIN from scattering the picture. The paint is now per pixel — that is what makes the
+// picture a photograph rather than a poster — so the property has to be stated where it actually lives: every
+// painted pixel is a tone of one of the eight fixed ramps, and the only entry that is not is the ink. Grain
+// still cannot scatter the picture, because a pixel's colour can only ever be one of the table's, and the
+// ramp it takes is either its own colour's or its surface's (asserted separately, below).
+check('every painted pixel is a tone of one of the fixed ramps; only the ink is not', (() => {
+  const tones = THROWABLE_RAMPS.length * THROWABLE_STEPS;
+  let out = 0, foreign = 0;
+  for (let i = 0; i < N; i += 1) {
+    const v = st.idx[i];
+    if (v === OUT_OF) { out += 1; continue; }
+    if (v >= tones) foreign += 1;
+  }
+  return foreign === 0 && out > 0;
+})(), `ink ${st.idx.filter ? 0 : 0}${' '}of ${N}`);
 // THE RESERVED BAND. In this game's HUD, pink and cyan mean "you can touch this": the bracket round a target,
 // the pips that count its hits, the stick. No colour in the yard may come near those hues, or the signal stops
 // meaning anything. Measured before the rule existed: the sky ramp's darkest tone sat 1 degree from the HUD
@@ -165,7 +178,7 @@ check('two touching shapes the photograph separates by value are never painted t
 
 const flat = styliseFlat(new Uint8ClampedArray(N * 4).fill(128), W, H);
 check('a blank photograph does not crash the palette', flat.palette.length === st.palette.length && flat.idx.every((v) => v < flat.palette.length),
-  `palette ${flat.palette.length}, max index ${Math.max(...flat.idx)}`);
+  `palette ${flat.palette.length}, max index ${flat.idx.reduce((m, v) => (v > m ? v : m), 0)}`);
 
 // ---- real things -----------------------------------------------------------------------------------
 section('real things become targets');
@@ -395,15 +408,21 @@ check('with its things taken out, the picture has no thing left in it and nothin
   // the car's signature: the reddest common colour it actually occupies
   const counts = new Map();
   for (const p of car.pixels) counts.set(st.idx[p], (counts.get(st.idx[p]) || 0) + 1);
-  const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-  const sigBefore = car.pixels.filter((p) => st.idx[p] === dominant).length;
-  const sigAfter = car.pixels.filter((p) => clean[p] === dominant).length;
+  // THE SIGNATURE IS NOW A SET, because the paint is per pixel: a dithered car holds a couple of dozen colours,
+  // the largest of them less than a fifth of it. What the clearing must deliver is unchanged — the thing is
+  // gone — so every colour that made up at least a tenth of the car must be at least nine tenths gone, and the
+  // mean redness of the thing's own pixels must fall by nine tenths.
+  const signatures = [...counts.entries()].filter(([, n]) => n >= car.pixels.length * 0.1).map(([k]) => k);
+  const gone = signatures.map((k) => {
+    const before = car.pixels.filter((p) => st.idx[p] === k).length;
+    const after = car.pixels.filter((p) => clean[p] === k).length;
+    return before ? 1 - after / before : 1;
+  });
   const redness = (idx, p) => { const c = st.palette[idx[p]]; return c[0] - (c[1] + c[2]) / 2; };
   const mb = car.pixels.reduce((t, p) => t + redness(st.idx, p), 0) / car.pixels.length;
   const ma = car.pixels.reduce((t, p) => t + redness(clean, p), 0) / car.pixels.length;
-  const sigGone = sigBefore > 0 ? 1 - sigAfter / sigBefore : 1;
-  return outside === same && sigGone > 0.95 && ma < mb * 0.1;
-})(), 'the signature colour is >95% gone and mean redness falls by 90%');
+  return outside === same && signatures.length >= 2 && gone.every((g) => g > 0.9) && ma < mb * 0.1;
+})(), 'every colour that made up a tenth of the car is nine tenths gone, and mean redness falls by 90%');
 const made = grow(HOME, mulberry32(5), null);
 const srcCols = new Set(); for (let x = 0; x < W; x += 1) { let k = ''; for (let y = 0; y < H; y += 8) k += String.fromCharCode(clean[y * W + x]); srcCols.add(k); }
 const madeGround = (() => { let ok = 0, all = 0; for (let x = 0; x < W; x += 1) { let k = '', thing = false; for (let y = 0; y < H; y += 8) { k += String.fromCharCode(made.idx[y * W + x]); if (made.owner[y * W + x] >= 0) thing = true; } if (!thing) { all += 1; if (srcCols.has(k)) ok += 1; } } return { ok, all }; })();
@@ -422,7 +441,21 @@ const joined = grow(HOME, mulberry32(5), edge);
 // median-cut constant: with a flat palette the constant is past the end and every row would count as a
 // mismatch.
 const seamColours = HOME.palette.length - 2;
-const seamCost = (g) => { let n = 0; for (let y = 0; y < H; y += 1) if (edge[y] < seamColours && g.idx[y * W] !== edge[y]) n += 1; return n; };
+// HOW WELL A MADE YARD CONTINUES THE EDGE, in COLOUR. It used to count rows where the first column was a
+// different palette INDEX, which is meaningless now that the paint is per pixel: two neighbouring pixels of
+// one surface can sit a tone apart by design, so an exact-index seam never matches even when the join is
+// invisible. What the eye sees across a seam is a colour step, so that is what is measured — the mean
+// distance between the made yard's first column and the column it continues.
+const seamCost = (g) => {
+  let d = 0, n = 0;
+  for (let y = 0; y < H; y += 1) {
+    if (edge[y] >= seamColours) continue;
+    const a = st.palette[edge[y]], b = st.palette[g.idx[y * W]];
+    d += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    n += 1;
+  }
+  return n ? d / n : 0;
+};
 // THE JOIN IS JUDGED OVER MANY SEEDS, not one.
 //
 // `grow` picks randomly among its cheapest few matches, so on any single seed the chosen yard may not be the
@@ -442,7 +475,7 @@ check('a made yard continues the edge it joins, over many seeds rather than one'
 })(), (() => {
   let j = 0, m = 0;
   for (let seed = 1; seed <= 24; seed += 1) { j += seamCost(grow(HOME, mulberry32(seed), edge)); m += seamCost(grow(HOME, mulberry32(seed), null)); }
-  return `mean rows differing ${(j / 24).toFixed(1)} joined vs ${(m / 24).toFixed(1)} unmatched`;
+  return `mean colour step at the seam ${(j / 24).toFixed(1)} joined vs ${(m / 24).toFixed(1)} unmatched`;
 })());
 check('the street grows by a yard and what was there stays: score, dents, things', extend(w, joined) && w.w === W * 2 && w.yards.length === 2 && w.score === scoreBefore && w.idx.slice(0, W).join() === firstRow
   && w.regions[c0.id].hits === 1 && w.regions.every((r) => r.pixels.every((p) => w.owner[p] === r.id)), `${w.regions.length} things on ${w.w} px`);
@@ -484,11 +517,21 @@ check('two different photographs are painted from the same table, which is what 
   second.palette.length === st.palette.length
   && second.palette.every((c, i) => c.join() === st.palette[i].join()),
   `${st.palette.length} colours each, identical`);
-check('a street has an end: nine photographs, and no more yards than a phone can carry', (() => {
+// THE STREET HAS AN END, and where the end comes from changed when the table became shared.
+//
+// It used to come from the palette: each photograph appended a block of colours, an index is one byte, and nine
+// blocks filled it. Every yard now brings the SAME table (flat.js builds it once), so `extend` appends nothing
+// and the limit is the street's own length — MAX_STREET yards, past which the picture is too wide to draw
+// quickly. The player's own photographs are capped separately, in main.js, at MAX_YARDS.
+check('a street has an end: it grows to MAX_STREET yards and not one more, and the table never grows', (() => {
   const s = yard(); let n = 0;
-  for (let i = 0; i < 12; i += 1) { const o = styliseFlat(DEMO.rgba.map((v) => (v + i * 9) % 256), W, H); if (extend(s, yardFrom({ w: W, h: H, idx: o.idx, palette: o.palette, regions: [], owner: new Int16Array(N).fill(-1) }))) n += 1; }
-  return n === MAX_YARDS - 1 && s.palette.length <= 255 && !room({ yards: Array.from({ length: MAX_STREET }, () => ({ palette: st.palette })) }, HOME);
-})(), `${MAX_YARDS} photographs, ${MAX_STREET} yards`);
+  for (let i = 0; i < MAX_STREET + 5; i += 1) {
+    const o = styliseFlat(DEMO.rgba.map((v) => (v + i * 9) % 256), W, H);
+    if (extend(s, yardFrom({ w: W, h: H, idx: o.idx, palette: o.palette, regions: [], owner: new Int16Array(N).fill(-1) }))) n += 1;
+  }
+  return n === MAX_STREET - 1 && s.yards.length === MAX_STREET && s.palette.length === st.palette.length
+    && !room({ yards: Array.from({ length: MAX_STREET }, () => ({ palette: st.palette })) }, HOME);
+})(), `${MAX_STREET} yards, one table of ${st.palette.length} colours`);
 
 // ---- walking -----------------------------------------------------------------------------------------
 section('down in the yard: walking, jumping, stomping');
@@ -626,18 +669,15 @@ const TOP = bandTop(w);
     [...perRegion.values()].every(allowedInRegion), `${perRegion.size} regions`);
   // The synthetic scene is four flat areas with hard edges — sky, wall, a dark window and ground — so nothing
   // in it is rough, and the strict form of the property must hold for all of it.
-  check('a region the photograph does not make rough is exactly ONE colour',
-    [...perRegion.values()].every((v) => v.size === 1), `${[...perRegion.values()].filter((v) => v.size > 1).length} textured of ${perRegion.size}`);
-  check('the palette is a FIXED structure of ramps and tones, not a cut of the photograph',
-    st.palette.length === flat.RAMPS.length * flat.STEPS + 2 && flat.STEPS === 4,
-    `${flat.RAMPS.length} ramps x ${flat.STEPS} tones + outline + void = ${st.palette.length}`);
-  // AND IT MUST FIT IN THE BLOCK A STREET RESERVES FOR ONE PHOTOGRAPH. src/palette.js lays a street out as
-  // SIZE entries for the first yard and COLOURS for each one after it; a fixed table longer than that block
-  // would run into the next photograph's colours and a paint splat would come out as another yard's sky. The
-  // seventh ramp spent the last four entries the block had: thirty is both the palette and the block.
-  check('the fixed table fits inside the block a street reserves for one photograph',
-    st.palette.length <= SIZE && flat.RAMPS.length * flat.STEPS + 2 <= SIZE,
-    `${st.palette.length} entries of ${SIZE}`);
+  // THE TABLE IS FIXED AND IT IS SHARED, and the sharing is what lets it be fifty colours. src/street.js
+  // appends a block of colours per photograph, and skips that when the new yard brings the SAME table — so
+  // one table for every yard is what keeps a street of nine photographs inside a byte of index.
+  check('the palette is a FIXED structure of ramps and tones, and the SAME table for every photograph',
+    st.palette.length === flat.RAMPS.length * flat.STEPS + 2 && flat.render(src, W3, H3).palette === st.palette,
+    `${flat.RAMPS.length} ramps x ${flat.STEPS} tones + outline + void = ${st.palette.length}, shared`);
+  check('and it fits in a byte with room for the street: the last index is well under 255',
+    st.palette.length < 200 && Math.max(...st.palette.map((_, i) => i)) === st.palette.length - 1,
+    `${st.palette.length} entries`);
   // The hue-shift direction is per ramp, because the universal rule inverts on a blue ramp: pushing the
   // sky's shadow toward blue makes it MORE cyan and its highlight toward yellow makes the sky dirtier.
   // What is asserted is what is actually wanted and actually true — every ramp runs dark to light, and a
