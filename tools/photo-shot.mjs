@@ -70,6 +70,18 @@ await withPage(BASE, {}, async (page) => {
   results.push({ step: 'info', ...(await page.run(`return { note: document.getElementById('note').textContent.slice(0, 120) }`)) });
   await page.shot(`${out}/3-info.png`);
 
+  // DESTROYABILITY, on the real photograph: throw at the same thing until the game has taken it apart, and
+  // capture what is left. This is the check that matters for requirement 14 - remains, not a black hole.
+  await page.run(`
+    document.getElementById('infoBtn').click();
+    const el = document.getElementById('tilt'), r = document.getElementById('frame').getBoundingClientRect();
+    const o = { clientX: r.left + r.width * 0.34, clientY: r.top + r.height * 0.68, bubbles: true, cancelable: true, pointerId: 1 };
+    for (let i = 0; i < 8; i += 1) { el.dispatchEvent(new PointerEvent('pointerdown', o)); el.dispatchEvent(new PointerEvent('pointerup', o)); await new Promise((res) => setTimeout(res, 420)); }
+    return 'thrown';`);
+  await page.wait(600);
+  await page.shot(`${out}/6-destroyed.png`);
+  results.push({ step: 'destroyed', ...(await page.run(`return { left: document.getElementById('left').textContent, score: document.getElementById('score').textContent }`)) });
+
   // THE DISASTER, mid-event
   await page.run(`
     document.getElementById('infoBtn').click();

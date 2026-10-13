@@ -48,6 +48,14 @@ const ROWS = [
     () => existsSync(shot('photo-tsunami.png')) && shotNewerThan('photo-tsunami.png', 'src/render.js')],
   ['L3 A beast on a REAL photo', 'docs/shots/photo-beyonce.png', () => existsSync(shot('photo-beyonce.png'))],
   ['L1 v6\'s edges map replaced the traced polyline for outlining', 'src/world.js', () => has(src('world.js'), 'export function edgesOf')],
+  // THE DESTRUCTION MODEL: recorded before anything is built on it, and implemented in the three parts the
+  // knowledge base names - the ladder, the carrier, the transition.
+  ['L1 The destruction model is written down with its sources', 'docs/knowledge-base.md',
+    () => has(read('docs/knowledge-base.md'), 'THE DESTRUCTION MODEL', 'the LADDER', 'the CARRIER', 'the TRANSITION', 'What was tried and rejected')],
+  ['L2 The model is implemented: ladder, carrier and transition', 'src/world.js + src/disaster.js',
+    () => has(src('world.js'), 'dentMap', 'scorchMap', 'export function edgesOf', 'export function wreckAlong', 'rubble') && has(src('disaster.js'), 'wreckAlong')],
+  ['L3 One thing is destroyed on a REAL photo, with remains', 'docs/shots/photo-destroyed.png',
+    () => existsSync(shot('photo-destroyed.png')) && shotNewerThan('photo-destroyed.png', 'src/world.js')],
   ["Beyoncé eats cars, Pac-Man style, then shakes her head", 'src/disaster.js', () => has(src('disaster.js'), "type: 'chomp'", 'd.chew', 'shake', 'PAC-MAN')],
   ['A disaster can never touch a person', 'src/disaster.js + test.mjs', () => has(src('disaster.js'), 'export function stepDisaster') && has(read('test.mjs'), 'a disaster cannot reach a person')],
   ['L1 The bottom toolbar: arrow, the two names, info on the right', 'index.html + style.css', () => has(read('index.html'), 'id="paletteBox"', 'id="fateBox"', 'id="infoBtn"', 'id="barMore"', 'class="round"', 'class="pill"') && has(read('style.css'), '#bar .round', '#bar .pill')],

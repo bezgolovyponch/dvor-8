@@ -69,3 +69,27 @@ outline rule. Still to port, in this order: the **edges map per object**, the **
 > **A working reference beats a new idea.** When a reference produces the result the creator accepts, take its
 > path, name it in the code, and use it for the next piece. Search this file before searching the web. Add to it
 > every time a path works — with the link, what it gave, and which file here used it.
+
+
+## 6. THE DESTRUCTION MODEL — resolved, and now the one this game uses
+
+Researched against the references in this file, then proved on a real photograph. The model has three parts, and
+each part comes from a source rather than from taste:
+
+| part | what it is | source |
+|---|---|---|
+| **1. the LADDER** | a pixel of a thing is either intact, **scraped one tone** (its own ramp, up if it has nowhere darker to go), **torn** (a hole), or **void** (taken out). Four states, checked in that order | the state ladder every 8-bit game uses for a breakable thing; here it also carries this project's permanence rule (D8) |
+| **2. the CARRIER** | damage is applied **along the thing's own edges map** — a pixel is on the edge when a neighbour is not in the thing — so a blow tears the silhouette, never a box | v6's `edges` map, `DVOR-8 Street v6.dc.html`; the general rule is morphological dilation ([OpenCV](https://docs.opencv.org/4.x/d9/d61/tutorial_py_morphology.html)) |
+| **3. the TRANSITION** | the thing does not vanish: it goes **intact → wrecked in place**, losing pieces, and only a small core becomes void | [Rampage (1986)](https://en.wikipedia.org/wiki/Rampage_(video_game)) for damage by pieces; [Dig Dug (1982)](https://en.wikipedia.org/wiki/Dig_Dug) and [Rampart (1990)](https://en.wikipedia.org/wiki/Rampart_(1990_video_game)) for carving and living with the holes; v6 for a shattered pane leaving shards |
+
+**What was tried and rejected, with the reason:**
+
+| rejected | why |
+|---|---|
+| delete the region (`gone = true`) | no remains: the picture loses a car and gains nothing. This is what produced the black boxes the creator saw |
+| drive every damaged pixel to the **scorch** map | a dark car became a black mass — measured: the tone-0 pixels had nowhere darker to go |
+| trace and simplify a **polyline** per thing | on a large solid region the trace fell back to the box, so a car was outlined as a rectangle |
+| paint the flood as a **flat colour** over the picture | the yard disappeared under an olive field |
+
+**The rule that follows, and the reason this section exists:** the destruction model is decided and written down
+BEFORE the disasters that use it are drawn. A disaster is a hitter and an envelope; it must not invent damage.
