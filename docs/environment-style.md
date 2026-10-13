@@ -166,10 +166,13 @@ revisions** (39 such pairs in revision 1, 62 in revision 2). It is reported that
 property was already satisfied, and what revision 2 adds is that it is now asserted by a test and enforced by
 stage 3b instead of happening by luck.
 
-The render time is the transition alone, in headless Chrome, on one photograph. Revision 2 is within 1.5x of
-revision 1 on two photographs and faster on the third: the extra work (an ink gate, a roughness measure, a
-material pattern, a value-separation pass) was paid for by removing a second pair table that every merge used
-to copy, and a quadratic scan in the separation pass.
+The render time is the transition alone, in headless Chrome, on one photograph, on an idle machine; run to run
+it moves by 10-20%, so the useful statement is the range: revision 2 costs **0.85x to 1.55x** of revision 1 on
+these three photographs (244 / 268 / 363 ms against 288 / 255 / 236 ms). The extra work — an ink gate, a
+roughness measure, a material pattern, a value-separation pass — was paid for twice over: the merge used to
+copy a second pair table on every one of its ~1400 merges (223 ms of a 519 ms merge, measured), and the
+value-separation pass scanned the whole pair table for every candidate move. Both were removed in the audit
+that followed the first draft of this revision.
 
 ### The index
 
