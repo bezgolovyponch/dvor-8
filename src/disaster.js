@@ -30,7 +30,7 @@ export const DISASTERS = {
   hurricane: {
     ru: 'УРАГАН', line: 'ураган: всё, что не приколочено, летит',
     grade: { dark: 0.82, desat: 0.72, tint: [-6, 4, 14], lift: 0, contrast: 1.1 },
-    debris: 26, wind: 2.4, sway: 2.2, points: 40, lasts: 22, sweep: 0.22,
+    debris: 34, wind: 2.4, sway: 2.2, points: 40, lasts: 22, sweep: 0.5,
     why: 'The yard is sandblasted: debris crosses the frame, everything planted bends flat, and the people leave.',
   },
   tsunami: {
@@ -237,8 +237,11 @@ export function stepDisaster(d, world, dt, rnd) {
   // WARNING → IMPACT → AFTERMATH, the envelope every one of these games uses. The warning is a beat of its own:
   // nothing is damaged while the siren sounds, which is what makes the impact feel like an arrival.
   if (d.phase === 'warn') {
-    if (d.t > 1.6) { d.phase = 'impact'; out.push({ type: 'impact' }); }
-    else if (d.t > 0.9) out.push({ type: 'siren' });
+    // A BEAT, NOT A PAUSE. The creator watched a hurricane "just move" because the warning lasted 1.6 s and the
+    // front then crossed at 0.22 of the frame per second: most of the event was travel. The siren is a beat and
+    // the front is fast.
+    if (d.t > 0.7) { d.phase = 'impact'; out.push({ type: 'impact' }); }
+    else if (d.t > 0.25) out.push({ type: 'siren' });
     return out;
   }
   if (d.phase === 'aftermath') {

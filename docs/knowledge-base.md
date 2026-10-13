@@ -93,3 +93,35 @@ each part comes from a source rather than from taste:
 
 **The rule that follows, and the reason this section exists:** the destruction model is decided and written down
 BEFORE the disasters that use it are drawn. A disaster is a hitter and an envelope; it must not invent damage.
+
+
+## 7. THE CORE ISSUE IN MY APPROACH — found, named, and now a rule
+
+The creator's verdict on a screen I had called valid: *"total abomination — where is the re-rendering of the
+buildings as in the v6 html? why is the hurricane just a sign moving?"* Both are true, and both have one cause.
+
+**v6 does not filter a photograph. v6 BUILDS the frame out of sprites.** Its buildings are constructed — a wall
+grid, window sprites with a frame, glass and a sill, lit and shaded faces — its cars are one template with a
+4-tone ramp, a glint and an outline, and its disasters are sprites that act on that constructed world.
+
+**I took v6's PARTS and dropped them into a photo-painting pipeline.** An edges map, a spiral, a wave: all
+ported, all correct in isolation, and all sitting on top of a photograph that was still being painted per pixel.
+That is why a hurricane looks like a sign moving across a picture, and why a building is a photograph with a
+tint rather than a facade with windows: **there was nothing for the event to happen TO.**
+
+The rule that follows, and it is the most important line in this file:
+
+> **ADOPT THE REFERENCE'S ARCHITECTURE FOR THAT LAYER, NOT ITS PARTS.** When a reference produces a result the
+> creator accepts, the question is not "which of its functions can I call?" but "what does it build, and in what
+> order?" A sprite laid over a photograph is not a re-render. If the reference constructs a wall and puts windows
+> in it, then this project constructs a wall and puts windows in it — the photograph supplies COLOURS and
+> GEOMETRY, and the frame itself is built.
+
+The order that follows from it, and the only order in which the remaining work makes sense:
+
+1. **BUILD THE WORLD**: facades as wall planes with window sprites (frame, glass, sill) — from the geometry the
+   region and facade passes already produce.
+2. **BUILD THE THINGS**: the Metal Slug template — one car, 4-tone ramp from its paint, windshield glint,
+   running light, 1-px outline (v6's own citation).
+3. **THEN THE EVENTS**: a hurricane as a front that tears the BUILT world apart, a tsunami that floods it,
+   a beast that walks through it. An event is what happens to a world, never an overlay on a picture.

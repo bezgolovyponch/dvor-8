@@ -50,6 +50,13 @@ const ROWS = [
   ['L1 v6\'s edges map replaced the traced polyline for outlining', 'src/world.js', () => has(src('world.js'), 'export function edgesOf')],
   // THE DESTRUCTION MODEL: recorded before anything is built on it, and implemented in the three parts the
   // knowledge base names - the ladder, the carrier, the transition.
+  ['L1 THE CORE ISSUE is recorded as a rule: adopt the reference\'s ARCHITECTURE, not its parts', 'docs/knowledge-base.md',
+    () => has(read('docs/knowledge-base.md'), 'THE CORE ISSUE IN MY APPROACH', 'ADOPT THE REFERENCE\'S ARCHITECTURE FOR THAT LAYER', 'BUILD THE WORLD', 'BUILD THE THINGS', 'THEN THE EVENTS')],
+  ['L2 A window is a SPRITE: frame, glass and sill - not one dark rectangle', 'src/vector.js',
+    () => has(src('vector.js'), 'glassEntry', 'sillEntry', 'onFrame')],
+  ['L2 A wall is BUILT: a plane tone plus a turned-away tone', 'src/vector.js', () => has(src('vector.js'), 'shadeEntry', 'en.line[p2] > 0.25 ? shadeEntry : entry')],
+  ['L3 Buildings re-rendered on a REAL photo, with a storm through them', 'docs/shots/photo-hurricane.png',
+    () => existsSync(shot('photo-hurricane.png')) && shotNewerThan('photo-hurricane.png', 'src/vector.js')],
   ['L1 The destruction model is written down with its sources', 'docs/knowledge-base.md',
     () => has(read('docs/knowledge-base.md'), 'THE DESTRUCTION MODEL', 'the LADDER', 'the CARRIER', 'the TRANSITION', 'What was tried and rejected')],
   ['L2 The model is implemented: ladder, carrier and transition', 'src/world.js + src/disaster.js',

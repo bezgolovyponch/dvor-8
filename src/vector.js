@@ -490,7 +490,14 @@ export function trace(rgba, w, h, opts = {}) {
       // two steps of the plane's own ramp, chosen by its brightness, so a lit face and a shaded face differ
       const want = shade > 0.62 ? 1.16 : shade > 0.42 ? 1.0 : 0.86;
       const entry = entryFor(palette, (r / c) * want, (g / c) * want, (b / c) * want);
-      for (const p2 of part.px) if (!sky[p2] && idx[p2] !== skyColour) idx[p2] = entry;
+      // THE WALL IS BUILT, NOT PHOTOGRAPHED: one tone for the plane, and a second, darker tone on the pixels
+      // whose own edges say the surface turns away - so a facade reads as masonry with light on it rather than
+      // as a photograph someone tinted.
+      const shadeEntry = entryFor(palette, (r / c) * want * 0.86, (g / c) * want * 0.86, (b / c) * want * 0.86);
+      for (const p2 of part.px) {
+        if (sky[p2] || idx[p2] === skyColour) continue;
+        idx[p2] = en.line[p2] > 0.25 ? shadeEntry : entry;
+      }
     }
   }
 
@@ -720,10 +727,28 @@ export function trace(rgba, w, h, opts = {}) {
     }
   }
   if (gridWindows.length) {
+    // A WINDOW IS A SPRITE OF THREE PARTS, the way v6 builds one: a dark FRAME round the opening, the GLASS
+    // inside it, and a SILL of one lighter row under the frame. The first version painted each window as one
+    // dark rectangle, which is a hole in a photograph rather than a window in a wall.
     const winEntry = entryFor(palette, 40, 42, 58);
+    const glassEntry = entryFor(palette, 58, 74, 104);
     const frameEntry = entryFor(palette, 176, 178, 190);
+    const sillEntry = entryFor(palette, 208, 206, 198);
     for (const q of [...windowsFound, ...gridWindows]) {
-      for (const p2 of q.px) idx[p2] = winEntry;
+      // glass inside, frame round it: the outer ring of the opening is the frame, the rest is glass
+      for (const p2 of q.px) {
+        const x = p2 % w, y = (p2 / w) | 0;
+        const onFrame = x === q.x || y === q.y || x === q.x + q.w - 1 || y === q.y + q.h - 1;
+        idx[p2] = onFrame ? winEntry : glassEntry;
+      }
+      // and the SILL: one row of lighter masonry directly under the frame
+      for (let xx = q.x; xx < q.x + q.w; xx += 1) {
+        const yy = q.y + q.h + 1;
+        if (yy >= 0 && yy < h && xx >= 0 && xx < w) {
+          const p2 = yy * w + xx;
+          if (!sky[p2] && idx[p2] !== winEntry) idx[p2] = sillEntry;
+        }
+      }
       // a one-pixel frame one tone up, so a window is a window and not a hole in the picture
       for (let xx = q.x - 1; xx <= q.x + q.w; xx += 1) {
         for (const yy of [q.y - 1, q.y + q.h]) {
