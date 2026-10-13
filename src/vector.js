@@ -899,10 +899,39 @@ export function trace(rgba, w, h, opts = {}) {
         r += rgb[p2 * 3]; g += rgb[p2 * 3 + 1]; b += rgb[p2 * 3 + 2]; c += 1;
       }
       if (!c) continue;
-      const road = entryFor(palette, r / c, g / c, b / c);
+      // THE ROAD REPRODUCES THE PHOTOGRAPH'S OWN PLANES. One flat tone made the largest surface of the frame a
+      // single colour - the gate measured 62% where the reference's largest is 6%, and a street that is 62% one
+      // tone is not a street. Inventing kerbs and patches would be inventing the place, so the road is split into
+      // THE PLANES THE PHOTOGRAPH ALREADY HAS: its own luma terciles, each painted flat in one tone of the road's
+      // ramp. A kerb, a gutter, a patched rectangle and a shadowed strip are all in the photograph, and each
+      // becomes a plane of its own - the LAYOUT is the photograph's, only the surface is flat.
+      const usable = pad.px.filter((p2) => luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) <= 168);
+      if (!usable.length) continue;
+      const lums = usable.map((p2) => luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2])).sort((x, y) => x - y);
+      const q1 = lums[Math.floor(lums.length * 0.34)], q2 = lums[Math.floor(lums.length * 0.67)];
+      const bandOf = (p2) => {
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        return L <= q1 ? 0 : L <= q2 ? 1 : 2;
+      };
+      const sums = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+      for (const p2 of usable) { const b2 = bandOf(p2); sums[b2][0] += rgb[p2 * 3]; sums[b2][1] += rgb[p2 * 3 + 1]; sums[b2][2] += rgb[p2 * 3 + 2]; sums[b2][3] += 1; }
+      const roadEntries = sums.map(([rr, gg, bb, cc], i2) => (cc ? entryFor(palette, rr / cc, gg / cc, bb / cc) : entryFor(palette, r / c * (0.8 + 0.2 * i2), g / c * (0.8 + 0.2 * i2), b / c * (0.8 + 0.2 * i2))));
+      // a plane is painted flat and only its BOUNDARY is a change: three smoothing passes drop lone band pixels
+      const bandMap = new Int8Array(n).fill(-1);
+      for (const p2 of usable) bandMap[p2] = bandOf(p2);
+      for (let pass = 0; pass < 3; pass += 1) {
+        const was = Int8Array.from(bandMap);
+        for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
+          const p2 = y * w + x;
+          if (was[p2] < 0) continue;
+          const nb = [was[p2 - 1], was[p2 + 1], was[p2 - w], was[p2 + w]].filter((v) => v >= 0).sort();
+          if (nb.length >= 3 && nb[1] !== was[p2]) bandMap[p2] = nb[1];
+        }
+      }
       for (const p2 of pad.px) {
         const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        idx[p2] = L > 168 ? marking : road;
+        if (L > 168) { idx[p2] = marking; continue; }
+        idx[p2] = roadEntries[Math.max(0, bandMap[p2])];
       }
     }
     if (roads) sky.__roads = roads;
