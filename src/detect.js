@@ -11,7 +11,12 @@ import { tilesFor, merge } from './objects.js';
 export const DETECT_LONG = 1600;   // the photograph is searched at up to this size, not at the game's
 let ready = null;
 
-export function loadDetector(model = 'efficientdet_lite0') {
+// THE MODEL IS LITE2, NOT LITE0, and that is a measured change rather than a preference. On this game's own
+// photographs (docs/scene-analysis.md): Lite2 finds 13 cars on photo 2 where Lite0 found 8, finds 4 on photo 3
+// where Lite0 found 5 but called a FACADE a truck, and on photo 1 it stops calling the concrete wall a boat.
+// It costs about 1.5 s more per photograph. Both files are the same size on disk (7.5 MB, int8), so nothing
+// else in the game changes.
+export function loadDetector(model = 'efficientdet_lite2') {
   ready ||= (async () => {
     const at = (path) => new URL(`../vendor/mediapipe/${path}`, import.meta.url).href;
     const fileset = await FilesetResolver.forVisionTasks(at('wasm'));

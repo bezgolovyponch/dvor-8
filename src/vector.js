@@ -24,6 +24,7 @@
 //   stray single pixels, specks under 4 px, same-colour blobs per 1000 px, and jagged border share.
 
 import { RAMPS, STEPS, paletteOf } from './flat.js';
+import { enhance, straightness } from './enhance.js';
 
 const clamp255 = (v) => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
 
@@ -214,12 +215,19 @@ function cloud(mask, w, h, cx, cy, size, colour, shade) {
 export function trace(rgba, w, h, opts = {}) {
   const t0 = (typeof performance !== 'undefined' ? performance.now() : Date.now());
   const palette = opts.palette || paletteOf();
+  // FIRST ENHANCE, THEN RECOGNISE. The shapes are found on the LIGHT-FLATTENED picture, so a wall in shadow and
+  // the same wall in sun are one shape instead of two, and the grain of the asphalt is not a shape at all. The
+  // colours that are ultimately painted still come from the ORIGINAL pixels: the enhancement decides where a
+  // shape is, never what colour it is.
+  const en = opts.preEnhanced || enhance(rgba, w, h, opts.enhance || {});
+  const shapeRgba = en.rgba;
   const clean = { ...CLEAN, ...(opts.clean || {}) };
   const n = w * h;
   const idx = new Uint8Array(n);
 
   // ---- 1. sky, foliage, and everything else, by hue and smoothness --------------------------------------
   const src = new Uint8ClampedArray(rgba.buffer ? rgba.buffer : rgba, rgba.byteOffset || 0, n * 4);
+  const shapeSrc = shapeRgba;
   const cls = new Uint8Array(n);          // 0 other, 1 sky-candidate, 2 foliage
   const rgb = new Float32Array(n * 3);
   for (let i = 0; i < n; i += 1) {
@@ -239,6 +247,10 @@ export function trace(rgba, w, h, opts = {}) {
     edge[p] = m / 255;
   }
   for (let i = 0; i < n; i += 1) if (cls[i] === 1 && edge[i] > SKY_MAX_EDGE) cls[i] = 0;
+  // ...AND A SKY HAS NO LONG STRAIGHT LINES. Depth alone cannot tell sky from a distant city; straight-line
+  // density can, and that is what the scene analysis found decisive. So a blue area that is full of long runs
+  // is not sky here either - it is a distant tower, a crane or a blue-painted facade, and it is left as a shape.
+  for (let i = 0; i < n; i += 1) if (cls[i] === 1 && en.line[i] > 0.34) cls[i] = 0;
 
   // the sky is the sky-candidate area CONNECTED TO THE TOP: a blue car below the horizon is not sky
   const sky = new Uint8Array(n);
@@ -309,9 +321,13 @@ export function trace(rgba, w, h, opts = {}) {
   for (let i = 0; i < n; i += 1) {
     if (sky[i]) { key[i] = -1; continue; }
     const r = rgb[i * 3], g = rgb[i * 3 + 1], b = rgb[i * 3 + 2];
-    const { h: hue, s, v } = rgb2hsv(r, g, b);
+    const { h: hue, s, v } = rgb2hsv(shapeSrc[i * 4], shapeSrc[i * 4 + 1], shapeSrc[i * 4 + 2]);
     const band = s < 0.16 ? 8 : Math.min(7, Math.floor(hue / 45));       // 8 = the greys, else 45-degree bands
-    const shade = Math.min(3, Math.floor(v * 4));
+    // THE SHADE BAND IS TAKEN FROM THE FLATTENED LUMA, not the original: this is where "shadows are secondary"
+    // is actually implemented. Two halves of one wall, one lit and one in shadow, land in the same band and
+    // become ONE shape; the shadow comes back later as a tone on a shape that already exists.
+    const lf = en.smooth[i];
+    const shade = Math.min(3, Math.floor((lf / 255) * 4));
     key[i] = band * 4 + shade;
   }
   const { label, parts } = components(w, h, (p) => key[p]);
@@ -444,6 +460,8 @@ export function trace(rgba, w, h, opts = {}) {
   // needs no model, no depth and no colour: the wall is bright and smooth, the opening is dark and rectangular,
   // and a facade has its openings in rows and columns.
   const WIN = { minArea: 0.0003, maxArea: 0.03, aspect: [0.35, 2.6], fill: 0.62, drop: 20, group: 2, max: 48 };
+  // `windowsFound` holds what the local-contrast pass found; the grid pass below adds the ones the rhythm of
+  // the facade implies but the contrast test missed, and the game gets the union.
   const windowsFound = [];
   {
     // THE OPENING IS DARK RELATIVE TO ITS OWN SURROUNDINGS, measured against a blurred copy of the frame rather
@@ -489,13 +507,88 @@ export function trace(rgba, w, h, opts = {}) {
       inside /= d.area;
       windowsFound.push({ x: d.minX, y: d.minY, w: wd, h: ht, cx: d.minX + wd / 2, cy: d.minY + ht / 2, area: d.area / n, fill: +fill.toFixed(2), drop: Math.round(boxMean(mx, my, R) - inside), px: d.px });
     }
+    // A FACADE IS A RHYTHM, SO SAMPLE IT AS ONE. The component test above finds a window when an opening is
+    // clean and isolated; on a real street most openings are small, partly occluded or soft-edged and it finds
+    // one or two. But their RHYTHM survives: project the dark pixels of a wall onto its rows and its columns and
+    // the windows show up as periodic peaks even when not one of them is individually clean. That is the
+    // classic facade-grammar reading and it is what makes a grid recoverable from a bad sample - which is the
+    // honest fix for the under-detection recorded in D52.
+    const facadeSamples = [];
+    {
+      const med = (a) => (a.length ? a.slice().sort((x, y) => x - y)[a.length >> 1] : 0);
+      const peaksOf = (profile, min) => {
+        const out = [];
+        for (let i = 1; i < profile.length - 1; i += 1) {
+          if (profile[i] >= min && profile[i] >= profile[i - 1] && profile[i] >= profile[i + 1]) out.push(i);
+        }
+        // thin the peaks: neighbouring maxima are one opening
+        const thin = [];
+        for (const i of out) { const last = thin[thin.length - 1]; if (last === undefined || i - last > 3) thin.push(i); }
+        return thin;
+      };
+      // A FACADE IS NOT ONE OF THE COLOUR SHAPES. Testing the colour shapes for a rhythm found NOTHING on any
+      // photograph, because the quantisation splits a wall into dozens of pieces and none of them is a building.
+      // The wall is instead taken from the STRUCTURE: flat (no long lines of its own), not sky, not foliage,
+      // bright enough to be masonry - and then joined into one connected plane. That is what a facade is, and it
+      // is the same lesson as the sky: the unit of the parse is the structure, not the colour.
+      const wallMask = new Uint8Array(n);
+      for (let p2 = 0; p2 < n; p2 += 1) {
+        if (sky[p2] || cls[p2] === 2) continue;
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        if (L < 62) continue;
+        if (en.line[p2] > 0.55) continue;                 // a line is an edge, not a wall face
+        wallMask[p2] = 1;
+      }
+      const { parts: planes } = components(w, h, (p2) => wallMask[p2]);
+      for (const part of planes) {
+        if (part.area / n < 0.02) continue;                       // a wall is big
+        const wd0 = part.maxX - part.minX + 1, ht0 = part.maxY - part.minY + 1;
+        if (ht0 < 24 || wd0 < 24) continue;
+        // how much of this plane is openings at all: a wall of brick is 3% dark, a plane that is ALL shadow is
+        // not a facade and must be skipped
+        let darkN = 0;
+        for (const p2 of part.px) if (dark[p2]) darkN += 1;
+        const darkShare = darkN / part.area;
+        if (darkShare < 0.02 || darkShare > 0.6) continue;
+        const rowP = new Float32Array(ht0), colP = new Float32Array(wd0);
+        for (const p2 of part.px) {
+          if (!dark[p2]) continue;
+          rowP[((p2 / w) | 0) - part.minY] += 1;
+          colP[(p2 % w) - part.minX] += 1;
+        }
+        const rMean = rowP.reduce((a, b) => a + b, 0) / ht0, cMean = colP.reduce((a, b) => a + b, 0) / wd0;
+        const rPeaks = peaksOf(rowP, rMean * 1.3), cPeaks = peaksOf(colP, cMean * 1.3);
+        if (rPeaks.length + cPeaks.length < 3) continue;          // no rhythm here
+        const sizeAt = (profile, idx, mean) => {
+          let a = idx, b = idx;
+          while (a > 0 && profile[a - 1] > mean * 0.8) a -= 1;
+          while (b < profile.length - 1 && profile[b + 1] > mean * 0.8) b += 1;
+          return Math.max(3, b - a + 1);
+        };
+        const hgt = med(rPeaks.map((i) => sizeAt(rowP, i, rMean))) || 8;
+        const wid = med(cPeaks.map((i) => sizeAt(colP, i, cMean))) || 8;
+        for (const ry of rPeaks) for (const cx of cPeaks) {
+          const cy = part.minY + ry, x = part.minX + cx;
+          // the crossing must actually be dark in the wall
+          let d2 = 0, t2 = 0;
+          for (let yy = cy - 1; yy <= cy + 1; yy += 1) for (let xx = x - 1; xx <= x + 1; xx += 1) {
+            if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+            t2 += 1; if (dark[yy * w + xx]) d2 += 1;
+          }
+          if (!t2 || d2 / t2 < 0.5) continue;
+          facadeSamples.push({ x: Math.round(x - wid / 2), y: Math.round(cy - hgt / 2), w: wid, h: hgt, cx, cy, area: (wid * hgt) / n, fill: 0.7, drop: 0, sample: true, px: [] });
+        }
+      }
+    }
+    windowsFound.push(...facadeSamples);
+
     // IN ROWS OR COLUMNS: two openings that line up are a facade; one dark rectangle on its own is a shadow.
     const rows = new Map(), cols = new Map();
     for (const q of windowsFound) {
       rows.set(Math.round(q.cy / 12), (rows.get(Math.round(q.cy / 12)) || 0) + 1);
       cols.set(Math.round(q.cx / 12), (cols.get(Math.round(q.cx / 12)) || 0) + 1);
     }
-    let kept = windowsFound.filter((q) => rows.get(Math.round(q.cy / 12)) >= WIN.group || cols.get(Math.round(q.cx / 12)) >= WIN.group);
+    let kept = windowsFound.filter((q) => q.sample || rows.get(Math.round(q.cy / 12)) >= WIN.group || cols.get(Math.round(q.cx / 12)) >= WIN.group);
     // ...and if a picture has no facade to line up (a courtyard seen from above, a street at an angle), keep the
     // unambiguous ones rather than nothing: a very rectangular, clearly darker opening is a window anywhere.
     if (!kept.length) kept = windowsFound.filter((q) => q.fill >= 0.72 && q.drop >= 30);
@@ -504,9 +597,117 @@ export function trace(rgba, w, h, opts = {}) {
     const darkEntry = entryFor(palette, 34, 34, 46);
     for (const q of kept) for (const p of q.px) idx[p] = darkEntry;
     windowsFound.push(...kept.splice(kept.length));   // (kept is now empty; windowsFound already holds the rest)
+    // a sample that came from the rhythm has no pixels of its own yet; give it the box's pixels so it paints
+    for (const q of kept) if (!q.px.length) { for (let yy = q.y; yy < q.y + q.h; yy += 1) for (let xx = q.x; xx < q.x + q.w; xx += 1) if (xx >= 0 && yy >= 0 && xx < w && yy < h) q.px.push(yy * w + xx); }
     const final = windowsFound.filter((q) => q.px.some((p) => idx[p] === darkEntry));
     windowsFound.length = 0;
     windowsFound.push(...final);
+  }
+
+  // ---- 5c. THE WINDOW GRID: the fundamental detail that makes a building a building ---------------------
+  //
+  // A facade is not "a wall with some dark rectangles in it", it is a GRID: the openings line up in rows and
+  // columns and repeat, and that repetition is most of what makes a building read as a building at this size.
+  // The scene analysis this follows found the same thing from the other end ("the tower's window grid reads"),
+  // and it is also how a facade is drawn by hand.
+  //
+  // So the windows found in 5b are treated as SAMPLES of a grid rather than as the whole answer: their centres
+  // are clustered into rows and columns, the spacing and the size are taken as the median of each row, and the
+  // grid is then completed across the wall where the wall actually is. That is what turns one or two found
+  // openings into a facade that reads, which is the honest fix for the under-detection recorded in D52.
+  const gridWindows = [];
+  {
+    const grp = (vals, tol) => {
+      const sorted = [...vals].sort((a, b) => a - b), out = [];
+      for (const v of sorted) {
+        const last = out[out.length - 1];
+        if (last && v - last.max <= tol) { last.vals.push(v); last.max = v; }
+        else out.push({ vals: [v], max: v });
+      }
+      return out.map((g) => g.vals.reduce((a, b) => a + b, 0) / g.vals.length);
+    };
+    const sample = windowsFound.filter((q) => q.fill >= 0.6);
+    if (sample.length >= 3) {
+      const med = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
+      const mw = med(sample.map((q) => q.w)), mh = med(sample.map((q) => q.h));
+      const rows = grp(sample.map((q) => q.cy), Math.max(4, mh * 0.6));
+      const cols = grp(sample.map((q) => q.cx), Math.max(4, mw * 0.6));
+      if (rows.length && cols.length) {
+        // the pitch: the median gap between neighbouring columns and rows, so the grid is the building's own
+        const pitch = (list, size) => {
+          const gaps = [];
+          for (let i = 1; i < list.length; i += 1) gaps.push(list[i] - list[i - 1]);
+          const g = gaps.length ? med(gaps) : size * 1.6;
+          return Math.max(size * 1.15, Math.min(size * 4, g));
+        };
+        const px = pitch(cols, mw), py = pitch(rows, mh);
+        const frames = new Set(sample.map((q) => `${Math.round(q.cx / 6)}:${Math.round(q.cy / 6)}`));
+        for (const ry of rows) for (const cxBase of cols) {
+          for (let k = -3; k <= 3; k += 1) {
+            const cx = Math.round(cxBase + k * px), cy = Math.round(ry);
+            const x = Math.round(cx - mw / 2), y = Math.round(cy - mh / 2);
+            if (x < 1 || y < 1 || x + mw >= w - 1 || y + mh >= h - 1) continue;
+            const key2 = `${Math.round(cx / 6)}:${Math.round(cy / 6)}`;
+            if (frames.has(key2)) continue;                        // one already found here
+            // only place a window where the WALL is: the ring around it must be wall-coloured (bright, flat,
+            // and not sky), otherwise the grid would march across a window, a tree, or the sky itself
+            let wallish = 0, tot = 0, bright = 0;
+            for (let yy = y - 3; yy <= y + mh + 3; yy += 1) {
+              if (yy < 0 || yy >= h) continue;
+              for (let xx = x - 3; xx <= x + mw + 3; xx += 1) {
+                if (xx < 0 || xx >= w) continue;
+                const p2 = yy * w + xx;
+                if (xx >= x && xx < x + mw && yy >= y && yy < y + mh) continue;
+                tot += 1;
+                if (sky[p2]) continue;
+                const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+                if (L > 92) bright += 1;
+                if (en.line[p2] < 0.5) wallish += 1;
+              }
+            }
+            if (!tot || bright / tot < 0.6 || wallish / tot < 0.7) continue;
+            // and the opening itself must be darker than that wall, or it is not an opening
+            let insideL = 0, c2 = 0;
+            for (let yy = y; yy < y + mh; yy += 1) for (let xx = x; xx < x + mw; xx += 1) { insideL += luma(rgb[(yy * w + xx) * 3], rgb[(yy * w + xx) * 3 + 1], rgb[(yy * w + xx) * 3 + 2]); c2 += 1; }
+            insideL /= Math.max(1, c2);
+            let ringL = 0, r2 = 0;
+            for (let yy = y - 3; yy <= y + mh + 3; yy += 1) {
+              if (yy < 0 || yy >= h) continue;
+              for (let xx = x - 3; xx <= x + mw + 3; xx += 1) {
+                if (xx < 0 || xx >= w || (xx >= x && xx < x + mw && yy >= y && yy < y + mh)) continue;
+                ringL += luma(rgb[(yy * w + xx) * 3], rgb[(yy * w + xx) * 3 + 1], rgb[(yy * w + xx) * 3 + 2]); r2 += 1;
+              }
+            }
+            ringL /= Math.max(1, r2);
+            if (ringL - insideL < 14) continue;
+            gridWindows.push({ x, y, w: mw, h: mh, cx, cy, grid: true, px: (() => { const a = []; for (let yy = y; yy < y + mh; yy += 1) for (let xx = x; xx < x + mw; xx += 1) a.push(yy * w + xx); return a; })() });
+          }
+        }
+      }
+    }
+  }
+  if (gridWindows.length) {
+    const winEntry = entryFor(palette, 40, 42, 58);
+    const frameEntry = entryFor(palette, 176, 178, 190);
+    for (const q of [...windowsFound, ...gridWindows]) {
+      for (const p2 of q.px) idx[p2] = winEntry;
+      // a one-pixel frame one tone up, so a window is a window and not a hole in the picture
+      for (let xx = q.x - 1; xx <= q.x + q.w; xx += 1) {
+        for (const yy of [q.y - 1, q.y + q.h]) {
+          if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+          const p2 = yy * w + xx;
+          if (!sky[p2] && idx[p2] !== winEntry) idx[p2] = frameEntry;
+        }
+      }
+      for (let yy = q.y - 1; yy <= q.y + q.h; yy += 1) {
+        for (const xx of [q.x - 1, q.x + q.w]) {
+          if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
+          const p2 = yy * w + xx;
+          if (!sky[p2] && idx[p2] !== winEntry) idx[p2] = frameEntry;
+        }
+      }
+    }
+    windowsFound.push(...gridWindows);
   }
 
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------
