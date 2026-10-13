@@ -7,7 +7,7 @@
 // day's news from news.js. frame.js finds the windows in the walls, glass.js says how one breaks, decal.js
 // keeps the colour thrown at the yard, parts.js throws the pieces. This file wires them to the page and the finger.
 
-import { styliseFlat, styliseVector } from './stylise.js';
+import { styliseVector } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { makeWorld, pick, strike, tick, left } from './world.js';
@@ -64,7 +64,6 @@ let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
 // where the sky is measured, and a tsunami grade tints the whole frame blue (restriction R6).
 const params = new URLSearchParams(location.search);
 const cleanFrame = params.get('clean') === '1';
-const styleChoice = params.get('style') || 'vector';
 let weather = makeWeather('clear');               // the day's sky (weather.js)
 let disaster = null;                              // the sky misbehaving (disaster.js), or null
 let beforeCanvas = null;                          // the photograph the yard came from, for the card's БЫЛО half
@@ -225,7 +224,7 @@ function withWindows(seg, st, w, h, big, photo) {
   return seg;
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
-function build(rgba, w, h, dets, big = null, drawn = false) {
+function build(rgba, w, h, dets, big = null) {
   // THE THINGS THE DETECTOR FOUND ARE HANDED TO THE PAINTER, and this is the only thing the painter is told
   // about the player's world. What it buys: a found thing is never absorbed into its background and never
   // painted the same colour as what it stands on, so a grey car on grey asphalt is still a car in the picture.
@@ -234,13 +233,10 @@ function build(rgba, w, h, dets, big = null, drawn = false) {
   // Both are the same contract, so nothing downstream knows or cares; the switch exists so the two can be
   // looked at side by side on the same photograph in the same session before either is called the style.
   // THE VECTOR ROUTE IS FOR PHOTOGRAPHS. The demo yard is drawn art whose objects are known in advance and
-  // whose flat fills carry no photographic texture: the route reads it as one shape and paints it wrong (a black
-  // frame), because every step in it - the lighting flatten, the straight-line density, the sky test - is
-  // written for a camera image. So the demo keeps the per-pixel route, and `?style=vector` applies to the yard
-  // the player actually photographs.
-  // `drawn` is passed in by the DEMO path: drawn art is not a photograph.
-  const useVector = styleChoice === 'vector' && !drawn;
-  const st = useVector ? styliseVector(rgba, w, h, { marks: dets, fundamentals: true }) : styliseFlat(rgba, w, h, { marks: dets });
+  // ONE RENDERER, AND IT IS THE CONSTRUCTIVE ONE - see the note where the route was chosen. The photographic
+  // pipeline is not reachable from the product: it painted per pixel what should be a surface (R3), measured at
+  // 10-18% flat against the constructive route's 56-81%. src/flat.js stays for the palette and the tone table.
+  const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true });
   const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big, rgba);
   // THE WINDOWS THE VECTOR ROUTE FOUND ARE THINGS TOO. The per-pixel route guesses at openings in a wall
   // (frame.js, "на глаз"); the vector route reads the facade's own rhythm and returns rectangles. Either way a
@@ -476,7 +472,7 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
-  const st = (styleChoice === 'vector' ? styliseVector(shot.rgba, w, h, { marks: found.kept }) : styliseFlat(shot.rgba, w, h, { marks: found.kept })), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
+  const st = styliseVector(shot.rgba, w, h, { marks: found.kept, fundamentals: true }), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);

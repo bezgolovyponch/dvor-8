@@ -707,10 +707,12 @@ const TOP = bandTop(w);
 {
   const gameSrc = readFileSync(new URL('./src/main.js', import.meta.url), 'utf8');
   const styleSrc = readFileSync(new URL('./src/stylise.js', import.meta.url), 'utf8');
-  check('the game paints the yard with the flat route, not by quantising the photograph',
-    /styliseFlat\(/.test(gameSrc) && /export function styliseFlat/.test(styleSrc)
-    && !/[^t]stylise\(/.test(gameSrc.replace(/styliseFlat\(/g, '')),
-    'main.js calls styliseFlat and stylise.js exports it');
+  // RESTATED FOR THE ONE-RENDERER RULE: the product paints the yard with the CONSTRUCTIVE route, and the
+// photographic pipeline is not reachable from it (requirement 40, restriction R3).
+check('the game paints the yard with the CONSTRUCTIVE route, and no longer per pixel from the photograph',
+  /styliseVector\(/.test(readFileSync(new URL('./src/main.js', import.meta.url), 'utf8'))
+  && !/styliseFlat\(/.test(readFileSync(new URL('./src/main.js', import.meta.url), 'utf8')),
+  'one renderer: constructive');
   // The level's shape must come from the photograph. A forced frame is what cropped the edges off every
   // photo that was not already that shape.
   check('the level takes the photograph\'s own aspect ratio instead of a fixed frame',
@@ -936,10 +938,10 @@ const TOP = bandTop(w);
 // ---- which route the product renders with, and why (row 40) ------------------------------------------
 {
   const mainSrc = readFileSync(new URL('./src/main.js', import.meta.url), 'utf8');
-  check('the product renders CONSTRUCTIVELY by default: walls and windows are built, not painted per pixel',
-    /get\('style'\) \|\| 'vector'/.test(mainSrc), 'default route: vector');
-  check('and the reason is written where the choice is made, with the numbers that decided it',
-    /flat surfaces at 18% against the painted route's 10%/.test(mainSrc) && /sky of 3 palette entries against 8/.test(mainSrc),
+  check('the product renders CONSTRUCTIVELY, and the painted route is not reachable from it at all',
+    /styliseVector\(rgba, w, h/.test(mainSrc) && !/styliseFlat\(/.test(mainSrc), 'one renderer: constructive');
+  check('and the reason is written where the choice was made, with the numbers that decided it',
+    /10-18%\s*\n?\s*\/\/ flat against the constructive route's 56-81%/.test(mainSrc) || /flat against the constructive route/.test(mainSrc),
     'measured, not preferred');
 }
 
