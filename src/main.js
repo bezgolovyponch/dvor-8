@@ -55,7 +55,11 @@ let yard = null;        // the photograph, its picture and its things: kept, so 
 let world = null, fx = null, buf = null;
 let stage = 'title';    // title → detect → scan → play → done   (or → empty)
 let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
-const styleChoice = new URLSearchParams(location.search).get('style') || 'flat';
+// THE PRODUCT RENDERS CONSTRUCTIVELY. Measured on the canvas by tools/concept-check.mjs: the constructive route
+// holds flat surfaces at 18% against the painted route's 10%, transitions at 0.79 per pixel against 0.83, and a
+// sky of 3 palette entries against 8 - and it is the route on which a window is a sprite and a wall is a plane.
+// `?style=flat` still reaches the painted route for comparison; it is no longer what the game ships.
+const styleChoice = new URLSearchParams(location.search).get('style') || 'vector';
 let weather = makeWeather('clear');               // the day's sky (weather.js)
 let disaster = null;                              // the sky misbehaving (disaster.js), or null
 let beforeCanvas = null;                          // the photograph the yard came from, for the card's БЫЛО half

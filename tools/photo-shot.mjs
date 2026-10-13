@@ -45,6 +45,17 @@ await withPage(BASE, {}, async (page) => {
     const left = await page.run(`return document.getElementById('left').textContent`);
     if (left && left !== '0') break;
   }
+  // THE CANVAS, DUMPED. The gate cannot measure flatness through a screenshot - the creator's own reference
+  // arrives as a photograph of a phone screen and measures 3% flat there. What can be measured is the pixels the
+  // game DREW: a compact string of the canvas, every second pixel, written beside the pictures.
+  const dump = await page.run(`
+    const c = document.getElementById('view') || document.querySelector('canvas');
+    const g = c.getContext('2d');
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    const out = [];
+    for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) { const i = (y * c.width + x) * 4; out.push(d[i], d[i + 1], d[i + 2]); }
+    return { w: Math.ceil(c.width / 2), h: Math.ceil(c.height / 2), px: out.join(',') };`);
+  if (dump && dump.px) (await import('node:fs')).writeFileSync(`${out}/canvas.json`, JSON.stringify(dump));
   results.push({ step: 'built', ...(await page.run(`return { left: document.getElementById('left').textContent, note: document.getElementById('note').textContent.slice(0, 90) }`)) });
   await page.shot(`${out}/1-yard.png`);
 

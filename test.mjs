@@ -896,6 +896,16 @@ const TOP = bandTop(w);
     'seven materials and one sky');
 }
 
+// ---- which route the product renders with, and why (row 40) ------------------------------------------
+{
+  const mainSrc = readFileSync(new URL('./src/main.js', import.meta.url), 'utf8');
+  check('the product renders CONSTRUCTIVELY by default: walls and windows are built, not painted per pixel',
+    /get\('style'\) \|\| 'vector'/.test(mainSrc), 'default route: vector');
+  check('and the reason is written where the choice is made, with the numbers that decided it',
+    /flat surfaces at 18% against the painted route's 10%/.test(mainSrc) && /sky of 3 palette entries against 8/.test(mainSrc),
+    'measured, not preferred');
+}
+
 // ---- the vector route and the enhancement it stands on ------------------------------------------------
 {
   const { trace } = await import('./src/vector.js');

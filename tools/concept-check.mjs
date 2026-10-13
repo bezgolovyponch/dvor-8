@@ -12,15 +12,28 @@ const file = process.argv[2];
 if (!file) { console.error('usage: node tools/concept-check.mjs <picture.png>'); process.exit(2); }
 
 // decode the PNG through the tool the repo already uses for screenshots: sips writes a raw bitmap
-const raw = execFileSync('sips', ['-s', 'format', 'png', file, '--out', '/tmp/gate.png']).toString();
-void raw;
-const info = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file]).toString();
-const W = Number(/pixelWidth: (\d+)/.exec(info)[1]), H = Number(/pixelHeight: (\d+)/.exec(info)[1]);
-const bmp = execFileSync('sips', ['-s', 'format', 'bmp', file, '--out', '/tmp/gate.bmp']);
-void bmp;
-const buf = readFileSync('/tmp/gate.bmp');
-const off = buf.readUInt32LE(10), w = buf.readInt32LE(18), h = Math.abs(buf.readInt32LE(22)), bpp = buf.readUInt16LE(28) / 8;
-const px = (x, y) => { const yy = h - 1 - y, i = off + (yy * w + x) * bpp; return [buf[i + 2], buf[i + 1], buf[i]]; };
+// a canvas dump needs no decoding at all: it IS the pixels
+if (!file.endsWith('.json')) {
+  const raw = execFileSync('sips', ['-s', 'format', 'png', file, '--out', '/tmp/gate.png']).toString();
+  void raw;
+}
+const isDump = file.endsWith('.json');
+let dump = null;
+if (isDump) dump = JSON.parse(readFileSync(file, 'utf8'));
+const info = isDump ? '' : execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', file]).toString();
+const W = isDump ? dump.w : Number(/pixelWidth: (\d+)/.exec(info)[1]);
+const H = isDump ? dump.h : Number(/pixelHeight: (\d+)/.exec(info)[1]);
+if (!file.endsWith('.json')) {
+  const bmp = execFileSync('sips', ['-s', 'format', 'bmp', file, '--out', '/tmp/gate.bmp']);
+  void bmp;
+}
+const buf = isDump ? null : readFileSync('/tmp/gate.bmp');
+const off = isDump ? 0 : buf.readUInt32LE(10), w = isDump ? W : buf.readInt32LE(18), h = isDump ? H : Math.abs(buf.readInt32LE(22)), bpp = isDump ? 3 : buf.readUInt16LE(28) / 8;
+const dumpArr = isDump ? dump.px.split(',').map(Number) : null;
+const px = (x, y) => {
+  if (dumpArr) { const i = (y * W + x) * 3; return [dumpArr[i], dumpArr[i + 1], dumpArr[i + 2]]; }
+  const yy = h - 1 - y, i = off + (yy * w + x) * bpp; return [buf[i + 2], buf[i + 1], buf[i]];
+};
 
 const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
 // THE PALETTE IS THE UNIT OF MEASURE. Counting raw screenshot pixels made this gate fail on the reference as well
@@ -39,7 +52,8 @@ const palCount = new Map();
 const palSky = new Map();
 let sum = 0, n = 0;
 const counts = new Map();
-for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) {
+const STEP = isDump ? 1 : 2;
+for (let y = 0; y < h; y += STEP) for (let x = 0; x < w; x += STEP) {
   const c = px(x, y);
   sum += lum(c); n += 1;
   const k = c.join(',');
