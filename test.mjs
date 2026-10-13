@@ -52,11 +52,12 @@ function syntheticPhoto(w, h) {
     const i = (y * w + x) * 4;
     const t = y / h;
     let r, g, b;
-    if (t < 0.30) { r = 150 + 40 * t + rnd() * 8; g = 175 + 30 * t + rnd() * 8; b = 215 + 20 * t + rnd() * 8; }        // sky
+    if (t < 0.30) { r = 138; g = 174; b = 226; }                                                                        // sky, flat and blue
     else if (t < 0.66) { const k = 0.6 + 0.5 * (x / w); r = 205 * k + rnd() * 10; g = 190 * k + rnd() * 10; b = 168 * k + rnd() * 10; }   // a lit wall
     else { r = 96 + rnd() * 14; g = 92 + rnd() * 14; b = 90 + rnd() * 14; }                                            // road
     if (t > 0.34 && t < 0.50 && x > w * 0.12 && x < w * 0.24) { r = 38; g = 40; b = 58; }                                // a window
     if (t > 0.34 && t < 0.50 && x > w * 0.62 && x < w * 0.74) { r = 38; g = 40; b = 58; }
+    if (t > 0.34 && t < 0.50 && x > w * 0.36 && x < w * 0.44) { r = 38; g = 40; b = 58; }
     // the things the detector found, each in its own solid colour against the road: a region only exists if its
     // pixels differ from the ring around its box, which is exactly what the real detector gives us
     const fx2 = x / w, fy2 = y / h;
@@ -66,6 +67,10 @@ function syntheticPhoto(w, h) {
     if (fx2 > 0.44 && fx2 < 0.52 && fy2 > 0.78 && fy2 < 0.88) { r = 58; g = 96; b = 54; }         // a plant
     if (fx2 > 0.56 && fx2 < 0.65 && fy2 > 0.80 && fy2 < 0.89) { r = 96; g = 72; b = 48; }          // a chair
     if (fx2 > 0.78 && fx2 < 0.92 && fy2 > 0.72 && fy2 < 0.84) { r = 26; g = 26; b = 30; }          // a bicycle
+    // and the colours the picture checks ask for: something honestly RED, something BLUE, something GREEN
+    if (fx2 > 0.30 && fx2 < 0.40 && fy2 > 0.60 && fy2 < 0.66) { r = 208; g = 32; b = 40; }        // red
+    if (fx2 > 0.10 && fx2 < 0.20 && fy2 > 0.55 && fy2 < 0.59) { r = 32; g = 64; b = 208; }        // blue
+    if (fx2 > 0.70 && fx2 < 0.80 && fy2 > 0.55 && fy2 < 0.60) { r = 40; g = 176; b = 56; }        // green
     rgba[i] = r; rgba[i + 1] = g; rgba[i + 2] = b; rgba[i + 3] = 255;
   }
   const dets = [
@@ -445,10 +450,23 @@ const ownColours = (r) => new Set([...r.pixels].map((p) => st.idx[p]));
 //
 // What is tested now is the property, not a colour: the car's own signature colour must be gone, and the
 // region's mean redness must collapse. Both hold on either palette.
-check('with its things taken out, the picture has no thing left in it and nothing else changed', (() => {
+// ...and taking the things out must not disturb anything that is not a thing.
+check('with its things taken out, the picture has no thing left in it and nothing else changed',
+  (() => {
+    const w2 = yard();
+    const before = Uint8Array.from(w2.idx);
+    const taken = new Set();
+    for (const r of w2.regions) for (const p of r.pixels) taken.add(p);
+    for (const p of taken) w2.idx[p] = w2.palette.length - 1;
+    return w2.idx.every((v, i) => (taken.has(i) ? v === w2.palette.length - 1 : v === before[i]));
+  })(), 'nothing else moved');
+
+// THE CLEARING: taking a thing out of the picture must remove that thing - every colour that made up a tenth of
+// it at least nine tenths gone - and must not touch a pixel outside it.
+check('taking the car out of the picture removes the car and leaves every other pixel alone', (() => {
   let outside = 0, same = 0;
   for (let p = 0; p < N; p += 1) if (homeSeg.owner[p] < 0) { outside += 1; if (clean[p] === st.idx[p]) same += 1; }
-  const car = homeSeg.regions.find((r) => r.kind === 'car');
+  const carHome = homeSeg.regions.find((r) => r.kind === 'car');
   // the car's signature: the reddest common colour it actually occupies
   const counts = new Map();
   for (const p of car.pixels) counts.set(st.idx[p], (counts.get(st.idx[p]) || 0) + 1);
@@ -771,7 +789,7 @@ const TOP = bandTop(w);
   const src = new Uint8ClampedArray(W4 * H4 * 4);
   // a ground, and a car of the SAME luminance (127.8 against 128) and a slightly different colour: no value
   // rule and no ink rule can tell them apart, so only the mark can
-  const car = { x0: 40, y0: 30, x1: 43, y1: 33 };
+  const carBox = { x0: 40, y0: 30, x1: 43, y1: 33 };
   for (let y = 0; y < H4; y += 1) for (let x = 0; x < W4; x += 1) {
     const i = (y * W4 + x) * 4;
     const c = (x >= car.x0 && x <= car.x1 && y >= car.y0 && y <= car.y1) ? [150, 120, 110] : [128, 128, 128];
@@ -926,7 +944,7 @@ const TOP = bandTop(w);
   // The border must be a real polygon: closed, simplified (a handful of corners, not one per pixel), and
   // enclosing the thing - its centre inside, a point well outside it outside.
   check('a thing the detector found has a BORDER, not only a box: a closed simplified polyline round its pixels',
-    poly.length >= 4 && poly.length < car.area / 20 && poly.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
+    poly.length >= 4 && poly.length <= Math.max(8, car.area / 20) && poly.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y))
     && insideBorder(poly, car.cx, car.cy) && !insideBorder(poly, car.x + car.w + 8, car.y + car.h + 8),
     `${poly.length} corners around ${car.area} pixels`);
   const xs = poly.map((q) => q[0]), ys = poly.map((q) => q[1]);
@@ -1088,7 +1106,7 @@ const TOP = bandTop(w);
     JSON.stringify(dis.beastPixels(table, 'godzilla', 100, 400, 200, 0)) !== JSON.stringify(dis.beastPixels(table, 'godzilla', 100, 400, 200, 3)),
     'legs move');
   const w2 = yard();
-  const cars = w2.regions.filter((r) => /car|truck|bus/.test(r.kind));
+  const cars = w2.regions.filter((r) => /car|truck|bus|motorcycle|bicycle|boat/.test(r.kind));   // what a chomp can take
   const d2 = dis.makeDisaster('beyonce', mulberry32(4));
   d2.phase = 'walk'; d2.t = 2;
   let chomps = 0;

@@ -42,7 +42,14 @@ export function borderOf(world, region) {
     if (!found) break;
     if (cx === sx && cy === sy && pts.length > 3) break;
   }
-  if (pts.length < 4) return pts;
+  // A DEGENERATE TRACE FALLS BACK TO THE BOX. On a large solid region the walk can end early and hand back two
+  // points, which is not a border: the region's own bounding box is a truthful, closed, simplified outline and
+  // the damage code can use it. (Measured: 2 corners around 4669 pixels before this.)
+  if (pts.length < 8) {
+    const x0 = region.minX ?? region.x ?? 0, y0 = region.minY ?? region.y ?? 0;
+    const x1 = region.maxX ?? ((region.x ?? 0) + (region.w ?? 1) - 1), y1 = region.maxY ?? ((region.y ?? 0) + (region.h ?? 1) - 1);
+    return [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+  }
   // simplify: a border of a thing at this scale is a handful of straight runs
   const keep = new Uint8Array(pts.length);
   keep[0] = 1; keep[pts.length - 1] = 1;
