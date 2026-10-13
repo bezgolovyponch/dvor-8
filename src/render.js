@@ -479,6 +479,10 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   // part of it (world.edgesOf), cached per region because the shape does not change while the yard stands.
   for (const r of world.regions) {
     if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;
+    // OUTLINES ARE FOR THINGS, NOT FOR PLANES (R12). The trace of a large, noisy region is thousands of scattered
+    // pixels, and drawing every one of them crosshatched whole buildings. Above a share of the frame the outline
+    // is skipped; the plane is drawn by the painter instead.
+    if (r.area > world.w * world.h * 0.05) continue;
     if (scanY === null && !inFocus(mode, world, r, fxx, fyy)) continue;
     world.edgesCache = world.edgesCache || new Map();
     let edges = world.edgesCache.get(r.id);

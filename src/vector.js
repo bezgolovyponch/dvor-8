@@ -799,6 +799,9 @@ export function trace(rgba, w, h, opts = {}) {
     const OUT2 = palette.length - 2;
     for (const box of boxes) {
       if (box.area < 24) continue;
+      // A PLANE IS NOT A THING (R11). A wall is large and low-contrast; cutting it out and painting its "glass"
+      // put a black rectangle over a building. Only things below a share of the frame are templated.
+      if (box.area > n * 0.06) continue;
       const bw = box.maxX - box.minX + 1, bh = box.maxY - box.minY + 1;
       if (bw < 4 || bh < 4) continue;
       // the ring: what the background just outside the box looks like

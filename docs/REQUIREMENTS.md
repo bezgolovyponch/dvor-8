@@ -134,6 +134,10 @@ requirement: a requirement says what to build, a restriction says what is forbid
 | R6 | Measuring a frame that carries transient overlays or grades | three separate false readings: the news ticker (59% → 16% flat), the scan wipe, and the tsunami grade (62% "one colour") |
 | R7 | Claiming a result without a picture of it on a REAL photograph | five requirements were reported done while nothing had been seen on screen; the L3 rows exist because of it |
 | R8 | Writing a patch and reading the measurement without checking the patch landed | one round measured a road that had never been changed: the script died before writing the file |
+| R10 | Drawing a monochrome frame where surfaces should be built | the gate's flatness and dominance rows, and the creator's blue frame |
+| R11 | Treating a PLANE as a thing: a wall is not cut out and templated as if it were a car | a black rectangle appeared over a building: the cut-out painted a wall's "glass" |
+| R12 | Outlining a PLANE: `edgesOf` on a big noisy region returns thousands of scattered pixels | crosshatch over whole buildings in the creator's screenshot |
+| R13 | Reporting a fix with no picture and no number, or attempting a fix whose cause is not named in `docs/FAILS.md` | ten failures, four of them the same fault returning |
 | R9 | Inventing a mechanic when a working reference exists | v6's path (grid → fills + edges → outline → highlight states → tooltip) was the answer for four rounds while I built alternatives |
 
 **The validation loop that goes with them**, run before ANY report, in this order:
