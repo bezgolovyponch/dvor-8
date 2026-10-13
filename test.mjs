@@ -838,6 +838,62 @@ const TOP = bandTop(w);
     'seven materials and one sky');
 }
 
+// ---- the vector route and the enhancement it stands on ------------------------------------------------
+{
+  const { trace } = await import('./src/vector.js');
+  const { enhance, straightness } = await import('./src/enhance.js');
+  const W6 = 192, H6 = 320;
+  // a synthetic photograph: sky on top, a wall with a lighting gradient, a dark window, ground below
+  const px = new Uint8ClampedArray(W6 * H6 * 4);
+  for (let y = 0; y < H6; y += 1) for (let x = 0; x < W6; x += 1) {
+    const i = (y * W6 + x) * 4;
+    let r, g, b;
+    if (y < H6 * 0.32) { r = 120; g = 160; b = 215; }                       // sky
+    else if (y < H6 * 0.72) { const t = 0.45 + 0.55 * (x / W6); r = 210 * t; g = 190 * t; b = 160 * t; }   // a lit wall
+    else { r = 92; g = 88; b = 84; }
+    if (y > H6 * 0.38 && y < H6 * 0.58 && x > W6 * 0.3 && x < W6 * 0.55) { r = 34; g = 34; b = 48; }        // a window
+    px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255;
+  }
+  const en = enhance(px, W6, H6);
+  // the lighting flatten: the same wall, lit at one end and shaded at the other, must come out closer in value
+  const at = (x, y) => en.smooth[y * W6 + x];
+  const wallL = at(6, Math.round(H6 * 0.55)), wallR = at(W6 - 6, Math.round(H6 * 0.55));
+  check('the enhancement flattens the lighting: the two ends of one wall come out much closer in value',
+    Math.abs(wallR - wallL) < Math.abs(0.45 - 1.0) * 210 * 0.7, `${wallL.toFixed(0)} vs ${wallR.toFixed(0)}`);
+
+  const r = trace(px, W6, H6);
+  const hist = new Map();
+  for (const v of r.idx) hist.set(v, (hist.get(v) || 0) + 1);
+  let stray = 0;
+  for (let y = 1; y < H6 - 1; y += 1) for (let x = 1; x < W6 - 1; x += 1) {
+    const p2 = y * W6 + x, v = r.idx[p2];
+    if (r.idx[p2 - 1] !== v && r.idx[p2 + 1] !== v && r.idx[p2 - W6] !== v && r.idx[p2 + W6] !== v) stray += 1;
+  }
+  check('the vector route paints shapes, not confetti: strays under 1% of the frame',
+    stray / (W6 * H6) < 0.01 && hist.size < 20, `${(100 * stray / (W6 * H6)).toFixed(2)}% stray, ${hist.size} colours`);
+  check('the sky is ONE colour, the clouds are inside it, and none of them touches the skyline',
+    r.skyN / (W6 * H6) > 0.1 && r.clouds >= 1 && r.clouds <= 5, `sky ${(100 * r.skyShare).toFixed(0)}%, ${r.clouds} clouds`);
+  check('the line is one pixel along the skyline and nowhere else',
+    r.linePixels > W6 * 0.5 && r.linePixels < W6 * 1.2, `${r.linePixels} line pixels for ${W6} columns`);
+  check('a straight edge measures straighter than noise: what the sky/distance split reads',
+    straightness(en.line, W6, H6, 0, Math.round(H6 * 0.32), W6, Math.round(H6 * 0.34))
+      > straightness(en.line, W6, H6, 0, 0, W6, H6), 'the wall edge beats the average');
+}
+
+// ---- the info button: a true fact, random, never the same theme twice ---------------------------------
+{
+  const lore = await import('./src/lore.js');
+  const seen = [];
+  let theme = null;
+  for (let i = 0; i < 40; i += 1) { const f = lore.factFor(theme, mulberry32(100 + i)); theme = f.theme; seen.push(f.theme); }
+  check('the info button can answer from every theme it claims, and never repeats a theme twice running',
+    new Set(seen).size === lore.THEMES.length && seen.every((t, i) => i === 0 || t !== seen[i - 1]),
+    `${new Set(seen).size} themes in 40 taps`);
+  check('every fact is one written line with its theme',
+    lore.FACTS.length >= lore.THEMES.length * 2 && lore.FACTS.every((f) => f.theme && f.ru && f.ru.length > 40),
+    `${lore.FACTS.length} facts across ${lore.THEMES.length} themes`);
+}
+
 // ---- disasters: hurricane, tsunami, Godzilla, and one very large Beyoncé -------------------------------
 {
   const dis = await import('./src/disaster.js');

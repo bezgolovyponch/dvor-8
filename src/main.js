@@ -32,6 +32,7 @@ import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomB
 import { STEPS } from './flat.js';
 import { chip, surfaceAt, imprint } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
+import { factFor } from './lore.js';
 import { DISASTERS, ORDER as DISASTER_ORDER, makeDisaster, rollDisaster, stepDisaster, beastPixels, beastAt } from './disaster.js';
 import { makeWindow, hitWindow, shards } from './glass.js';
 import { PAINTS, stamp, lay } from './decal.js';
@@ -595,6 +596,7 @@ function disasterSays(ev) {
     world.antics = (world.antics || 0) + 1;
     return;
   }
+  if (ev.type === 'chew') { sfx.gulp(); return; }
   if (ev.type === 'beam') {
     fx.flash = 1; fx.shake = 6; sfx.siren();
     // the breath burns a line across the yard: everything the line crosses is scorched, permanently
@@ -1026,6 +1028,56 @@ async function share(picture) {
   }
 }
 $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisaster(); });
+// THE BAR: what the sky is doing, and the info button.
+{
+  const box = $('fates');
+  if (box) {
+    const set = (kind) => {
+      disaster = kind ? makeDisaster(kind, rnd) : null;
+      $('fateNow').textContent = kind ? DISASTERS[kind].ru : 'ЯСНО';
+      $('fateWhy').textContent = kind ? DISASTERS[kind].why : 'обычный день: двор такой, каким его сфотографировали';
+      if (kind) { note(DISASTERS[kind].line); pop(DISASTERS[kind].ru, world ? world.w / 2 : 0, world ? world.h * 0.3 : 0, 'warn'); }
+      const box2 = $('fateBox');
+      if (box2) box2.open = false;                        // the choice is made: close the dropdown
+    };
+    for (const [label, kind] of [['ЯСНО', null], ...DISASTER_ORDER.map((k) => [DISASTERS[k].ru, k])]) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn small alt'; b.textContent = label;
+      b.addEventListener('click', () => { if (stage === 'play') set(kind); });
+      box.append(b);
+    }
+    $('fateWhy').textContent = 'обычный день: двор такой, каким его сфотографировали';
+  }
+  // INFO MODE: while it is on, a tap asks about a thing instead of throwing at it, and the answer is a true fact
+  // about the world the yard stands in - random, and never the same theme twice running (src/lore.js).
+  let lastTheme = null, infoOn = false;
+  const btn = $('infoBtn');
+  btn?.addEventListener('click', () => {
+    infoOn = !infoOn;
+    btn.setAttribute('aria-pressed', String(infoOn));
+    note(infoOn ? 'режим справки: ткни в вещь и узнаешь про неё правду' : 'снова можно бросать');
+  });
+  tiltEl.addEventListener('pointerdown', (e) => {
+    if (!infoOn || stage !== 'play' || !world) return;
+    const at = toWorld(e);
+    const t = pick(world, at.x, at.y);
+    const f = factFor(lastTheme, rnd);
+    lastTheme = f.theme;
+    const what = t ? t.label : 'этот двор';
+    pop(`${what.toUpperCase()}: ${f.theme}`, at.x, at.y - 10, 'tag');
+    pop(f.line, at.x, at.y + 6);
+    note(`${what}: ${f.line}`);
+    sfx.paper();
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
+}
+$('barMore')?.addEventListener('click', (e) => {
+  const box = $('moreBox');
+  if (!box) return;
+  box.open = !box.open;
+  e.currentTarget.setAttribute('aria-expanded', String(box.open));
+});
 $('shareBtn').addEventListener('click', () => share(false));
 $('cardBtn').addEventListener('click', () => share(true));
 $('albumBtn').addEventListener('click', () => { paintAlbum(); cards('album'); });

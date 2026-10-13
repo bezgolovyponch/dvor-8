@@ -92,11 +92,25 @@
     <button id="sipBtn" type="button" class="btn small">ГЛОТОК</button>
     <div><span>градус</span><i><u id="drunkBar"></u></i></div>
   </div>
-  <details id="paletteBox" class="fold">
-    <summary class="btn small alt">ЧТО БРОСАТЬ <b id="paletteNow"></b></summary>
-    <div id="palette" class="palette" aria-label="что бросить"></div>
-    <p id="paletteWhy" class="fine"></p>
-  </details>
+  <!-- THE BOTTOM BAR. One row, read right to left: the round expand arrow opens the drawer, then the two
+       dropdowns (what is in the hand, and what the sky is doing), and the round info button on the left, which
+       turns a tap into a question rather than a throw. -->
+  <div class="bar">
+    <button id="infoBtn" type="button" class="round" aria-pressed="false" title="узнать про вещь">i</button>
+    <div class="barDrop">
+      <details id="paletteBox" class="fold">
+        <summary class="btn small alt">ОРУЖИЕ <b id="paletteNow"></b></summary>
+        <div id="palette" class="palette" aria-label="что бросить"></div>
+        <p id="paletteWhy" class="fine"></p>
+      </details>
+      <details id="fateBox" class="fold">
+        <summary class="btn small alt">БЕДСТВИЕ <b id="fateNow">ЯСНО</b></summary>
+        <div id="fates" class="row" aria-label="бедствие"></div>
+        <p id="fateWhy" class="fine"></p>
+      </details>
+    </div>
+    <button id="barMore" type="button" class="round" aria-expanded="false" title="ещё">▾</button>
+  </div>
   <details id="lookBox" class="fold">
     <summary class="btn small alt">КАК СМОТРЕТЬ <b id="lookNow"></b></summary>
     <div id="filters" class="row" aria-label="взгляд"></div>

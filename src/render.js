@@ -429,7 +429,7 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
       }
     }
     const at = beastAt(disaster, world);
-    if (at) for (const px of beastPixels(pal, spec.beast, at.x, at.feet, at.height, at.frame)) {
+    if (at) for (const px of beastPixels(pal, spec.beast, at.x, at.feet, at.height, at.frame, { mouth: disaster.mouth, shake: disaster.shake })) {
       if (px.x < cx - 4 || px.x > cx + w + 4) continue;
       ctx.fillStyle = css(pal[px.i]);
       ctx.fillRect(px.x, px.y, 1, 1);

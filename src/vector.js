@@ -757,7 +757,11 @@ export function trace(rgba, w, h, opts = {}) {
   // nothing else. "Real objects seem real but with all the fundamental details that create shape" is this pass:
   // the details kept are the ones that CREATE the shape, and the texture of the paint is dropped.
   let objectCount = 0;
-  if (opts.marks) {
+  // OFF UNTIL THE MARKS CARRY SHAPE. `opts.marks` is the detector's bounding boxes, so "the object's outline"
+  // was the BOX's outline and every car came out as a black rounded rectangle on screen. Drawing fundamentals
+  // needs the thing's own pixels (a cut-out), which is the next piece of work; until then this pass does not
+  // run, because a wrong silhouette is worse than none.
+  if (opts.marks && opts.fundamentals === true) {
     const marks = opts.marks;
     const { parts: objs } = components(w, h, (p2) => (marks[p2] ? 1 : 0));
     for (const o of objs) {

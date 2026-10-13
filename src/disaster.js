@@ -57,8 +57,19 @@ export const ORDER = ['hurricane', 'tsunami', 'godzilla', 'beyonce'];
 // always being eaten is a yard nobody looks at; the drawer can summon one on purpose.
 export const CHANCE = 0.12;
 
+// THE MECHANIC IS COPIED, NOT INVENTED, and it is two arcade ideas bolted together:
+//
+//   PAC-MAN (Namco, 1980) - the bite. The mouth opens and closes on a fixed cycle and the thing being eaten
+//   disappears into it. The cycle is the whole animation: no tweening, no physics, just a two-state mouth.
+//   RAMPAGE (Bally Midway, 1986) - the kaiju that walks a city and eats what it passes. The comedy there is
+//   that the monster is unhurried and the city is not going anywhere.
+//
+// So: walk, CHOMP (mouth closes on a car, the car is gone), then CHEW - the head shakes twice, because a mouth
+// that has just taken a whole car has to do something with it - and walk on. `mouth` and `shake` are the state;
+// the renderer reads them and nothing else.
 export const makeDisaster = (kind, rnd = Math.random) => ({
   kind, t: 0, next: 1.2, phase: 'arrive', water: 0, eaten: 0, stomped: 0, beamed: 0, roars: 0,
+  mouth: 0, chew: 0, shake: 0,
   x: kind === 'beyonce' ? -0.2 : 1.15, dir: kind === 'beyonce' ? 1 : -1, step: 0,
   seed: rnd(),
 });
@@ -132,8 +143,13 @@ const BEYONCE = (() => {
  * The beast's pixels, one entry per pixel, in palette indices. `frame` walks the legs: two columns are shifted
  * by a pixel every other frame, which is the whole of the animation.
  */
-export function beastPixels(palette, kind, cx, feetY, height, frame = 0) {
+export function beastPixels(palette, kind, cx, feetY, height, frame = 0, pose = null) {
   const rows = kind === 'beyonce' ? BEYONCE : GODZILLA;
+  // THE MOUTH AND THE HEAD SHAKE, in the arcade's own terms: a mouth is a gap in the top rows, a shake is the
+  // whole silhouette moved one pixel sideways. Two states each, no more, because that is how the machines did it.
+  const chewing = pose && pose.mouth;
+  const shakeX = pose && pose.shake ? (pose.shake > 0 ? 1 : -1) : 0;
+  const headRows = Math.max(2, Math.round(rows.length * 0.12));
   const body = entryForFamily(palette, kind === 'beyonce' ? 'dusk' : 'foliage', kind === 'beyonce' ? 0 : 1);
   const dark = entryForFamily(palette, kind === 'beyonce' ? 'dusk' : 'foliage', 0);
   const accent = kind === 'beyonce'
@@ -146,13 +162,17 @@ export function beastPixels(palette, kind, cx, feetY, height, frame = 0) {
   for (let r = 0; r < rows.length; r += 1) {
     const half = Math.max(1, Math.round(rows[r] * (h / 40) * 0.9));
     const y = Math.round(feetY - (rows.length - r) * scale);
+    const isHead = r >= rows.length - headRows;
+    const shifted = isHead ? shakeX : 0;                      // only the head shakes: the body keeps walking
     const t = r / (rows.length - 1);
     // the legs: below a fifth of the height, the body splits and the two columns alternate
     const walk = kind === 'beyonce' ? 2 : 1;
     const legGap = t < 0.16 ? Math.round(1 + walk * Math.abs(Math.sin(frame * 0.7)) * half * 0.5) : 0;
     for (let dx = -half; dx <= half; dx += 1) {
       if (legGap && Math.abs(dx) < legGap) continue;         // the gap between the legs
-      const x = Math.round(cx + dx);
+      // the bite: a wedge out of the head's own rows, closing as the chew goes on
+      if (isHead && chewing && Math.abs(dx) < Math.max(1, Math.round(half * 0.8))) continue;
+      const x = Math.round(cx + dx + shifted);
       // the accents: Godzilla's dorsal plates run down the spine, Beyoncé's hair crowns the top
       const plate = kind !== 'beyonce' && t > 0.3 && t < 0.85 && dx >= half - 2 && (r + frame) % 3 !== 0;
       const hair = kind === 'beyonce' && t > 0.88;
@@ -224,7 +244,15 @@ export function stepDisaster(d, world, dt, rnd) {
       out.push({ type: 'stomp', at: { x: cx, y: feet }, target });
     }
     // CHOMPS: the cars. A kaiju-sized appetite needs no justification; the line is the joke.
-    if (spec.chomps && d.phase !== 'arrive' && d.t > d.next) {
+    // the chew: after a bite the head shakes twice and she does not move while she does it
+    if (d.chew > 0) {
+      d.chew -= dt;
+      d.shake = Math.sin(d.chew * 34) > 0 ? 1 : -1;
+      d.mouth = 0;
+      if (d.chew <= 0) { d.shake = 0; d.phase = 'walk'; }
+      return out.length ? out : [{ type: 'chew' }];
+    }
+    if (spec.chomps && d.phase === 'walk' && d.t > d.next) {
       d.next = d.t + spec.lasts / (spec.chomps + 1);
       const cars = world.regions.filter((r) => !r.gone && /car|truck|bus|motorcycle|bicycle|boat/.test(r.kind));
       const target = cars.sort((a, b) => Math.abs(a.cx - cx) - Math.abs(b.cx - cx))[0] || null;
@@ -233,6 +261,9 @@ export function stepDisaster(d, world, dt, rnd) {
         for (const p of target.pixels) world.rubble[p] = world.palette.length - 1;
         d.eaten += 1;
       }
+      d.mouth = 1;
+      d.chew = 0.55;                       // the mouth closes, then the head shakes: the Pac-Man beat
+      d.phase = 'chew';
       out.push({ type: 'chomp', at: { x: cx, y: feet - height * 0.75 }, target });
     }
     if (spec.beam && d.phase === 'walk' && !d.beamed && d.t > spec.lasts * 0.45) {
