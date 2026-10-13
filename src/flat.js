@@ -877,7 +877,14 @@ export function render(rgba, w, h, opts = {}) {
       else if (here === RAMP_SKY && nrm < 0.10) here = RAMP_DUSK;    // the deep end of a sky is violet, not black
     }
     let tone;
-    if (maxL[r] - minL[r] < 8) {
+    // A THING THE DETECTOR FOUND IS PAINTED MINIMALLY: one flat tone of its own ramp, no dither at all, and the
+    // game draws a one-pixel line round it (world.js). That is what makes a real object read as an OBJECT in a
+    // photographed yard — a clean, quiet shape against a dithered background — and it is why the thing the
+    // player is meant to hit is never lost in the texture around it. It still resembles the photograph exactly:
+    // the tone is the surface's own, taken from the pixels the detector found.
+    if (marks && marks[i]) {
+      tone = toneArr[r];
+    } else if (maxL[r] - minL[r] < 8) {
       // A SURFACE THE PHOTOGRAPH ITSELF HAS NO DETAIL IN IS PAINTED FLAT. Without this the tone came from the
       // pixel's absolute value, and a flat mid-grey wall — whose value sits half way between two tones —
       // came out as a 50% checkerboard of both: measured on a test picture of two flat greys, one of them was

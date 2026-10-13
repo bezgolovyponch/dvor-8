@@ -56,5 +56,6 @@ export const sfx = {
   fly: () => tone(74, 0.7, 'sawtooth', 0.025, 26),
   paper: () => { noise(0.12, 0.1); tone(980, 0.1, 'triangle', 0.05, -520); },
   miss: () => tone(110, 0.05, 'triangle', 0.04),
+  thunder: () => { noise(0.7, 0.22); tone(48, 0.8, 'sawtooth', 0.16, -18); setTimeout(() => noise(0.5, 0.12), 260); },
   done: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'square', 0.07), i * 90)),
 };

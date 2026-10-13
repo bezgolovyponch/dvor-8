@@ -16,6 +16,7 @@ They are the only things in the game that leave the picture better than they fou
 | **flowers** | a bunch thrown at bare ground | a flower that grows in three stages, sways, and is still there when the run ends | one throw, 30 points |
 | **sponge** | a sponge thrown at something standing | one tone up the thing's own ramp, foam, and a shine: the only thing in the game that gets LIGHTER | one throw, 45 points, once per thing |
 | **help** | a tap on the parcel the courier dropped | the box goes back, the courier nods, and the danger meter loses a mark | nothing — it is a tap, not a throw |
+| **whimsy** | a throw of pure absurdity at a real thing | one action chosen at random from a table keyed by the thing's own kind: eat the car, sit on the bench, water the plant pot | one throw, 60 points |
 
 ## The rules a kind action is held to
 
@@ -30,6 +31,24 @@ These are the game's own rules, not new ones (`docs/concept.md`, brief Q8, D27):
   stem, warm or dusk for the petals) and a wash moves an index up its own ramp, so a red car is a lighter red
   car and not a different colour. Nothing in `kind.js` knows the palette: it is handed the table and the step
   count and it picks indices by ramp.
+
+## Whimsy: the second verb
+
+The yard is made of real things found in the player's own photograph, and the game's only verb used to be
+throwing something at them. Whimsy is the second verb: one throw does something absurd and specific to whatever
+it lands on. The table is keyed by the labels `src/objects.js` finds (`car`, `truck`, `bus`, `bicycle`,
+`motorcycle`, `bench`, `chair`, `potted plant`, `boat`, `window`), so the joke is always about a REAL thing in
+the player's photograph, and a thing nobody named is not a candidate — the game never invents a thing to be
+absurd at. The throw lands exactly where it is aimed: the randomness is in what it DOES, not in where it goes
+(the bottle is the one that strays, D17).
+
+## What the yard became
+
+A run is not only a score. `imprint()` in `src/world.js` counts what the player did — flowers planted, paint
+thrown, things washed, absurdities performed, holes torn — and decides which of those the run was ABOUT. The
+end card's title and the card that is sent say it: `ДВОР: ЦВЕТЫ`, `ДВОР: КРАСКА`, `ДВОР: РАЗВАЛИНЫ`,
+`ДВОР: ЧИСТОТА`, or `ХВАТИТ` when the yard was left as it was found. Ruins win only when there is more ruin
+than decoration: a yard with twelve flowers and one broken crate is a yard in flowers, and the title says so.
 
 ## What each one looks like
 

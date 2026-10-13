@@ -220,9 +220,16 @@ const before = w.idx.join();
 let res = strike(w, c1, c1.cx, c1.cy);
 check('a first hit on a car dents and cracks it: the picture changes, the car stands', res.kind === 'crack' && !c1.gone && w.idx.join() !== before);
 while (!c1.gone) res = strike(w, c1, c1.cx, c1.cy);
+// A wreck is a DENT AND A HOLE, not a black silhouette: what is left of the car is the car, one tone down,
+// with the impact torn out of it. So the test looks at both layers — the picture it left behind, and the
+// rubble that is drawn over it — because the hole is what makes it a wreck rather than a repaint.
 const wreck = [...c1.pixels].map((p) => w.palette[w.idx[p]]);
-check('enough hits wreck it: what is left is dark, but it is still where the car was', res.kind === 'break' && c1.hits === 3
-  && wreck.reduce((n, c) => n + luma(c), 0) / wreck.length < 0.2 && [...c1.pixels].some((p) => w.idx[p] === w.palette.length - 1), `mean brightness ${(wreck.reduce((n, c) => n + luma(c), 0) / wreck.length).toFixed(2)}`);
+const holed = [...c1.pixels].filter((p) => w.rubble[p] !== 255).length;
+check('enough hits wreck it: what is left is darker, still where the car was, and torn open',
+  res.kind === 'break' && c1.hits === 3
+  && wreck.reduce((n, c) => n + luma(c), 0) / wreck.length < 0.35
+  && holed > 4 && w.rubble[c1.pixels[Math.floor(c1.pixels.length / 2)]] !== undefined,
+  `mean brightness ${(wreck.reduce((n, c) => n + luma(c), 0) / wreck.length).toFixed(2)}, ${holed} pixels torn open`);
 check('a wrecked thing throws pieces, but never more than the cap', res.debris.length > 0 && res.debris.length <= DEBRIS_MAX + 1, `${res.debris.length} pieces`);
 check('a wrecked thing cannot be picked or hit again', pick(w, c1.cx, c1.cy) !== c1 && strike(w, c1, c1.cx, c1.cy) === null);
 w = yard();
@@ -740,6 +747,33 @@ const TOP = bandTop(w);
   const ground = (st) => at(st, 8, 8);
   const plain = flat.render(src, W4, H4, { minRegionShare: 0.004 });
   const marked = flat.render(src, W4, H4, { marks: mark, minRegionShare: 0.004 });
+  // A FOUND THING IS PAINTED MINIMALLY. Inside the mark, every pixel takes ONE tone of its surface's ramp: no
+  // dither, no texture, a clean shape for the game to outline. Outside it, the photograph keeps its detail.
+  {
+    const W5 = 160, H5 = 160;
+    const src2 = new Uint8ClampedArray(W5 * H5 * 4);
+    let seed2 = 5;
+    const rnd2 = () => ((seed2 = (seed2 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let y = 0; y < H5; y += 1) for (let x = 0; x < W5; x += 1) {
+      const i = (y * W5 + x) * 4;
+      // a noisy surface, so the picture has something to dither BETWEEN
+      const v = 96 + Math.round(26 * Math.sin(x / 7) + 22 * Math.cos(y / 9) + rnd2() * 10);
+      src2[i] = v; src2[i + 1] = v + 6; src2[i + 2] = v - 4; src2[i + 3] = 255;
+    }
+    const mark5 = new Uint8Array(W5 * H5);
+    for (let y = 60; y < 90; y += 1) for (let x = 60; x < 100; x += 1) mark5[y * W5 + x] = 1;
+    const stM = flat.render(src2, W5, H5, { marks: mark5, minRegionShare: 0.002 });
+    const inside = new Set(), outside = new Set();
+    for (let y = 0; y < H5; y += 1) for (let x = 0; x < W5; x += 1) {
+      const v = stM.idx[y * W5 + x];
+      if (v >= stM.palette.length - 2) continue;
+      (mark5[y * W5 + x] ? inside : outside).add(`${Math.floor(v / flat.STEPS)}:${v % flat.STEPS}`);
+    }
+    const insideTones = new Set([...inside].map((k) => k.split(':')[1]));
+    check('a found thing is painted minimally: one flat tone of its own ramp, no dither inside it',
+      inside.size >= 1 && insideTones.size === 1, `${inside.size} colours in the thing, ${outside.size} around it`);
+  }
+
   check('a small thing the same colour as its ground is absorbed when nothing marks it (the failure)',
     inCar(plain) === ground(plain), 'orphan absorbed');
   check('a thing the detector found is not absorbed, and is painted apart from its ground',
@@ -752,6 +786,133 @@ const TOP = bandTop(w);
 // The ink pass is GONE, and its checks went with it. It drew structure lines over a quantised photograph;
 // the flat route draws the region borders instead, and those are checked in the picture section above and in
 // the transition section below. Keeping checks for a function that no longer exists tests nothing.
+
+// ---- the environment is destructible, not just the things in it -----------------------------------------
+{
+  const { chip, surfaceAt, ENV_TOUGH, ENV_HIT_POINTS, ENV_BREAK_POINTS } = await import('./src/world.js');
+  const flatMod = await import('./src/flat.js');
+  const stE = styliseFlat(DEMO.rgba, W, H);
+  const segE = toRegions(DEMO.dets, DEMO.rgba, W, H);
+  const env = { label: stE.regions.label, rampOf: stE.regions.rampOf, role: stE.regions.role, nr: stE.regions.nr,
+    rampName: flatMod.RAMPS.map((r) => r.name) };
+  const we = makeWorld({ w: W, h: H, photo: DEMO.rgba, idx: stE.idx, palette: stE.palette, ...segE, env, seed: 3 });
+
+  // find a surface pixel of each kind: one hard (stone or metal) and one soft (foliage)
+  const findSurface = (want) => {
+    for (let y = 2; y < H - 2; y += 1) for (let x = 2; x < W - 2; x += 1) {
+      const s = surfaceAt(we, x, y);
+      if (s && want.includes(s.name)) return { x, y, s };
+    }
+    return null;
+  };
+  const soft = findSurface(['foliage']);
+  const hard = findSurface(['stone', 'metal']);
+  check('a surface under a throw is a surface with a material and a toughness',
+    Boolean(soft && hard) && soft.s.tough === 1 && hard.s.tough === 3,
+    `${soft?.s.name} ${soft?.s.tough}, ${hard?.s.name} ${hard?.s.tough}`);
+
+  const cx = Math.round(hard.x), cy = Math.round(hard.y);
+  const before = we.idx[(cy * W) + cx];
+  const c1 = chip(we, cx, cy, 1, mulberry32(11));
+  check('a hit on the yard chips it: the surface takes a mark and the hit is worth points',
+    c1 && c1.kind === 'chip' && !c1.broke && c1.points === ENV_HIT_POINTS && we.idx[(cy * W) + cx] !== before,
+    `${c1?.name} ${c1?.hits}/${c1?.tough}`);
+
+  let last = c1, guard = 0;
+  while (!last.broke && guard < 8) { last = chip(we, cx, cy, 1, mulberry32(20 + guard)); guard += 1; }
+  const hole = last.broke && last.points === ENV_BREAK_POINTS;
+  check('enough hits break the surface open, and the hole is a hole: rubble, not a colour',
+    hole && we.rubble[cy * W + cx] !== 255, `broke after ${guard} more`);
+  check('a broken surface cannot be hit again — the same break cannot be farmed',
+    chip(we, cx, cy, 1, mulberry32(31)) === null && surfaceAt(we, cx, cy) === null, 'no second break');
+  check('soft ground gives way in one hit where concrete takes three',
+    ENV_TOUGH.foliage === 1 && ENV_TOUGH.metal === 3 && ENV_TOUGH.stone === 3 && ENV_TOUGH.earth === 2,
+    JSON.stringify(ENV_TOUGH));
+  check('the sky is not a surface: a throw at it goes up and comes down',
+    Array.from({ length: 200 }, (_, n) => surfaceAt(we, 2 + (n % (W - 4)), 2)).every((s) => s === null || s.name !== 'sky'),
+    'no sky surface');
+  check('where a thing stands, the thing is hit and not the yard',
+    surfaceAt(we, byKind(we, 'car').cx, byKind(we, 'car').cy) === null, 'object path');
+  check('the environment can be broken anywhere in the picture: every named surface has a toughness',
+    ['foliage', 'earth', 'stone', 'metal', 'warm', 'sand', 'dusk'].every((n) => ENV_TOUGH[n] > 0) && ENV_TOUGH.sky === 0,
+    'seven materials and one sky');
+}
+
+// ---- what the yard BECAME: ruins, flowers, paint, or nothing ------------------------------------------
+{
+  const { imprint } = await import('./src/world.js');
+  const w2 = yard();
+  const fresh = imprint(w2);
+  check('a yard nobody touched says so, and the four things you can do are counted separately',
+    fresh.kind === 'quiet' && fresh.holes === 0 && fresh.flowers === 0 && fresh.paint === 0,
+    `${fresh.kind}`);
+  // flowers and paint, then a wreck: the title follows what there is MORE of
+  const kindMod = await import('./src/kind.js');
+  kindMod.plant(w2, 20, 300, mulberry32(1), () => true);
+  kindMod.plant(w2, 30, 300, mulberry32(2), () => true);
+  kindMod.plant(w2, 40, 300, mulberry32(3), () => true);
+  const flowered = imprint(w2);
+  check('a yard with flowers in it is a yard in flowers, and it says how many',
+    flowered.kind === 'flowers' && flowered.flowers === 3 && flowered.words === 'ЦВЕТЫ', JSON.stringify(flowered.words));
+  w2.splats = 9;
+  const painted = imprint(w2);
+  check('and once there is more paint than flowers, it is a painted yard',
+    painted.kind === 'paint' && painted.paint === 9, `${painted.kind} ${painted.words}`);
+  const car3 = byKind(w2, 'car');
+  while (!car3.gone) strike(w2, car3, car3.cx, car3.cy);
+  w2.broken = 40;
+  const ruins = imprint(w2);
+  check('a yard broken open is a yard in ruins, and the count of holes is what decides it',
+    ruins.kind === 'ruins' && ruins.holes >= 41 && ruins.standing < w2.regions.length, `${ruins.holes} holes`);
+  check('the words the card uses come from the same place as the counts',
+    ['ruins', 'flowers', 'paint', 'washed', 'quiet'].every((k) => imprint(w2).words !== undefined) && ruins.words === 'РАЗВАЛИНЫ', 'one table');
+}
+
+// ---- the day's sky: rain, snow, fog, and a storm that throws lightning ----------------------------------
+{
+  const weather = await import('./src/weather.js');
+  const flatMod = await import('./src/flat.js');
+  const table = flatMod.paletteOf();
+  const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+  const sat = (c) => { const mx = Math.max(...c), mn = Math.min(...c); return mx ? (mx - mn) / mx : 0; };
+  const mean = (p, f) => p.slice(0, p.length - 2).reduce((n, c) => n + f(c), 0) / (p.length - 2);
+  const spread = (p) => { const l = p.slice(0, p.length - 2).map(lum), m = l.reduce((a, b) => a + b, 0) / l.length; return Math.sqrt(l.reduce((n, v) => n + (v - m) ** 2, 0) / l.length); };
+
+  const clear = weather.weatherTable(table, 'clear');
+  const rain = weather.weatherTable(table, 'rain');
+  const snow = weather.weatherTable(table, 'snow');
+  const fog = weather.weatherTable(table, 'fog');
+  const storm = weather.weatherTable(table, 'storm');
+  check('the weather is a GRADE on the table: rain darkens and cools, snow lifts and flattens',
+    mean(rain, lum) < mean(clear, lum) && mean(rain, sat) < mean(clear, sat)
+    && mean(snow, lum) > mean(clear, lum) && mean(snow, sat) < mean(clear, sat),
+    `lum ${mean(clear, lum).toFixed(0)} → rain ${mean(rain, lum).toFixed(0)}, snow ${mean(snow, lum).toFixed(0)}`);
+  check('fog eats the contrast and the storm sharpens it',
+    spread(fog) < spread(clear) && spread(storm) > spread(fog),
+    `spread clear ${spread(clear).toFixed(1)}, fog ${spread(fog).toFixed(1)}, storm ${spread(storm).toFixed(1)}`);
+  check('the ink and the void are never touched by weather: a line that fades is not a line',
+    [rain, snow, fog, storm].every((p) => p[p.length - 2].join() === table[table.length - 2].join() && p[p.length - 1].join() === table[table.length - 1].join()),
+    'outline and void unchanged');
+  check('the day decides the sky, and the same day gives the same sky',
+    weather.rollFor(20261013, mulberry32(1)) === weather.rollFor(20261013, mulberry32(9))
+    && new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((d) => weather.rollFor(d * 7919, mulberry32(d)))).size > 1,
+    'same day, same weather');
+  check('rain and snow fall, fog does not, and none of them harms anybody',
+    weather.WEATHERS.rain.falls > 0 && weather.WEATHERS.snow.falls > 0 && weather.WEATHERS.fog.falls === 0
+    && Object.values(weather.WEATHERS).every((w) => w.harm === undefined),
+    'falls, no harm field');
+  check('lightning can only choose a THING: the step is not given the people at all',
+    weather.stepWeather.length === 6 && !/folk/.test(weather.stepWeather.toString()),
+    'no path to a person');
+  const we2 = yard();
+  const wx = weather.makeWeather('storm', mulberry32(2));
+  const fx2 = { particles: [] };
+  const view = { x: 0, y: 0, w: W, h: H };
+  let struck = 0;
+  for (let i = 0; i < 900; i += 1) for (const ev of weather.stepWeather(wx, we2, fx2, 1 / 30, mulberry32(40 + i), view)) { if (ev.type === 'lightning') { struck += 1; if (ev.target) we2.regions.includes(ev.target); } }
+  check('a storm strikes standing things, and the pieces it throws are capped',
+    struck >= 1 && fx2.particles.length <= 460, `${struck} strikes, ${fx2.particles.length} particles`);
+}
 
 // ---- kind actions: what you can do to a yard that is not wrecking it -----------------------------------
 // Three actions, one shape: what it costs the player, what it adds to the world, and what it looks like while
@@ -827,6 +988,18 @@ const TOP = bandTop(w);
   check('the hand can hold them: both are in the throwables list and in the drawer order',
     Boolean(THROWABLES.flowers && THROWABLES.sponge) && THROW_ORDER.includes('flowers') && THROW_ORDER.includes('sponge'),
     THROW_ORDER.join(' '));
+  // WHIMSY: a random absurdity, keyed to a thing the detector really named, and harmless.
+  const carAntic = kind.antic('car', 0);
+  const benchAntic = kind.antic('bench', 0.99);
+  check('each kind of real thing has its own absurdities, and the roll picks one of them',
+    Boolean(carAntic && benchAntic) && carAntic.line !== benchAntic.line && carAntic.points === kind.WHIMSY.points,
+    `${carAntic.line} / ${benchAntic.line}`);
+  check('a thing nobody named is not a candidate: whimsy invents nothing to be absurd at',
+    kind.antic('person', 0) === null && kind.antic('dog', 0.5) === null && Object.keys(kind.ANTICS).every((k) => TARGETS[k]),
+    Object.keys(kind.ANTICS).join(' '));
+  check('whimsy harms nothing: it deals no damage and takes no points away',
+    THROWABLES.whimsy.damage === 0 && kind.WHIMSY.points > 0 && THROW_ORDER.includes('whimsy'), 'harmless');
+
   const box = kind.parcelPixels(st2.palette, steps, parcel);
   check('the parcel is drawn as a box with tape, in the palette\'s own colours',
     box.length >= 8 && box.every((p) => p.i < st2.palette.length - 2), `${box.length} pixels`);
@@ -1222,10 +1395,13 @@ section('windows and paint: glass breaks, colour stays');
   check('and never more than a phone can draw', fxp.particles.length === MAX_LIVE && spawn(fxp, 50, 50, PRESETS.dust, mulberry32(2)) === 0);
   const names = Object.keys(PRESETS), sig = (p) => [p.count, p.speed, p.cone.toFixed(2), p.life].join('/');
   check('no two kinds of piece fly the same way', new Set(names.map((k) => sig(PRESETS[k]))).size === names.length, names.join(' '));
-  const one = makeFx(w), piece = Array.from({ length: 30 }, (_, i) => ({ x: 40 + (i % 6), y: 40 + ((i / 6) | 0), rgb: '#fff' }));
+  // A FRESH yard for this one: a wreck now writes into `rubble` (that is what makes a hole a hole), so the
+  // shared world of the hitting tests is no longer empty and could not answer the question.
+  const wClean = yard();
+  const one = makeFx(wClean), piece = Array.from({ length: 30 }, (_, i) => ({ x: 40 + (i % 6), y: 40 + ((i / 6) | 0), rgb: '#fff' }));
   check('a shard leaves as one piece: every pixel of it at the same speed', fling(one, piece, 30, -20) === 30 && one.particles.every((p) => p.vx === 30 && p.vy === -20));
-  stepFx(one, w, 0.016);
-  check('coloured pieces never settle into the rubble', (() => { for (let i = 0; i < 200; i += 1) stepFx(one, w, 0.016); return one.particles.length === 0 && w.rubble.every((v) => v === 255); })());
+  stepFx(one, wClean, 0.016);
+  check('coloured pieces never settle into the rubble', (() => { for (let i = 0; i < 200; i += 1) stepFx(one, wClean, 0.016); return one.particles.length === 0 && wClean.rubble.every((v) => v === 255); })());
 }
 
 // ---- nothing in vain ---------------------------------------------------------------------------------

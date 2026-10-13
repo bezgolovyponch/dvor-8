@@ -67,6 +67,12 @@ export function styliseFlat(rgba, w, h, opts = {}) {
     smooth: rgba,
     surfaces: { what, horizon: 0, skyShare: 0 },
     regions: st.regions,
+    // THE SURFACES BEHIND THE THINGS, for the environment's own damage (world.js): flat.js's region map, the
+    // ramp each region is painted from (which is what it is made of — see the toughness table), and each
+    // region's role. Handed straight through: nothing here classifies anything, it carries a decision already
+    // made by the painter.
+    env: { label: st.regions.label, rampOf: st.regions.rampOf, role: st.regions.role, nr: st.regions.nr,
+      rampName: RAMPS.map((r) => r.name) },
     outlinePixels: st.outlinePixels,
     style: 'flat',
   };

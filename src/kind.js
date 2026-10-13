@@ -191,5 +191,42 @@ export const blossomBurst = (x, y, rnd) => Array.from({ length: 14 }, (_, n) => 
   floor: y + 10 + Math.floor(rnd() * 6),
 }));
 
+// ---- WHIMSY: a random thing to do to a real object, for no reason --------------------------------------
+//
+// The yard is made of REAL things the detector found in the player's own photograph, and the game's only verb is
+// throwing something at them. Whimsy is the second verb: one throw that does something absurd and specific to
+// whatever it lands on — eat the car, sit on the bench, water the plant pot, ride the bicycle — chosen at
+// random from a table keyed by the thing's own kind. It is here because a photograph of your own courtyard is
+// FUNNY, and a game that can only break it wastes that.
+//
+// Rules, the same as every other kind action: nothing is harmed, nothing is taken away, a miss costs nothing.
+// The table is keyed by the labels `src/objects.js` finds, so a thing the detector cannot name is not a
+// candidate — the game never invents a thing to be absurd at.
+export const WHIMSY = {
+  ru: 'забава', points: 60,
+  why: 'One throw, one absurdity, chosen for the thing it lands on. Nothing is harmed and the yard is funnier.',
+};
+
+export const ANTICS = {
+  car: ['СЪЕСТЬ МАШИНУ', 'ПОКАЗАТЬ МАШИНЕ ФОКУС', 'ПОГЛАДИТЬ КАПОТ'],
+  truck: ['СЪЕСТЬ ГРУЗОВИК', 'СПЕТЬ ГРУЗОВИКУ'],
+  bus: ['ЗАЙЦЕМ В АВТОБУС', 'СЪЕСТЬ АВТОБУС'],
+  bicycle: ['ПРОКАТИТЬСЯ', 'ПОДКАЧАТЬ КОЛЕСО'],
+  motorcycle: ['ПОРЫЧАТЬ ВМЕСТЕ', 'ПРОКАТИТЬСЯ'],
+  bench: ['ПОСИДЕТЬ', 'ПОЧИНИТЬ СКАМЕЙКУ'],
+  chair: ['СЕСТЬ', 'ПОКАЧАТЬСЯ'],
+  'potted plant': ['ПОЛИТЬ', 'ПОГОВОРИТЬ С ЦВЕТКОМ'],
+  boat: ['ПОПЛЫТЬ', 'СЪЕСТЬ ЛОДКУ'],
+  window: ['ПОМЫТЬ ОКНО', 'ПОСТУЧАТЬ'],
+};
+
+/** One absurd thing to do to this kind of thing. Deterministic given the roll, so a replay is a replay. */
+export function antic(kind, roll) {
+  const list = ANTICS[kind];
+  if (!list || !list.length) return null;
+  const i = Math.min(list.length - 1, Math.floor(roll * list.length));
+  return { kind, line: list[i], points: WHIMSY.points };
+}
+
 /** Points a kind action is worth, for the pop and for the score. */
 export const worth = { flowers: FLOWERS.points, wash: WASH.points, help: HELP.points };

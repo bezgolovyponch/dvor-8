@@ -53,6 +53,13 @@ export const THROWABLES = {
     flight: 0.18, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 30, sky: false,
     why: 'The only thing that makes anything LIGHTER: it moves a car one tone up its own ramp, so it is visibly clean and still the same colour. Once per thing, because the point is the change and not the farming.',
   },
+  whimsy: {
+    label: 'забава', hint: 'случайное действие с тем, во что попадёшь · ничего не ломает', kind: 'whimsy',
+    // scatter 0: the RANDOMNESS IS IN WHAT IT DOES, not in where it goes. A throw that both strayed and did a
+    // random thing would be two uncertainties at once, and the bottle is the one that strays (D17).
+    flight: 0.22, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 12, sky: false,
+    why: 'The second verb. One throw does something absurd and specific to whatever it lands on — eat the car, sit on the bench, water the plant pot — picked from a table keyed by the thing the detector named. Nothing is harmed, and the yard is funnier for it.',
+  },
   paint: {
     label: 'краска', hint: 'пятно остаётся на стене · ничего не ломает',
     flight: 0.24, damage: 0, scatter: 0, splash: 0, chain: 0, cooldown: 0, weight: 34, sky: false,
@@ -60,7 +67,7 @@ export const THROWABLES = {
   },
 };
 
-export const ORDER = ['stone', 'brick', 'slipper', 'bottle', 'water', 'paint', 'flowers', 'sponge'];
+export const ORDER = ['stone', 'brick', 'slipper', 'bottle', 'water', 'paint', 'flowers', 'sponge', 'whimsy'];
 
 // The throwable's own numbers, with the mode's vision left alone. A mode may still sharpen the aim or add
 // reach — that is its business — but it no longer decides what is in the hand.

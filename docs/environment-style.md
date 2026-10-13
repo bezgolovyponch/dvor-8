@@ -43,6 +43,28 @@ screen, and the world's speeds and reaches doubled with it. The transition costs
 1,950 ms, because the segmentation runs on a quarter-size copy (a surface only has to say which ramp its pixels
 come from) and the paint is one pass over the pixels.
 
+### The damage language: a dent and a hole, in the picture's own colours
+
+Everything in the yard is destructible, and the destruction is deliberately minimal, because a wreck that
+recolours a thing stops resembling the photograph it came from. Two rules:
+
+- **A hit dents.** The pixels within a few of the impact move ONE TONE DOWN THEIR OWN RAMP — a darker version of
+  the same colour, never black — and three short cracks run out of it. A dented car in a photograph is still a
+  car, and a dented wall is still that wall.
+- **Enough hits tear a hole.** The thing is broken open where it was hit: a ragged hole of radius scaled to its
+  size is written into the rubble layer, which is drawn OVER the picture and never cleared, and a scatter of
+  pockmarks goes with it. The rest of the thing is one tone down and still recognisably itself.
+
+The surfaces BEHIND the things take the same damage by the same rules, so the wall, the asphalt, the kerb, the
+fence and the ground are all destructible — one hole at a time, permanently. What a surface is made of decides
+how many hits it takes, and the game already knows what it is made of: the ramp the painter chose (foliage 1,
+soil and painted walls 2, concrete and asphalt 3). There is nothing in the picture that cannot be broken, and
+nothing in it is a backdrop.
+
+Scenery gives points but **not combo**: if a wall fed the multiplier, the cheapest way to a big score would be
+to stand still and hammer the ground, and the things the detector found — the actual game — would be worth less
+than the backdrop.
+
 ## 2. The stages, and what each one is for
 
 | # | Stage | What it does | What it is for |

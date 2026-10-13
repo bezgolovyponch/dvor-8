@@ -28,8 +28,10 @@ import { makeFolk, stepFolk, personAt, soak, threw, stars, KINDS as FOLK } from 
 import { mulberry32 } from './rng.js';
 import { sfx, unlock, setMuted } from './audio.js';
 import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
-import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, FLOWERS, WASH, HELP } from './kind.js';
+import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, antic, WHIMSY, FLOWERS, WASH, HELP } from './kind.js';
 import { STEPS } from './flat.js';
+import { chip, surfaceAt, imprint } from './world.js';
+import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
 import { makeWindow, hitWindow, shards } from './glass.js';
 import { PAINTS, stamp, lay } from './decal.js';
 import { spawn, fling, PRESETS } from './parts.js';
@@ -52,6 +54,7 @@ let yard = null;        // the photograph, its picture and its things: kept, so 
 let world = null, fx = null, buf = null;
 let stage = 'title';    // title → detect → scan → play → done   (or → empty)
 let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
+let weather = makeWeather('clear');               // the day's sky (weather.js)
 let hand = 'stone', item = THROWABLES.stone;      // hand/item: what you THROW
 let clock = 0, scanT = 0, endIn = 0, last = performance.now();
 let motion = viewMotion(filter, 0, calm), shake = { x: 0, y: 0 };
@@ -223,9 +226,13 @@ function build(rgba, w, h, dets, big = null) {
   return true;
 }
 function begin() {
-  world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8 });
+  world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env });
   fx = makeFx(world);
   me = null; drink = makeDrink(); queue = [...yard.more]; like = yard.home; grown = mulberry32(daySeed(today));   // today's street
+  // The sky is the day's too (D28): the same day's number gives the same yard, the same street and the same
+  // weather, and the players comparing a day are comparing the same thing. Announced once, in the note.
+  weather = makeWeather(rollFor(daySeed(today), rnd));
+  if (weather.kind !== 'clear') note(`${weatherLine(weather)} — ${WEATHERS[weather.kind].why}`);
   top = bandTop(world); ended = false; stomps = 0;
   clearSky(sky, skyLines());
   folk = makeFolk(); paintHide(); hideT = 0;
@@ -429,6 +436,7 @@ function resolve(rock) {
   if (rock.sky && skyHit(rock)) return;
   if (rock.kind === 'paint') { paintLands(rock); return; }
   if (rock.kind === 'flowers') { flowersLand(rock); return; }
+  if (rock.kind === 'whimsy') { whimsyLands(rock); return; }
   if (rock.kind === 'sponge') { spongeLands(rock); return; }
   // What it lands on: everything near, for a thing that bursts; otherwise the one thing it was thrown at.
   const targets = rock.splash ? splashTargets(world, rock.tx, rock.ty, rock.splash) : rock.region && !rock.region.gone ? [rock.region] : [];
@@ -437,7 +445,24 @@ function resolve(rock) {
     burst(fx, Array.from({ length: 10 }, () => ({ x: rock.tx, y: rock.ty, c: 0, rgb: '#35d07f', floor: rock.ty + 8 })), rock.tx, rock.ty + 3, rnd, 60);
   }
   if (!targets.length) {
-    // A miss is answered too: a puff and a low note. It costs nothing and it does not end a combo.
+    // NOTHING STANDING THERE — but the YARD is there. The surface under the throw takes the hit: it chips,
+    // enough chips break it open, and the hole stays. This is what makes the environment destructible rather
+    // than a backdrop, and it is the same rule the things obey (hits counted, break permanent, D8).
+    const hitGround = rock.damage > 0 ? chip(world, rock.tx, rock.ty, rock.damage, rnd) : null;
+    if (hitGround) {
+      if (hitGround.broke) { sfx.break(1); impact(fx, 'crack', calm); navigator.vibrate?.(22); }
+      else { sfx.hit(1); impact(fx, 'dent', calm); navigator.vibrate?.(10); }
+      burst(fx, hitGround.debris, rock.tx, rock.ty, rnd, hitGround.broke ? 90 : 40);
+      // THE YARD GIVES POINTS BUT NOT COMBO. Chewing a hole in a wall is worth doing for the hole: if scenery
+      // fed the combo, the cheapest way to a big multiplier would be to stand still and hammer the ground, and
+      // the things the detector found — the actual game — would be worth less than the backdrop.
+      world.score += hitGround.points; world.hits += 1;
+      pop(`+${hitGround.points}`, rock.tx, rock.ty);
+      pop(hitGround.broke ? `${(hitGround.name || 'СТЕНА').toUpperCase()} ПРОБИТА` : (hitGround.name || 'СТЕНА').toUpperCase(), rock.tx, rock.ty - 12, hitGround.broke ? 'tag' : '');
+      return;
+    }
+    // And with nothing under it either — the sky, or a hole already cut — a puff and a low note. It costs
+    // nothing and it does not end a combo.
     if (!rock.splash) { sfx.miss(); spawn(fx, rock.tx, rock.ty, PRESETS.puff, rnd); }
     return;
   }
@@ -468,6 +493,25 @@ function hit(t, hx, hy, damage, comboTime) {
   if (broke) pop(t.label.toUpperCase(), t.cx, t.y - 5, 'tag');
   if (res.combo > 1) pop(`x${res.combo}`, cam.x + cam.w / 2, cam.y + cam.h * 0.18, 'big');
   return res;
+}
+
+// What the weather did, answered: a flash, thunder, and one standing thing left blackened. There is no path
+// from here to a person — a strike is chosen from the world's things — and nothing is taken from the player.
+function weatherSays(ev) {
+  if (ev.type !== 'lightning') return;
+  fx.flash = 1;
+  sfx.thunder();
+  navigator.vibrate?.(28);
+  const t = ev.target;
+  if (t) {
+    const scorch = world.scorch;
+    for (const p of t.pixels) world.idx[p] = scorch[world.idx[p]];
+    burst(fx, Array.from({ length: 16 }, (_, n) => ({ x: t.cx, y: t.cy, c: world.idx[t.pixels[0]], rgb: n % 2 ? '#fff6c2' : '#5c4969', floor: t.y + t.h })), t.cx, t.cy, rnd, 120);
+    pop('МОЛНИЯ', t.cx, t.y - 6, 'warn');
+    note('молния выжгла то, что стояло: оно потемнело, но осталось на месте');
+  } else {
+    pop('МОЛНИЯ', cam.x + cam.w / 2, cam.y + cam.h * 0.3, 'warn');
+  }
 }
 
 // A window was struck. glass.js keeps where, and says whether it broke; if it did, the pane is cut into
@@ -529,6 +573,28 @@ function flowersLand(rock) {
   world.score += FLOWERS.points; world.hits += 1; world.planted = (world.planted || 0) + 1;
   pop(`+${FLOWERS.points}`, rock.tx, rock.ty);
   pop('ЦВЕТОК', rock.tx, rock.ty - 12, 'tag');
+}
+
+// A throw of pure whimsy: something absurd, specific to the thing it landed on, and harmless. The table is
+// keyed by what the detector named, so the joke is always about a REAL thing in the player's own photograph —
+// eat the car, sit on the bench, water the plant pot — and a thing nobody named is not a candidate.
+function whimsyLands(rock) {
+  const t = rock.region && !rock.region.gone ? rock.region : splashTargets(world, rock.tx, rock.ty, 12).find((r) => !r.gone) || null;
+  const done = t ? antic(t.kind, rnd()) : null;
+  if (!done) {
+    sfx.miss(); spawn(fx, rock.tx, rock.ty, PRESETS.puff, rnd);
+    pop('НЕ С ЧЕМ ЗАБАВЛЯТЬСЯ', rock.tx, rock.ty, 'tag');
+    return;
+  }
+  const hx = Math.max(t.x, Math.min(t.x + t.w, rock.tx)), hy = Math.max(t.y, Math.min(t.y + t.h, rock.ty));
+  burst(fx, Array.from({ length: 8 }, (_, n) => ({ x: hx, y: hy, c: 0, rgb: n % 2 ? '#ffd23f' : '#ff6fa8', floor: t.y + t.h + 4 })), hx, hy, rnd, 26);
+  impact(fx, 'dent', calm);
+  sfx.ready();
+  navigator.vibrate?.(12);
+  world.score += done.points; world.hits += 1; world.antics = (world.antics || 0) + 1;
+  pop(`+${done.points}`, hx, hy);
+  pop(done.line, t.cx, t.y - 8, 'tag');
+  note(`${done.line.toLowerCase()} — ${t.label} цел и невредим`);
 }
 
 // A sponge came down on something standing. It is washed: every pixel one tone up its own ramp, once, with
@@ -615,14 +681,18 @@ function finish() {
   const best = album.best, metres = me ? walked(me) : 0;
   const news = record(album, { wrecked: world.regions.filter((r) => r.gone).map((r) => r.kind), score: world.score, metres });
   keep();
-  result = { things: world.regions.slice(0, yard.regions.length).map((r) => ({ kind: r.kind, gone: r.gone })), score: world.score, combo: world.maxCombo, metres, day: today };
+  // WHAT THE YARD BECAME, computed first because the result, the title, the line and the card all quote it.
+  const mark = imprint(world);
+  result = { things: world.regions.slice(0, yard.regions.length).map((r) => ({ kind: r.kind, gone: r.gone })), score: world.score, combo: world.maxCombo, metres, day: today, mark };
   const { have, of } = progress(album);
   $('endNews').textContent = `альбом ${have}/${of}${news.kinds.length ? ` · впервые: ${news.kinds.map((k) => `${SIGN[k]} ${TARGETS[k].ru}`).join(', ')}` : ''}${news.far && metres ? ' · так далеко ещё не уходил' : ''}`;
   $('shared').textContent = '';
   $('endScore').textContent = world.score;
   const aim = world.throws ? Math.min(100, Math.round(((world.hits - stomps) / world.throws) * 100)) : 0;   // a burst can hit several things with one throw
-  $('endTitle').textContent = folk.seen ? 'ЗАМЕТИЛИ' : world.done ? 'ДВОР РАЗНЕСЁН' : 'ХВАТИТ';
-  $('endLine').textContent = `${world.time.toFixed(1)} с · комбо x${world.maxCombo} · бросков ${world.throws} · попаданий ${aim}%${me ? ` · прыжков на вещи ${stomps} · пройдено ${walked(me)} м` : ''}${folk.soaked ? ` · облито ${folk.soaked}` : ''}${folk.calls ? ` · звонков в полицию ${folk.calls}` : ''}${world.splats ? ` · пятен краски ${world.splats}` : ''}`;
+  // THE TITLE SAYS WHAT THE YARD BECAME, not only whether it is finished: a yard in flowers and a yard in
+  // ruins are two different things to have done, and the card that goes out should say which one it was.
+  $('endTitle').textContent = folk.seen ? 'ЗАМЕТИЛИ' : world.done ? 'ДВОР РАЗНЕСЁН' : mark.kind === 'quiet' ? 'ХВАТИТ' : `ДВОР: ${mark.words}`;
+  $('endLine').textContent = `${world.time.toFixed(1)} с · комбо x${world.maxCombo} · бросков ${world.throws} · попаданий ${aim}%${me ? ` · прыжков на вещи ${stomps} · пройдено ${walked(me)} м` : ''}${folk.soaked ? ` · облито ${folk.soaked}` : ''}${folk.calls ? ` · звонков в полицию ${folk.calls}` : ''}${world.splats ? ` · пятен краски ${world.splats}` : ''}${mark.flowers ? ` · цветов ${mark.flowers}` : ''}${mark.washed ? ` · вымыто ${mark.washed}` : ''}${mark.antics ? ` · забав ${mark.antics}` : ''}${mark.holes ? ` · проломов ${mark.holes}` : ''}`;
   if (me) me.down = false;
   paintView();
   $('endBest').textContent = news.best ? 'НОВЫЙ РЕКОРД' : `рекорд ${best}`;
@@ -659,10 +729,11 @@ function frame(now) {
     if (stage === 'play' && !frozen) {
       tick(world, dt);
       stepBlooms(world, dt);
+      for (const ev of stepWeather(weather, world, fx, dt, rnd, { x: cam.x, y: cam.y, w: cam.w, h: cam.h })) weatherSays(ev);
       stepDrink(drink, dt);
       if (me?.down) walk(dt);
       if (stepSky(sky, dt, cam.w)) sfx.fly();
-      if (!world.done && !folk.seen) for (const ev of stepFolk(folk, dt, { x0: cam.x, x1: cam.x + cam.w, top: Math.max(top + 6, cam.y + cam.h * 0.45), bottom: cam.y + cam.h * 0.78 }, rnd)) folkSays(ev);
+      if (!world.done && !folk.seen) for (const ev of stepFolk(folk, dt * peopleSpeed(weather), { x0: cam.x, x1: cam.x + cam.w, top: Math.max(top + 6, cam.y + cam.h * 0.45), bottom: cam.y + cam.h * 0.78 }, rnd)) folkSays(ev);
       if (folk.seen && (endIn -= dt) <= 0) finish();
       if (world.done && (endIn -= dt) <= 0) finish();
     }
@@ -673,7 +744,7 @@ function frame(now) {
     if (me?.down) { fx.hand.x = me.x; fx.hand.y = me.y - me.z - 8; fx.focus.tx = me.x; fx.focus.ty = me.y - 6; }
     else { fx.hand.x = cam.x + cam.w / 2; fx.hand.y = world.h + 4; }
     shake = shakeOffset(fx);
-    draw(ctx, buf, world, fx, { filter, mode, seconds: clock, scanY, motion, shake, cam, me,
+    draw(ctx, buf, world, fx, { filter, mode, seconds: clock, scanY, motion, shake, cam, me, weather,
       drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk,
       hideT, land: me?.land ?? 0 });
     paintHud();
@@ -811,7 +882,7 @@ async function share(picture) {
     // Inside the Android app the page has neither a share sheet nor a download of its own: the app is asked.
     const app = window.DvorApp;
     if (picture) {
-      const card = postcard(world, 'ДВОР-8', text.split('\n')[2]);
+      const card = postcard(world, `ДВОР-8 · ${mark.words}`, text.split('\n')[2]);
       if (app?.sharePicture(card.toDataURL('image/png').split(',')[1], `dvor-8-${result.day}.png`, text)) { $('shared').textContent = 'картинка сохранена в галерею: Pictures/DVOR-8'; return; }
       const blob = await new Promise((done) => card.toBlob(done, 'image/png'));
       const file = new File([blob], `dvor-8-${result.day}.png`, { type: 'image/png' });

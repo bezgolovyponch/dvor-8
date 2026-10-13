@@ -8,6 +8,7 @@ import { boxes, SHIP, PLANE, BANNER_H, SHADOW } from './sky.js';
 import { textWidth } from './font.js';
 import { PAINTS, COVER } from './decal.js';
 import { bloomPixels, parcelPixels } from './kind.js';
+import { weatherTable } from './weather.js';
 import { RAMPS, STEPS } from './flat.js';
 
 // A GAME PIXEL IS PX PICTURE PIXELS (view.js). The picture doubled so that a photograph keeps its detail;
@@ -348,8 +349,11 @@ function rail(c, w, h, hideT = 1) {
 
 // scanY: null once the scan is over; before that, everything below it is still the photograph.
 // cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
-export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0 }) {
-  const pal = lookThrough(world.palette, filter, seconds);
+export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0, weather = null }) {
+  // The table the picture is drawn through: the mode's look first, then the weather's. Both are whole-screen
+  // moods and both are table transforms, which is the rule the NES decided for this project (D1) — a filter is
+  // a different table, and so is a sky.
+  const pal = weatherTable(lookThrough(world.palette, filter, seconds), weather);
   const { idx, rubble, photo, sw, paint } = world, W = world.w, H = world.h;
   const w = cam.w, h = cam.h, cx = cam.x, cy = cam.y;
   const d = buf.image.data;
