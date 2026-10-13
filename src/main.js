@@ -275,7 +275,7 @@ function build(rgba, w, h, dets, big = null, drawn = false) {
   return true;
 }
 function begin() {
-  world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env });
+  world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env, structures: yard.st.structures });
   fx = makeFx(world);
   me = null; drink = makeDrink(); queue = [...yard.more]; like = yard.home; grown = mulberry32(daySeed(today));   // today's street
   // The sky is the day's too (D28): the same day's number gives the same yard, the same street and the same
@@ -581,6 +581,18 @@ function disasterSays(ev) {
     // in a wrecked yard, which is not what a hurricane does. Each thing the line reaches takes ONE hit in its own
     // border the first time the front touches it, and a vehicle is ROLLED OVER - water and wind put a car on its
     // roof, and that is the picture everyone has of a street after a storm.
+    // ...AND THE BUILDINGS. A facade is a structure with hit points: the front takes a bite out of its own
+    // border each time it passes, and after enough of them the wall is a ruin rather than a wall. This is the
+    // half of "building destruction" that was in the list and never built - windows popped, walls did not.
+    for (const b2 of world.structures || []) {
+      if (b2.gone) continue;
+      if (ev.x < b2.x - 2 || ev.x > b2.x + b2.w + 2) continue;
+      b2.hits += 1;
+      const at2 = { x: Math.max(b2.x, Math.min(b2.x + b2.w, ev.x)), y: Math.max(b2.y, Math.min(b2.y + b2.h, world.h * (1 - ev.top * 0.5))) };
+      wreckAlong(world, b2, at2, 1.4);
+      if (b2.hits >= b2.hp) { b2.gone = true; pop('СТЕНА ОБРУШИЛАСЬ', b2.cx, b2.cy, 'warn'); world.score += 60; }
+      else pop(`СТЕНА ${b2.hits}/${b2.hp}`, at2.x, at2.y - 4, 'tag');
+    }
     for (const r of world.regions) {
       if (r.gone || r.hurled) continue;
       if (ev.x < r.x - 2 || ev.x > r.x + r.w + 2) continue;

@@ -108,6 +108,7 @@ export function styliseVector(rgba, w, h, opts = {}) {
     surfaces: { what, horizon: 0, skyShare: st.skyShare },
     regions, env: null,
     windows: st.windows || [],
+    structures: st.structures || [],
     outlinePixels: st.linePixels,
     stats: st,
     style: 'vector',

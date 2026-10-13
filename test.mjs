@@ -947,6 +947,39 @@ const TOP = bandTop(w);
     drained === true, 'drain beat present');
 }
 
+// ---- requirement 31: BUILDINGS are structures, and a storm leaves ruins of them -----------------------
+{
+  const { makeWorld, wreckAlong, borderOf } = await import('./src/world.js');
+  const flat7 = await import('./src/flat.js');
+  // a facade plane: a block of wall with a dark window in it, as vector.js hands one over
+  const W7 = 120, H7 = 120;
+  const idx7 = new Uint8Array(W7 * H7);
+  const wallPx = [];
+  for (let y = 20; y < 100; y += 1) for (let x = 10; x < 110; x += 1) { idx7[y * W7 + x] = 18; wallPx.push(y * W7 + x); }
+  const w7 = makeWorld({ w: W7, h: H7, photo: null, idx: idx7, palette: flat7.paletteOf(), regions: [], owner: new Int16Array(W7 * H7).fill(-1), seed: 1,
+    structures: [{ pixels: wallPx, x: 10, y: 20, w: 100, h: 80 }] });
+  check('a building is a STRUCTURE with hit points, not scenery with a special case bolted on',
+    w7.structures.length === 1 && w7.structures[0].hp === 3 && w7.structures[0].area === 100 * 80,
+    `${w7.structures[0].w}x${w7.structures[0].h}, hp ${w7.structures[0].hp}`);
+  const wall = w7.structures[0];
+  const poly7 = borderOf(w7, wall);
+  const hit7 = wreckAlong(w7, wall, { x: 60, y: 60 }, 1.4);
+  wall.hits += 1;
+  check('a storm takes a bite out of the wall IN ITS OWN BORDER: a hole, a torn edge, scraped masonry',
+    poly7.length >= 4 && hit7.torn > 10 && hit7.dented > 100 && !wall.gone,
+    `${hit7.torn} torn, ${hit7.dented} scraped, ${poly7.length} corners`);
+  const voidWall = wall.pixels.filter((p) => w7.rubble[p] === w7.palette.length - 1).length;
+  check('and a wall is never a black hole: the void stays a small part of it',
+    voidWall < wall.area * 0.05, `${voidWall} void of ${wall.area}`);
+  wreckAlong(w7, wall, { x: 40, y: 40 }, 1.4);
+  wreckAlong(w7, wall, { x: 80, y: 80 }, 1.4);
+  wall.hits += 2;
+  if (wall.hits >= wall.hp) wall.gone = true;
+  check('enough of them and the wall is a RUIN: marked gone, and its pixels are still there to be seen',
+    wall.gone === true && wall.pixels.filter((p) => w7.rubble[p] !== 255 || w7.idx[p] !== 18).length > wall.area * 0.2,
+    'ruins remain');
+}
+
 // ---- requirements 28 and 29: the storm rolls the cars and takes the windows with it -------------------
 {
   const { rollOver, wreckAlong, borderOf } = await import('./src/world.js');

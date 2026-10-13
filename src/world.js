@@ -149,7 +149,7 @@ export const NEAR = 14;            // a tap this close to a thing counts as a ta
                                    // (14 picture pixels — the same finger, on a picture that doubled)
 export const DEBRIS_MAX = 220;     // pieces a broken thing throws; more than this is noise, not impact
 
-export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1, env = null }) {
+export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1, env = null, structures = null }) {
   const picture = Uint8Array.from(idx);
   // The outline index is the palette's second-to-last entry. It used to be the OUTLINE constant, which is
   // COLOURS — correct only for the median-cut route's 28-colour table. A flat palette is shorter, so the
@@ -171,6 +171,10 @@ export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1,
     // The surfaces behind the things: which flat region each pixel belongs to, and what it is made of. This is
     // flat.js's own region map handed straight through — the painter already decided the material when it chose
     // the ramp, so nothing here classifies anything.
+    // THE BUILDINGS: facade planes with hit points. A wall is not scenery with a special case bolted on - it is
+    // a structure that takes hits in its own border like everything else, and when it has taken enough of them
+    // what is left is ruins, which is what the card shares.
+    structures: (structures || []).map((q, i) => ({ id: i, kind: 'building', label: 'стена', pixels: Int32Array.from(q.pixels), x: q.x, y: q.y, w: q.w, h: q.h, cx: q.x + q.w / 2, cy: q.y + q.h / 2, area: q.pixels.length, hp: 3, hits: 0, gone: false, seen: true })),
     env: env || null,
     envHits: env ? new Int32Array(env.nr) : null,
     rubble: new Uint8Array(w * h).fill(255),   // what has fallen and stayed, as palette indices

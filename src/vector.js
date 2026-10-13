@@ -923,6 +923,10 @@ export function trace(rgba, w, h, opts = {}) {
   return {
     idx, palette, skyline, skyN, clouds: placed, traced, removed, merged, linePixels, windows: windowsFound,
     planes: facadePlanes.length, objects: objectCount,
+    // THE BUILDINGS THEMSELVES, as structures the game can destroy: the pixels of each facade plane. The window
+    // pass already reads these planes, so a wall and its openings agree about where the wall is; now the storm
+    // can tear the wall as well as pop the windows, and what is left of it is ruins (D8).
+    structures: facadePlanes.slice(0, 24).map((part) => ({ pixels: part.px, x: part.minX, y: part.minY, w: part.maxX - part.minX + 1, h: part.maxY - part.minY + 1 })),
     ms: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0),
     skyShare: skyN / n,
   };

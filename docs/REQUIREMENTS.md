@@ -35,6 +35,7 @@ work, never after.
 | 27 | Mandatory baseline that forces completion | DONE | `tools/baseline-check.mjs`, 22 rows, L3 = pictures |
 | 28 | **Hurricane and tsunami must ROLL THE CARS OVER** | DONE | `world.rollOver`; the front rolls each vehicle once (7596 pixels lifted, measured) |
 | 29 | **Windows and structures must be destroyed by the hurricane/tsunami, leaving ruins to share** | DONE | the front now hits every region in its path once, in the region's own border: windows pop, structures break, vehicles roll; the ruins stay and the card shares them |
+| 31 | **BUILDINGS must be destroyable: the facade structure tears and the windows in it pop, leaving ruins to share** | DONE | `vector.js` hands each facade plane over as a **structure** with pixels and a border; `world.js` gives it 3 hit points; the hurricane front bites its own border each pass (`СТЕНА 1/3` … `СТЕНА ОБРУШИЛАСЬ`); windows inside pop with their own hits; the ruins stay and are what the card shows. Checks: a structure exists with hp 3 and its true area, a bite tears 100+ pixels in its own border, the void stays under 5% of it, and a wall with its hits spent is marked a ruin while its pixels remain |
 | 30 | **Do not stop while a flaw is known** | **RULE** | a known flaw is an open row here; work continues until the row is DONE. Stopping to report is only allowed when a row genuinely needs the creator's decision (licence, money, or a choice between two goods) |
 
 ## The mandatory rule, in the place the creator asked for
@@ -46,3 +47,25 @@ work, never after.
 
 Checked mechanically: `tools/baseline-check.mjs` fails the build while any row marked FIXING/OPEN has no
 artefact, and `docs/REQUIREMENTS.md` is read by the same script so a requirement cannot be quietly dropped.
+
+
+## The logic connection: requirement → mechanism → artefact → check
+
+Every row above is one link in this chain. A requirement with no mechanism is a wish; a mechanism with no
+artefact is a plan; an artefact with no check is a claim.
+
+| requirement | mechanism | artefact | check that proves it |
+|---|---|---|---|
+| 13 environment destructible | damage ladder per pixel | `world.chip`, `ENV_TOUGH` | *every surface has a toughness* |
+| 14 objects destructible, minimal, resembling | the object's own border | `world.borderOf`, `world.wreckAlong` | *a thing has a BORDER, not only a box* · *a wreck is REMAINS, not a hole* |
+| 26 disasters damage in borders | the same path a stone uses | `disaster.wrecks` → `wreckAlong` | *damage is scraped, not deleted* |
+| 28 cars roll over | lift and scrape the car's own pixels | `world.rollOver` | *7596 pixels lifted, once only* |
+| 29 windows/structures fall to the storm | the front hits every region once | `main.js` front handler | *the front takes the window and the structure* |
+| **31 buildings destroyable** | facade planes become structures with hp | `vector.js` `structures`, `world.structures` | *a building is a STRUCTURE with hp* · *a wall is a RUIN, pixels remaining* |
+| 25 info outlines | the thing's own border drawn | `world.infoMark`, renderer | *the info answer draws the border* |
+| 22/23 beasts on screen | — | — | **FAILS on purpose** until drawn |
+| 18 segmentation | — | — | **OPEN**: runtime decision |
+| 3 levels | — | — | **OPEN**: the document |
+
+The four OPEN rows are the whole of what is not built. Everything else in the list has a mechanism, an
+artefact and a check, and the baseline fails if any of the three goes missing.
