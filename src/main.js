@@ -564,6 +564,33 @@ function summonDisaster() {
 function disasterSays(ev) {
   const spec = disaster ? DISASTERS[disaster.kind] : null;
   if (ev.type === 'over') { pop('КОНЕЦ', world.w / 2, world.h * 0.4, 'tag'); disaster = null; return; }
+  if (ev.type === 'siren') { sfx.siren(); note(`${DISASTERS[disaster.kind].ru}: сирена — сейчас придёт`); return; }
+  if (ev.type === 'impact') { fx.flash = 0.7; sfx.thunder(); pop(DISASTERS[disaster.kind].ru, world.w / 2, world.h * 0.25, 'warn'); return; }
+  if (ev.type === 'calm') { note(`${DISASTERS[disaster.kind].ru}: прошло. что сломано — осталось сломанным`); return; }
+  if (ev.type === 'drain') {
+    // the second pass: debris and stains, nothing deleted
+    for (let n = 0; n < 40; n += 1) {
+      const x = Math.floor(rnd() * world.w), y = Math.floor(world.h * (0.72 + rnd() * 0.26));
+      spawn(fx, x, y, { ...PRESETS.paint, rgb: rnd() < 0.5 ? '#cfe9ff' : '#9fd8ff', settle: true }, rnd);
+    }
+    note('вода ушла: осталась грязь, мусор и то, что она забрала');
+    return;
+  }
+  if (ev.type === 'front') {
+    // THE FRONT ITSELF. Every cell the line covers takes one step down the ladder the whole game uses:
+    // intact -> scraped one tone -> torn -> void. High first, ground last, which is what wind does.
+    const x = ev.x, top = Math.floor(world.h * (1 - ev.top * 0.85));
+    for (let y = 0; y < world.h; y += 1) {
+      if (y < top) continue;
+      const p2 = y * world.w + x;
+      if (world.rubble[p2] !== 255) continue;
+      const deep = y > world.h * 0.55;
+      if (rnd() < (deep ? 0.10 : 0.22)) world.rubble[p2] = world.dent[world.idx[p2]] ?? world.palette.length - 1;
+      else if (rnd() < 0.35) world.idx[p2] = world.dent[world.idx[p2]] ?? world.idx[p2];
+    }
+    if (rnd() < 0.25) spawn(fx, x, top, { ...PRESETS.dust, rgb: rnd() < 0.5 ? '#d8cba8' : '#8a7f63' }, rnd);
+    return;
+  }
   if (ev.type === 'gust') {
     fx.shake = Math.max(fx.shake, 1.5);
     spawn(fx, cam.x + rnd() * cam.w, cam.y + cam.h * (0.3 + rnd() * 0.5), { ...PRESETS.dust, rgb: rnd() < 0.5 ? '#d8cba8' : '#8a7f63' }, rnd);

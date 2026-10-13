@@ -916,6 +916,37 @@ const TOP = bandTop(w);
     `${voidN} void (${(100 * voidN / car.pixels.length).toFixed(1)}%), ${hit.dented} scraped`);
 }
 
+// ---- disasters as a FRONT, in three beats (docs/disaster-design.md) ----------------------------------
+{
+  const dis = await import('./src/disaster.js');
+  const w5 = yard();
+  const d = dis.makeDisaster('hurricane', mulberry32(7));
+  check('a disaster starts with a WARNING and damages nothing while the siren sounds',
+    d.phase === 'warn' && dis.stepDisaster(d, w5, 0.5, mulberry32(1)).every((e) => e.type !== 'front'),
+    `phase ${d.phase}`);
+  const seen = [];
+  let firstImpact = -1, firstFront = -1;
+  for (let i = 0; i < 900; i += 1) {
+    for (const ev of dis.stepDisaster(d, w5, 1 / 30, mulberry32(11 + i))) {
+      seen.push(ev.type);
+      if (ev.type === 'impact' && firstImpact < 0) firstImpact = i;
+      if (ev.type === 'front' && firstFront < 0) firstFront = i;
+    }
+  }
+  check('then an IMPACT, and only then a FRONT that sweeps the yard column by column',
+    firstImpact >= 0 && firstFront > firstImpact && seen.filter((t) => t === 'front').length > w5.w * 0.4,
+    `${seen.filter((t) => t === 'front').length} front columns after ${firstFront} frames`);
+  check('and it ends in an AFTERMATH beat rather than by simply stopping',
+    seen.includes('calm') && d.phase === 'aftermath', seen.slice(-3).join(' '));
+  check('the front advances: its position grows and it takes the height as it goes',
+    d.front > 0.9 && d.frontY > 0.5, `front ${d.front.toFixed(2)} at height ${d.frontY.toFixed(2)}`);
+  const ts = dis.makeDisaster('tsunami', mulberry32(3));
+  let drained = false;
+  for (let i = 0; i < 900; i += 1) for (const ev of dis.stepDisaster(ts, w5, 1 / 30, mulberry32(21 + i))) if (ev.type === 'drain') drained = true;
+  check('the tsunami drains in a second, weaker pass that scatters but deletes nothing',
+    drained === true, 'drain beat present');
+}
+
 // ---- the info button: a true fact, random, never the same theme twice ---------------------------------
 {
   const lore = await import('./src/lore.js');

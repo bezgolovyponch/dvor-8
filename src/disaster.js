@@ -30,7 +30,7 @@ export const DISASTERS = {
   hurricane: {
     ru: 'УРАГАН', line: 'ураган: всё, что не приколочено, летит',
     grade: { dark: 0.82, desat: 0.72, tint: [-6, 4, 14], lift: 0, contrast: 1.1 },
-    debris: 30, wind: 2.4, sway: 2.2, points: 40, lasts: 22,
+    debris: 26, wind: 2.4, sway: 2.2, points: 40, lasts: 22, sweep: 0.22,
     why: 'The yard is sandblasted: debris crosses the frame, everything planted bends flat, and the people leave.',
   },
   tsunami: {
@@ -80,8 +80,14 @@ export const ALL = ['hurricane', 'tsunami', 'godzilla', 'beyonce'];
 // So: walk, CHOMP (mouth closes on a car, the car is gone), then CHEW - the head shakes twice, because a mouth
 // that has just taken a whole car has to do something with it - and walk on. `mouth` and `shake` are the state;
 // the renderer reads them and nothing else.
+// THE FRONT. Every disaster is a line that moves through the yard, and the damage happens where the line is -
+// Bomberman's blast wave, which is the one 8-bit mechanic that makes destruction read as an EVENT rather than as
+// a filter. `front` is 0..1 across the frame; `frontY` is the height it has taken so far.
+export const FRONT = { hurricane: 0.42, tsunami: 0.30, stomp: 0.5 };
+
 export const makeDisaster = (kind, rnd = Math.random) => ({
-  kind, t: 0, next: 3.2, phase: 'walk', water: 0, eaten: 0, stomped: 0, beamed: 0, roars: 0,
+  kind, t: 0, next: 3.2, phase: 'warn', water: 0, eaten: 0, stomped: 0, beamed: 0, roars: 0,
+  front: kind === 'hurricane' ? -0.05 : 0, frontY: 0, drained: 0, column: 0,
   mouth: 0, chew: 0, shake: 0,
   // ON SCREEN FROM THE FIRST FRAME. The beast used to start outside the picture (x = -0.2) and walk in at a
   // tenth of the frame per second, so for the first two seconds after summoning there was nothing to look at:
@@ -221,8 +227,31 @@ export function stepDisaster(d, world, dt, rnd) {
   const out = [];
   const bar = (n) => Math.min(1, d.t / n);
 
+  // WARNING → IMPACT → AFTERMATH, the envelope every one of these games uses. The warning is a beat of its own:
+  // nothing is damaged while the siren sounds, which is what makes the impact feel like an arrival.
+  if (d.phase === 'warn') {
+    if (d.t > 1.6) { d.phase = 'impact'; out.push({ type: 'impact' }); }
+    else if (d.t > 0.9) out.push({ type: 'siren' });
+    return out;
+  }
+  if (d.phase === 'aftermath') {
+    if (d.t > spec.lasts + 3) out.push({ type: 'over' });
+    return out;
+  }
+
   if (d.kind === 'hurricane') {
-    if (d.t > 1 && d.t < spec.lasts && rnd() < dt * spec.debris) out.push({ type: 'gust' });
+    // A VERTICAL FRONT SWEEPING SIDEWAYS. The wind takes what is high first and the ground last: the front's
+    // height grows as it crosses, so the first columns lose their branches and signs and the last lose the road.
+    // Bomberman's wave, oriented like weather.
+    d.front += dt * spec.sweep;
+    d.frontY = Math.min(1, d.frontY + dt * spec.sweep * 0.8);
+    while (d.column < Math.floor((d.front + 0.05) * world.w)) {
+      out.push({ type: 'front', x: d.column, top: d.frontY });
+      d.column += 2;                                   // every other column: a front at this scale is 2 px wide
+    }
+    if (rnd() < dt * spec.debris) out.push({ type: 'gust' });
+    if (d.front > 1.1) { d.phase = 'aftermath'; d.t = spec.lasts; out.push({ type: 'calm' }); }
+    return out;
   }
 
   if (d.kind === 'tsunami') {
@@ -238,6 +267,9 @@ export function stepDisaster(d, world, dt, rnd) {
       out.push({ type: 'drown', target: r });
     }
     if (d.water > 0.05 && rnd() < dt * spec.foam) out.push({ type: 'foam', line });
+    // THE DRAIN IS A SECOND, WEAKER PASS: it scatters and stains, it does not delete. Dig Dug carves, Rampart
+    // leaves you the holes to live with; a receding sea that removed things would be a second disaster.
+    if (d.t > spec.lasts * 0.6 && d.water < 0.2 && !d.drained) { d.drained = 1; out.push({ type: 'drain' }); }
   }
 
   const beast = spec.beast;
@@ -292,7 +324,7 @@ export function stepDisaster(d, world, dt, rnd) {
     if (d.phase === 'arrive' && d.t > 1.5) d.phase = 'walk';
   }
 
-  if (d.t > spec.lasts) out.push({ type: 'over' });
+  if (d.t > spec.lasts && d.phase !== 'aftermath') { d.phase = 'aftermath'; out.push({ type: 'calm' }); }
   return out;
 }
 

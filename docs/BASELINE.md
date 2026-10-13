@@ -38,3 +38,17 @@ It is not decoration. In the first two runs it found: the vector route painting 
 (now gated), the beast never being handed to the renderer (invisible Godzilla), an unguarded particle colour
 that threw away a whole frame, and — in its last run — that the suite had **no checks at all** for `vector.js`
 or `enhance.js`, which are now written and pass.
+
+## The disaster event, rebuilt on the pixel-era mechanics (`docs/disaster-design.md`)
+
+| part taken from | where it came from | what it does here |
+|---|---|---|
+| the destruction WAVE | Bomberman (1983) | the hurricane is a vertical front sweeping sideways, damaging the cell it covers and nothing else |
+| damage by pieces | Rampage (1986) | a stomp takes the thing in its own border, not whole |
+| the three-beat envelope | SimCity (1989) | WARNING (siren, the disaster named, nothing damaged) → IMPACT → AFTERMATH (calm announced, holes stay) |
+| the second, weaker pass | Dig Dug (1982) / Rampart (1990) | the tsunami drains as a pass that scatters debris and stains but deletes nothing |
+| the bite cycle | Pac-Man (1980) | Beyoncé's chomp (withdrawn until it renders) |
+
+What the first version got wrong, in those terms: a palette grade is a filter and not an event; dust on a random
+timer has no front and no cells; `gone = true` has no remains beat. All three are fixed in
+`stepDisaster`/`main.js`.
