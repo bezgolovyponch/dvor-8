@@ -28,7 +28,7 @@ The browser harnesses need a served copy. `--experimental-websocket` is required
 
 | File | What it is |
 |---|---|
-| `src/flat.js` | **The style route.** Photograph → Felzenszwalb regions → region-adjacency merge → one flat colour per region from a FIXED ramp palette → drawn outlines → orphan absorption. |
+| `src/flat.js` | **The style route.** Photograph → an ink gate (difference of Gaussians) → Felzenszwalb regions → region-adjacency merge the ink can veto → one ramp and one tone per region from a FIXED palette of six ramps, with a material pattern on rough surfaces only → a line layer decided per pair of regions where the photograph has a border. Every stage, its reason and its measurement: `docs/environment-style.md`. |
 | `src/stylise.js` | The seam: runs `flat.js` and answers what the rest of the game asks a styled picture for — palette index per pixel, region list, material map. |
 | `src/surfaces.js` | SKY or OTHER, and nothing finer. See "what was deleted" below for why it is not a classifier. |
 | `src/frame.js` | Finds windows (dark openings in a brighter wall) and decides where paint sticks. |
