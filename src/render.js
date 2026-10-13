@@ -414,22 +414,32 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     if (b.x > cx + w + 6 || b.x < cx - 6) continue;
     for (const px of bloomPixels(pal, STEPS, b, seconds)) { ctx.fillStyle = css(pal[px.i]); ctx.fillRect(px.x, px.y, 1, 1); }
   }
-  // THE INFO OUTLINE: the thing the player asked about, drawn in its own border while the answer is on screen.
-  const mark = world.infoMark;
-  if (mark && seconds < mark.until && mark.poly && mark.poly.length > 3) {
+  // THE HIGHLIGHT STATES, ported from the v6 screen: pink for the thing being aimed at, cyan for the thing the
+  // info button is describing, and the SELECTED one BLINKS - v6 alternates its edges between cyan and yellow
+  // every eighth frame, and that blink is what makes a selection read as a selection rather than as a border.
+  const drawEdges = (poly, colour) => {
+    if (!poly || poly.length < 3) return;
     ctx.save();
-    ctx.strokeStyle = '#9ff5c8';
+    ctx.strokeStyle = colour;
     ctx.lineWidth = PX;
-    ctx.setLineDash([PX * 2, PX]);
     ctx.beginPath();
-    for (let i = 0; i < mark.poly.length; i += 1) {
-      const [ax, ay] = mark.poly[i], [bx, by] = mark.poly[(i + 1) % mark.poly.length];
-      if (i === 0) ctx.moveTo(ax, ay); else ctx.lineTo(ax, ay);
+    for (let i = 0; i < poly.length; i += 1) {
+      const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
+      if (i === 0) ctx.moveTo(ax, ay);
       ctx.lineTo(bx, by);
     }
+    ctx.closePath();
     ctx.stroke();
     ctx.restore();
+  };
+  const AIM = '#f04f78', INFO = '#30e1b9', SEL = '#f9c22b';
+  if (world.aim && world.aim.poly) drawEdges(world.aim.poly, AIM);
+  const mark = world.infoMark;
+  if (mark && seconds < mark.until) {
+    const blink = Math.floor(seconds * 8) % 2 === 0;
+    drawEdges(mark.poly, blink ? SEL : INFO);
   }
+
   // Corner brackets on everything still standing and in view: what can be hit is never a guess.
   for (const r of world.regions) {
     if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;

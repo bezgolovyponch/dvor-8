@@ -925,6 +925,19 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
+// THE AIM HIGHLIGHT, ported from the v6 screen: v6 outlines the thing under the pointer in pink while aiming
+// and in cyan in info mode, and blinks the SELECTED one yellow. Here the border is traced once per region and
+// kept, because tracing it on every move would cost more than the frame can spare.
+function aimAt(x, y) {
+  if (!world || world.done) return;
+  const t = pick(world, x, y);
+  if (!t) { world.aim = null; return; }
+  world.polyCache = world.polyCache || new Map();
+  let poly = world.polyCache.get(t.id);
+  if (!poly) { poly = borderOf(world, t); world.polyCache.set(t.id, poly); }
+  world.aim = { poly, id: t.id, label: t.label };
+}
+
 // ---- the finger -----------------------------------------------------------------------------------
 const toWorld = (e) => {
   const at = clientToWorld(e.clientX, e.clientY, frameEl.getBoundingClientRect(), motion.angle + (shake.angle || 0),
@@ -978,6 +991,11 @@ function throwAt(at) {
 
 // Where the narrow view is dark, a finger first LOOKS (drag) and then throws (tap): the throw happens on
 // lifting, and only if the finger did not travel. Everywhere else a throw is on touch, with no wait.
+tiltEl.addEventListener('pointermove', (e) => {
+  if (stage !== 'play' || !world || press) return;
+  const at = toWorld(e);
+  aimAt(at.x, at.y);
+}, { passive: true });
 tiltEl.addEventListener('pointerdown', (e) => {
   if (stage !== 'play' || world.done || folk.seen) return;
   e.preventDefault();
@@ -1111,7 +1129,12 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
     btn.setAttribute('aria-pressed', String(infoOn));
     note(infoOn ? 'режим справки: ткни в вещь и узнаешь про неё правду' : 'снова можно бросать');
   });
-  tiltEl.addEventListener('pointerdown', (e) => {
+  tiltEl.addEventListener('pointermove', (e) => {
+  if (stage !== 'play' || !world || press) return;
+  const at = toWorld(e);
+  aimAt(at.x, at.y);
+}, { passive: true });
+tiltEl.addEventListener('pointerdown', (e) => {
     if (!infoOn || stage !== 'play' || !world) return;
     const at = toWorld(e);
     const t = pick(world, at.x, at.y);
