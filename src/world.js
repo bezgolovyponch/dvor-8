@@ -147,6 +147,88 @@ export function rollOver(world, region, by = 4, rnd = Math.random) {
   return { moved, shift };
 }
 
+// ---- L8: A BUILDING IS A STACK OF ITS OWN CELLS --------------------------------------------------------
+//
+// A wall is not one health bar. It is a grid of cells - the storeys and bays the photograph itself shows - and a
+// blow takes cells out of it. When a storey loses its cells, everything ABOVE it comes down with it, which is
+// what a building does: Rampage (1986) built its destruction this way, storey by storey, and the scene analysis
+// this project follows found the same thing from the other end ("each building tappable").
+//
+// The cells come from the facade's own geometry: its window rhythm where there is one, a fixed pitch otherwise.
+export const CELL = 22;
+
+export function cellsOf(world, s) {
+  if (!s.cells) {
+    const cols = Math.max(1, Math.round(s.w / CELL)), rows = Math.max(1, Math.round(s.h / CELL));
+    s.cells = { cols, rows, cw: s.w / cols, ch: s.h / rows, gone: new Set() };
+  }
+  return s.cells;
+}
+
+/** Which cell a point falls in. */
+export function cellAt(s, x, y) {
+  const c = s.cells;
+  const cx = Math.max(0, Math.min(c.cols - 1, Math.floor((x - s.x) / c.cw)));
+  const cy = Math.max(0, Math.min(c.rows - 1, Math.floor((y - s.y) / c.ch)));
+  return { cx, cy };
+}
+
+/**
+ * A blow on a wall: cells come out around the impact, and every storey above a fully-lost one falls too. Returns
+ * the cells that went, and how many of them carried a window (so the caller can throw glass).
+ */
+export function breakCells(world, s, at, strength = 1, rnd = Math.random) {
+  const c = cellsOf(world, s);
+  const hit = cellAt(s, at.x, at.y);
+  const taken = [];
+  const spread = strength >= 2 ? 2 : 1;
+  for (let dx = -spread; dx <= spread; dx += 1) {
+    for (let dy = 0; dy <= spread; dy += 1) {
+      const cx = hit.cx + dx, cy = hit.cy + dy;
+      if (cx < 0 || cy < 0 || cx >= c.cols || cy >= c.rows) continue;
+      const k = cy * c.cols + cx;
+      if (c.gone.has(k)) continue;
+      c.gone.add(k);
+      taken.push({ cx, cy, k });
+    }
+  }
+  // a storey with nothing left brings down everything above it
+  for (let cy = c.rows - 1; cy >= 0; cy -= 1) {
+    let empty = true;
+    for (let cx = 0; cx < c.cols; cx += 1) if (!c.gone.has(cy * c.cols + cx)) { empty = false; break; }
+    if (!empty) continue;
+    for (let up = cy - 1; up >= 0; up -= 1) {
+      for (let cx = 0; cx < c.cols; cx += 1) {
+        const k = up * c.cols + cx;
+        if (c.gone.has(k)) continue;
+        c.gone.add(k);
+        taken.push({ cx, cy: up, k, fell: true });
+      }
+    }
+  }
+  // the pixels of a lost cell become rubble: the wall visibly loses its storeys
+  const voidI = world.palette.length - 1;
+  let windows = 0;
+  for (const t of taken) {
+    const x0 = Math.round(s.x + t.cx * c.cw), x1 = Math.round(s.x + (t.cx + 1) * c.cw);
+    const y0 = Math.round(s.y + t.cy * c.ch), y1 = Math.round(s.y + (t.cy + 1) * c.ch);
+    let hadWindow = false;
+    for (let y = Math.max(0, y0); y < Math.min(world.h, y1); y += 1) {
+      for (let x = Math.max(0, x0); x < Math.min(world.w, x1); x += 1) {
+        const p2 = y * world.w + x;
+        if (world.idx[p2] === voidI) continue;
+        const dark = world.idx[p2] % STEPS === 0 && world.idx[p2] < voidI - 1;
+        if (dark) hadWindow = true;                       // the window's own frame tone: glass was here
+        world.rubble[p2] = rnd() < 0.3 ? voidI : (world.dent[world.idx[p2]] ?? voidI);
+      }
+    }
+    if (hadWindow) windows += 1;
+  }
+  s.gone = true;
+  for (let cy = 0; cy < c.rows; cy += 1) { let any = false; for (let cx = 0; cx < c.cols; cx += 1) if (!c.gone.has(cy * c.cols + cx)) any = true; if (any) s.gone = false; }
+  return { taken, windows };
+}
+
 // ---- THE ENVIRONMENT IS DESTRUCTIBLE TOO ------------------------------------------------------------------
 //
 // Until this, only the things the detector found could be hit: a car, a bench, a window. Everything else in the

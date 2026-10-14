@@ -29,7 +29,7 @@ import { sfx, unlock, setMuted } from './audio.js';
 import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
 import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, antic, WHIMSY, FLOWERS, WASH, HELP } from './kind.js';
 import { STEPS } from './flat.js';
-import { chip, surfaceAt, imprint, borderOf, edgesOf, wreckAlong, rollOver } from './world.js';
+import { chip, surfaceAt, imprint, borderOf, edgesOf, wreckAlong, rollOver, breakCells, cellsOf } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
 import { factFor } from './lore.js';
 import { DISASTERS, ORDER as DISASTER_ORDER, makeDisaster, rollDisaster, stepDisaster, beastPixels, beastAt } from './disaster.js';
@@ -585,6 +585,17 @@ function disasterSays(ev) {
       if (ev.x < b2.x - 2 || ev.x > b2.x + b2.w + 2) continue;
       b2.hits += 1;
       const at2 = { x: Math.max(b2.x, Math.min(b2.x + b2.w, ev.x)), y: Math.max(b2.y, Math.min(b2.y + b2.h, world.h * (1 - ev.top * 0.5))) };
+      // L8 + L9: the blow takes CELLS out of the wall, and a cell that carried a window throws GLASS
+      cellsOf(world, b2);
+      const broke = breakCells(world, b2, at2, 2, rnd);
+      if (broke.windows) {
+        for (let g2 = 0; g2 < 6 + broke.windows * 4; g2 += 1) {
+          spawn(fx, at2.x + (rnd() - 0.5) * 30, at2.y + (rnd() - 0.5) * 20,
+            { ...PRESETS.glass || PRESETS.dust, rgb: rnd() < 0.5 ? '#cfe9ff' : '#9fd8ff' }, rnd);
+        }
+        pop('СТЕКЛО', at2.x, at2.y - 8, 'tag');
+        sfx.glass?.();
+      }
       wreckAlong(world, b2, at2, 1.4);
       if (b2.hits >= b2.hp) { b2.gone = true; pop('СТЕНА ОБРУШИЛАСЬ', b2.cx, b2.cy, 'warn'); world.score += 60; }
       else pop(`СТЕНА ${b2.hits}/${b2.hp}`, at2.x, at2.y - 4, 'tag');

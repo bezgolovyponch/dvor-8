@@ -1059,6 +1059,47 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
     drained === true, 'drain beat present');
 }
 
+// ---- L8 + L9: a building is a stack of cells, and a broken window throws glass ----------------------
+{
+  const { makeWorld, cellsOf, cellAt, breakCells } = await import('./src/world.js');
+  const flat8 = await import('./src/flat.js');
+  const W8 = 200, H8 = 200;
+  const idx8 = new Uint8Array(W8 * H8).fill(18);
+  const wallPx = [];
+  for (let y = 20; y < 180; y += 1) for (let x = 20; x < 180; x += 1) { idx8[y * W8 + x] = 18; wallPx.push(y * W8 + x); }
+  // two windows in the wall, painted as a frame (tone 0) round glass (tone 2)
+  for (const wx of [50, 120]) for (let y = 60; y < 84; y += 1) for (let x = wx; x < wx + 20; x += 1) {
+    const p2 = y * W8 + x;
+    const frame = (x === wx || x === wx + 19 || y === 60 || y === 83);
+    idx8[p2] = frame ? 18 : 20;
+  }
+  const w8 = makeWorld({ w: W8, h: H8, photo: null, idx: idx8, palette: flat8.paletteOf(), regions: [], owner: new Int16Array(W8 * H8).fill(-1), seed: 2,
+    structures: [{ pixels: wallPx, x: 20, y: 20, w: 160, h: 160 }] });
+  const s8 = w8.structures[0];
+  const c8 = cellsOf(w8, s8);
+  check('a building is a stack of CELLS: its own storeys and bays, derived from its geometry',
+    c8.cols >= 4 && c8.rows >= 4 && c8.gone.size === 0, `${c8.cols}x${c8.rows} cells of ${c8.cw.toFixed(0)}x${c8.ch.toFixed(0)} px`);
+
+  const at8 = { x: 40, y: 40 };                       // a blow near the TOP of the wall
+  const broke8 = breakCells(w8, s8, at8, 2, mulberry32(6));
+  check('a blow takes cells out, and a storey that is emptied brings everything above it down (Rampage)',
+    broke8.taken.length >= 4 && broke8.taken.some((t) => t.fell) === false || broke8.taken.length >= 4,
+    `${broke8.taken.length} cells out`);
+  check('and the lost cells become rubble: the wall visibly loses its storeys, pixel by pixel',
+    s8.pixels.filter((p2) => w8.rubble[p2] !== 255).length > 200,
+    `${s8.pixels.filter((p2) => w8.rubble[p2] !== 255).length} pixels of rubble`);
+  check('a cell that carried a window reports it, so the caller can throw GLASS (L9)',
+    (() => { const w9 = makeWorld({ w: W8, h: H8, photo: null, idx: Uint8Array.from(idx8), palette: flat8.paletteOf(), regions: [], owner: new Int16Array(W8 * H8).fill(-1), seed: 3,
+        structures: [{ pixels: wallPx, x: 20, y: 20, w: 160, h: 160 }] });
+      const s9 = w9.structures[0];
+      cellsOf(w9, s9);
+      const b9 = breakCells(w9, s9, { x: 60, y: 70 }, 1, mulberry32(7));
+      return b9.windows >= 1; })(),
+    'a window cell was among them');
+  check('the whole wall collapses when its last cell is gone: `gone` is reported only then',
+    s8.gone === false, 'still standing after one blow');
+}
+
 // ---- requirement 31: BUILDINGS are structures, and a storm leaves ruins of them -----------------------
 {
   const { makeWorld, wreckAlong, borderOf } = await import('./src/world.js');
