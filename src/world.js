@@ -410,6 +410,10 @@ export function chip(world, x, y, damage = 1, rnd = Math.random) {
 
 // One impact on one thing. Returns what happened and the pieces that came off, for the effects to throw.
 export function strike(world, region, x, y, { damage = 1, combo = 2.5 } = {}) {
+  // DESTROYABLE KINDS, FROM docs/MECHANICS.md: buildings, cars, and windows - and nothing else. Windows break
+  // without ever being outlined; the yard's trees, bins, road and people are not targets at all.
+  // the decision lives in src/criteria/DestructionRule.js, named after the requirement
+  if (!mayBeDestroyed(region)) return null;
   if (!region || region.gone) return null;
   const rnd = mulberry32(world.seed + (world.strikes += 1) * 7919);
   const { w, idx, owner, scorch } = world;

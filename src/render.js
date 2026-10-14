@@ -477,8 +477,15 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   // photographed and called bullshit - a rectangle round a car says "a car might be in here", while an outline
   // says "THIS is the car". Every visible thing now draws its own silhouette: the pixels where a neighbour is not
   // part of it (world.edgesOf), cached per region because the shape does not change while the yard stands.
+  // OUTLINED KINDS, FROM docs/MECHANICS.md: BUILDINGS AND CARS, AND NOTHING ELSE. This loop used to outline every
+  // visible region, so a frame with twenty targets read as twenty rings - and windows were outlined too, doubling
+  // them on every facade. The creator's rule: buildings and cars get the outline; windows are destroyable but not
+  // outlined; trees, ground, people and street furniture get nothing.
+  // the decision lives in src/criteria/OutlineRule.js, named after the requirement
+
   for (const r of world.regions) {
     if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;
+    if (!mayBeOutlined(r)) continue;
     // OUTLINES ARE FOR THINGS, NOT FOR PLANES (R12). The trace of a large, noisy region is thousands of scattered
     // pixels, and drawing every one of them crosshatched whole buildings. Above a share of the frame the outline
     // is skipped; the plane is drawn by the painter instead.

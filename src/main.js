@@ -152,6 +152,10 @@ function pop(text, x, y, kind = '') {
 }
 function banner(text, hold = false) {
   const el = $('banner');
+  // AN EMPTY BANNER IS A HIDDEN BANNER. The detector's tile counter was written here and never taken away, so
+  // "ИЩУ ВЕЩИ 14/14" stayed over the yard for the whole session: it is a progress readout, not a status.
+  if (!text) { el.textContent = ''; el.classList.remove('show', 'hold'); el.style.display = 'none'; return; }
+  el.style.display = '';
   el.textContent = text;
   el.classList.remove('show', 'hold');
   void el.offsetWidth;   // restart the animation
@@ -494,6 +498,7 @@ async function fromFile(file) {
   // the yard for the whole session - the creator asked twice where it came from. 14 is not a target count: it is how
   // many tiles this photograph needs for the detector, and it means nothing once the tiles are done.
   $('banner').textContent = '';
+  $('banner').style.display = 'none';   // the tile counter is not a status line for the session
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   const names = found.kept.map((d) => TARGETS[d.label].ru);
   if (build(rgba, w, h, found.kept, big)) {
