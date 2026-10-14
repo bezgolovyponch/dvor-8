@@ -467,6 +467,10 @@ async function fromFile(file) {
   note('ищу настоящие вещи на снимке — всё на телефоне, снимок никуда не уходит');
   const t0 = performance.now();
   const found = await detectAll(large, (done, total) => { $('banner').textContent = `ИЩУ ВЕЩИ ${done}/${total}`; });
+  // THE BANNER IS CLEARED THE MOMENT THE SEARCH ENDS. It was set here and never unset, so "ИЩУ ВЕЩИ 14/14" sat over
+  // the yard for the whole session - the creator asked twice where it came from. 14 is not a target count: it is how
+  // many tiles this photograph needs for the detector, and it means nothing once the tiles are done.
+  $('banner').textContent = '';
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   const names = found.kept.map((d) => TARGETS[d.label].ru);
   if (build(rgba, w, h, found.kept, big)) {
@@ -483,6 +487,11 @@ async function addPhoto(file) {
   const { w, h } = yard, shot = await decode(file, [w, h]);
   note('ищу вещи на новом снимке…');
   const found = await detectAll(shot.large, (done, total) => note(`ищу вещи на новом снимке ${done}/${total}`));
+  // THE TILE COUNTER IS NOT A STATUS LINE. "ищу вещи 14/14" sat over the yard for the whole session because nothing
+  // ever cleared it: 14 is simply how many tiles this photograph needs, and it stayed on screen after the search it
+  // describes had finished. The note is cleared the moment the search returns.
+  note('');
+  note('');   // THE SEARCH LINE IS CLEARED WHEN THE SEARCH ENDS. It sat over the yard for ever
   const st = styliseVector(shot.rgba, w, h, { marks: found.kept, fundamentals: true }), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
   yard.more.push(next);
   if (world) queue.push(next);

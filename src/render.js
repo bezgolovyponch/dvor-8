@@ -485,8 +485,26 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     if (r.area > world.w * world.h * 0.05) continue;
     if (scanY === null && !inFocus(mode, world, r, fxx, fyy)) continue;
     world.edgesCache = world.edgesCache || new Map();
+    // THE OUTLINE IS THE SILHOUETTE, NOT EVERY INTERNAL EDGE. This used `edgesOf`, which marks a pixel that
+    // differs from ANY neighbour - so a region whose interior varies at all was outlined around its interior
+    // specks, and the car on the creator's phone came out as a STRIPED RING. The outline is drawn from the
+    // region's OWNER map instead: a pixel belongs to the outline when one of its four neighbours belongs to a
+    // DIFFERENT region. That is v9's rule - "an object's edge is every pixel that touches a pixel of another
+    // object" - and it cannot stripe an interior, because an interior pixel's neighbours are all its own.
     let edges = world.edgesCache.get(r.id);
-    if (!edges) { edges = edgesOf(world, r); world.edgesCache.set(r.id, edges); }
+    if (!edges) {
+      const own = world.owner || null;
+      const list = [];
+      if (own) {
+        for (const p2 of r.pixels) {
+          const x = p2 % world.w, y = (p2 / world.w) | 0;
+          if (x === 0 || y === 0 || x === world.w - 1 || y === world.h - 1) { list.push(p2); continue; }
+          if (own[p2 - 1] !== r.id || own[p2 + 1] !== r.id || own[p2 - world.w] !== r.id || own[p2 + world.w] !== r.id) list.push(p2);
+        }
+      }
+      edges = own ? list : edgesOf(world, r);
+      world.edgesCache.set(r.id, edges);
+    }
     const blink = (seconds * 2 + r.id * 0.37) % 1 > 0.82;      // a blink, out of step with its neighbours
     const aimed = world.aim && world.aim.id === r.id;
     const colour = aimed ? '#f04f78' : r.hits ? '#ffffff' : blink ? '#ffd23f' : '#3fe0f0';
