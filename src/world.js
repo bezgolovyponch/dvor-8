@@ -192,18 +192,19 @@ export function breakCells(world, s, at, strength = 1, rnd = Math.random) {
       taken.push({ cx, cy, k });
     }
   }
-  // a storey with nothing left brings down everything above it
+  // EVERY CHUNK KNOWS WHAT HOLDS IT UP (v9's L5, and Rampage's rule): a cell whose support - the cell directly
+  // below it - is gone FALLS, and it takes whatever is above it with it. A lost storey used to bring everything
+  // above it down only when the whole row was empty; now the collapse runs column by column, which is what a
+  // building does when its base is knocked out.
   for (let cy = c.rows - 1; cy >= 0; cy -= 1) {
-    let empty = true;
-    for (let cx = 0; cx < c.cols; cx += 1) if (!c.gone.has(cy * c.cols + cx)) { empty = false; break; }
-    if (!empty) continue;
-    for (let up = cy - 1; up >= 0; up -= 1) {
-      for (let cx = 0; cx < c.cols; cx += 1) {
-        const k = up * c.cols + cx;
-        if (c.gone.has(k)) continue;
-        c.gone.add(k);
-        taken.push({ cx, cy: up, k, fell: true });
-      }
+    for (let cx = 0; cx < c.cols; cx += 1) {
+      const k = cy * c.cols + cx;
+      if (c.gone.has(k)) continue;
+      const below = (cy + 1) * c.cols + cx;
+      if (cy === c.rows - 1) continue;                 // the ground storey rests on the ground
+      if (!c.gone.has(below)) continue;
+      c.gone.add(k);
+      taken.push({ cx, cy, k, fell: true });
     }
   }
   // the pixels of a lost cell become rubble: the wall visibly loses its storeys

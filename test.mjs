@@ -1059,6 +1059,35 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
     drained === true, 'drain beat present');
 }
 
+// ---- v9's L5: every chunk knows what holds it up -----------------------------------------------------
+{
+  const { makeWorld, cellsOf, breakCells } = await import('./src/world.js');
+  const flatB = await import('./src/flat.js');
+  const W10 = 120, H10 = 160;
+  const idx10 = new Uint8Array(W10 * H10).fill(18);
+  const px10 = [];
+  for (let y = 10; y < 150; y += 1) for (let x = 10; x < 110; x += 1) { idx10[y * W10 + x] = 18; px10.push(y * W10 + x); }
+  const w10 = makeWorld({ w: W10, h: H10, photo: null, idx: idx10, palette: flatB.paletteOf(), regions: [], owner: new Int16Array(W10 * H10).fill(-1), seed: 5,
+    structures: [{ pixels: px10, x: 10, y: 10, w: 100, h: 140 }] });
+  const s10 = w10.structures[0];
+  const c10 = cellsOf(w10, s10);
+  // knock the BOTTOM cell of one column out and nothing else
+  const bottom = (c10.rows - 1) * c10.cols;
+  c10.gone.add(bottom);
+  const after = breakCells(w10, s10, { x: s10.x + 1, y: s10.y + s10.h - 1 }, 0, mulberry32(4));
+  const fellInColumn = [...c10.gone].filter((k) => k % c10.cols === 0).length;
+  check('a chunk whose support is gone FALLS: knocking out a base cell brings the column above it down',
+    fellInColumn >= 2, `${fellInColumn} cells of that column are gone`);
+  // THE PROPERTY, stated correctly: the cascade is VERTICAL. A column whose base is knocked out collapses, so the
+  // two columns the blow touched lose the cells above it - and NOTHING ELSE ON THE WALL MOVES. The first version
+  // of this check demanded that the neighbouring column keep its cells, which is exactly what a building must NOT
+  // do: knock out a base and the wall above it comes down.
+  const cols = new Set([...c10.gone].map((k) => k % c10.cols));
+  check('the collapse is VERTICAL and contained: only the columns the blow touched lose anything',
+    [...cols].every((cx) => cx <= 1) && [...c10.gone].length >= 6,
+    `${c10.gone.size} cells gone, in columns ${[...cols].join(',')}`);
+}
+
 // ---- R15 + row 57: no invented content, and the photograph's own aspect -------------------------------
 {
   const { trace } = await import('./src/vector.js');
