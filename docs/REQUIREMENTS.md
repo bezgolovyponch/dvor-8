@@ -152,6 +152,7 @@ requirement: a requirement says what to build, a restriction says what is forbid
 | R13 | Reporting a fix with no picture and no number, or attempting a fix whose cause is not named in `docs/FAILS.md` | ten failures, four of them the same fault returning |
 | **R14** | **Inventing the environment's layout: merging, flattening or moving what the photograph put there** (the road was flattened into three tones, which moved its own markings) | the creator: *"the road have to stay exactly how its on photo, just pixelated"*; the plan is `docs/PLAN.md` |
 | **R15** | **Treating the reference as authoritative about CONTENT.** The v6 screen is the standard for STYLE — palette discipline, window sprites, one-pixel outlines, the car template, the aspect handling, the interaction — and it is WRONG about content: it drew trees where the photograph has none. A reference may be copied for how it draws, never for what it draws. | the creator: *"the rest of the screen was wrong, there were trees that aren't there"* |
+| **R16** | **Drawing a sprite at a size the thing it represents cannot have** (a window as big as a building became a black slab) | the creator's screenshot: a black block with speckles |
 | R9 | Inventing a mechanic when a working reference exists | v6's path (grid → fills + edges → outline → highlight states → tooltip) was the answer for four rounds while I built alternatives |
 
 **The validation loop that goes with them**, run before ANY report, in this order:

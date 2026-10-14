@@ -684,6 +684,12 @@ export function trace(rgba, w, h, opts = {}) {
       cols.set(Math.round(q.cx / 12), (cols.get(Math.round(q.cx / 12)) || 0) + 1);
     }
     let kept = windowsFound.filter((q) => q.sample || rows.get(Math.round(q.cy / 12)) >= WIN.group || cols.get(Math.round(q.cx / 12)) >= WIN.group);
+    // F11: A WINDOW IS SMALL. The rhythm reader could return a rectangle the size of a whole building - the
+    // creator photographed it as a black block with speckles, because a window sprite is a dark frame round dark
+    // glass, and at building size that is a black slab. A window is clamped to what a window can be: under 15% of
+    // the frame in either direction, and under 4% of its area. Anything larger is not a window but a plane, and
+    // planes are painted by the facade pass.
+    kept = kept.filter((q) => q.w < w * 0.15 && q.h < h * 0.15 && (q.w * q.h) / (w * h) < 0.04);
     // ...and if a picture has no facade to line up (a courtyard seen from above, a street at an angle), keep the
     // unambiguous ones rather than nothing: a very rectangular, clearly darker opening is a window anywhere.
     if (!kept.length) kept = windowsFound.filter((q) => q.fill >= 0.72 && q.drop >= 30);

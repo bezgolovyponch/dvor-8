@@ -19,6 +19,8 @@ create the restriction that will not allow you to go in circles.* This is that f
 | F9 | crosshatched outlines over whole buildings | `edgesOf` on a big noisy region returns thousands of scattered edge pixels, and every one was drawn | outlines are drawn for things, not for planes (this commit) | **R12** |
 | F10 | the same failure returning a fourth time | each fix was applied to the wrong layer, patched, and reported as a fix | the dependency chain below, and the loop rule | **R13** |
 
+| F11 | a **black block with speckles** over a building | the facade-rhythm window finder returned a rectangle the size of a building, and a window sprite is a dark frame round dark glass - at building size that is a slab | a window is clamped: under 15% of the frame in either direction and under 4% of its area; anything larger is a plane, and planes are painted by the facade pass | **R16** |
+
 ## The restriction that stops the circles
 
 > **R13 — NO FIX IS REPORTED WITHOUT ITS PICTURE AND ITS NUMBER, AND NO FIX IS ATTEMPTED BEFORE ITS CAUSE IS
