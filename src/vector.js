@@ -24,6 +24,7 @@
 //   stray single pixels, specks under 4 px, same-colour blobs per 1000 px, and jagged border share.
 
 import { RAMPS, STEPS, paletteOf } from './flat.js';
+import { makeScene, render as renderScene, census } from './scene.js';
 import { enhance, straightness } from './enhance.js';
 
 const clamp255 = (v) => (v < 0 ? 0 : v > 255 ? 255 : v | 0);
@@ -1447,6 +1448,45 @@ export function trace(rgba, w, h, opts = {}) {
       masses += 1;
     }
     if (masses) sky.__foliage = masses;
+  }
+
+  // ---- THE SCENE, PAINTED IN ITS OWN ORDER ------------------------------------------------------------
+  //
+  // The pieces this pipeline computed one after another - the sky mask, the foliage masses - are handed to the scene
+  // and painted by it, in the fixed order the module documents, instead of at points scattered through the trace.
+  // The remaining kinds (ground, walls, objects) still travel their old paths and are marked as such: this is the
+  // architecture taking over one kind at a time, not a rewrite that breaks the picture to prove a point.
+  {
+    const scene = makeScene(w, h);
+    scene.sky = { mask: sky, tone: designedSky };
+    const FOLC = 2;
+    const mask = new Uint8Array(n);
+    for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === FOLC && !sky[p2]) mask[p2] = 1;
+    const { parts } = components(w, h, (p2) => mask[p2]);
+    for (const part of parts) {
+      if (part.area < 14) continue;
+      let r0 = 0, g0 = 0, b0 = 0;
+      const lums = [];
+      for (const p2 of part.px) { r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2]; lums.push(en.smooth[p2]); }
+      const n0 = part.px.length;
+      const family = Math.floor(entryFor(palette, r0 / n0, g0 / n0, b0 / n0) / STEPS);
+      const toneOf = (t) => family * STEPS + Math.max(0, Math.min(STEPS - 1, t));
+      const sorted = lums.slice().sort((x, y) => x - y);
+      const t1 = sorted[Math.floor(sorted.length / 3)], t2 = sorted[Math.floor((sorted.length * 2) / 3)];
+      scene.foliage.push({ px: part.px, lums, t1, t2, tones: [toneOf(1), toneOf(2), toneOf(4)] });
+    }
+    const painted = renderScene(scene, idx, {
+      paintSky: (sc, out) => { for (let p2 = 0; p2 < n; p2 += 1) if (sc.sky.mask[p2]) out[p2] = sc.sky.tone; },
+      paintFoliage: (sc, out, mass) => {
+        for (let i2 = 0; i2 < mass.px.length; i2 += 1) {
+          const p2 = mass.px[i2];
+          if (windowsPx.has(p2)) continue;
+          out[p2] = mass.lums[i2] > mass.t2 ? mass.tones[2] : mass.lums[i2] > mass.t1 ? mass.tones[1] : mass.tones[0];
+        }
+      },
+    });
+    sky.__scene = census(scene);
+    void painted;
   }
 
   return {

@@ -119,3 +119,19 @@ it with a thumb: the stick and the buttons have only been driven by a script. Wh
 more of the player's street. Whether anything here brings a player back. How long the search takes on a phone.
 Whether the detector loads on an older phone. What it finds in *your* yard: from a high balcony, cars are
 small, and the slicing is there for that, but it has only been tried on street-level photographs.
+
+### src/scene.js — the picture as parts, and the order they are drawn in
+
+**Why it exists.** For the whole of this project the frame was built by passes writing into one pixel buffer: a shape
+pass, a sky pass, a wall pass, a foliage pass, outlines — each able to undo what the one before it did. Ten delivery
+lines could pass while the screen stayed a posterised photograph, because the picture was never a thing; it was the
+residue of an order of operations. A scene holds the picture **as parts** — ground, sky, walls, foliage, objects —
+each carrying the method it must be drawn by, and `render()` walks them in one fixed order and no other:
+`ground` (the photograph's own layout, pixelated, never redrawn) → `sky` (designed plane) → `walls` (designed plane
+plus drawn window sprites) → `foliage` (drawn masses) → `objects` (their own pixels, cut out, one silhouette
+outline). A kind whose source is the photograph may not be smoothed; a kind whose source is the design may not keep
+the photograph's pixels. `census()` lets a check ask **what the picture is made of** rather than only how flat it is.
+
+**Needs:** `src/flat.js` for the palette and the tone steps; `src/vector.js` fills it from the masks that pipeline
+already computes, and paints the sky and the foliage through it — one kind at a time, so the architecture takes over
+without breaking the picture to prove a point.
