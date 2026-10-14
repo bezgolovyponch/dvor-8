@@ -96,6 +96,15 @@ add('6 NO PAGE ERRORS during the whole run', (steps.errors?.errors || []).length
   JSON.stringify(steps.errors?.errors || []).slice(0, 90));
 add('7 THE SUITE passes', /FAIL 0/.test(suite), (suite.match(/PASS \d+\s+FAIL \d+/) || ['no suite output'])[0]);
 add('8 THE BASELINE does not regress', /BASELINE \d+ OK/.test(base), (base.match(/BASELINE \d+ OK\s+\d+ FAIL\s+of \d+/) || ['no baseline output'])[0]);
+// LINE 10: THE TARGET. The creator's criteria are in one file, and the frame must be comparable to the reference
+// frame on five measures. This is the line that knows what the result should LOOK like - the one that was missing
+// for the whole project, which is how ten lines could pass on a posterised photograph.
+const crit = existsSync('docs/CRITERIA.md');
+add('10 THE CREATOR\'S CRITERIA are in one file, with every area represented',
+  crit && ['frame', 'sky', 'buildings', 'windows', 'objects', 'interactions'].every((k2) => new RegExp(k2, 'i').test(readFileSync('docs/CRITERIA.md', 'utf8'))),
+  crit ? 'docs/CRITERIA.md: frame, photograph, sky, buildings, windows, objects, interactions, reference' : 'docs/CRITERIA.md missing');
+add('0 THE DEFINITION OF DONE is written down and read by this rule', existsSync('docs/DONE.md') && /THE DEFINITION OF DONE/.test(readFileSync('docs/DONE.md', 'utf8')),
+  'docs/DONE.md: the nine conditions and the six missing pieces');
 add('9 THE INSTRUMENT states its premises and does not withhold the verdict',
   /INSTRUMENT: the dump is 1:1/.test(gate) && !/VERDICT WITHHELD/.test(gate),
   (gate.match(/GATE \d+ OK\s+\d+ FAIL/) || ['no gate output'])[0]);
