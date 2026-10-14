@@ -1000,6 +1000,28 @@ export function trace(rgba, w, h, opts = {}) {
     if (roads) sky.__roads = roads;
   }
 
+  // ---- 5g. VEGETATION IS PAINTED LAST, IN ITS OWN RAMP ----------------------------------------------
+  //
+  // The fidelity check found the photograph's green being LOST: a fixture with a green mass produced zero
+  // pixels in the foliage ramp, and the histogram of that render showed the green landing in the stone and sky
+  // ramps instead. The cause is order: the road pass claims everything below the horizon and paints it in the
+  // road's family, so a green mass standing in that band was overpainted. Vegetation is now laid down AFTER
+  // every surface pass, in the foliage ramp, its own luma choosing the tone - so the photograph's trees and
+  // bushes survive whatever the surfaces did, and nothing green is invented (only pixels the photograph itself
+  // classed as foliage are touched).
+  {
+    const FOLIAGE_RAMP = Math.max(0, RAMPS.findIndex((R) => R.name === 'foliage'));
+    let painted = 0;
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      if (cls[p2] !== 2) continue;                    // the photograph's own green, and nothing else
+      const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+      const tone = Math.max(0, Math.min(STEPS - 1, Math.round(((L - 30) / 120) * (STEPS - 1))));
+      idx[p2] = FOLIAGE_RAMP * STEPS + tone;
+      painted += 1;
+    }
+    if (painted) sky.__veg = painted;
+  }
+
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------
   const cloudColour = entryFor(palette, 246, 246, 250);
   const cloudShade = entryFor(palette, 196, 202, 214);
