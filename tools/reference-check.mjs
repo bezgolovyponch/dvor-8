@@ -32,6 +32,46 @@ function loadJSON(path) {
 }
 
 // THE ART GRID IS FOUND, NOT ASSUMED: the pitch whose reduction has the fewest strays is the grid the art was drawn on.
+function medianOfBlock(img, x0, y0, p, size) {
+  const rs = [], gs = [], bs = [];
+  for (let dy = 0; dy < p; dy += 1) for (let dx = 0; dx < p; dx += 1) {
+    const c = img.px(x0 + dx, y0 + dy);
+    rs.push(c[0]); gs.push(c[1]); bs.push(c[2]);
+  }
+  const mid = (a) => a.sort((u, v) => u - v)[a.length >> 1];
+  return [mid(rs), mid(gs), mid(bs)];
+}
+
+/** The art frame inside a screenshot: the crop with the FEWEST distinct colours after a median reduction. */
+function findArt(img) {
+  let best = null;
+  for (const m of [0.02, 0.04, 0.06, 0.09, 0.12]) {
+    for (const p of [3, 4, 5, 6]) {
+      const x0 = Math.floor(img.w * m), y0 = Math.floor(img.h * m);
+      const w2 = Math.floor((img.w - 2 * x0) / p), h2 = Math.floor((img.h - 2 * y0) / p);
+      if (w2 < 64 || h2 < 64) continue;
+      // ART IS FLAT *AND* STRUCTURED. Scoring by "fewest colours" chose the black page background - a solid field,
+      // which is the one thing art never is. The score is the FLAT SHARE of the reduction, and a candidate must
+      // carry real structure: at least 6 distinct colours and no single colour owning more than 80% of it.
+      const grid = [];
+      for (let y = 0; y < h2; y += 1) for (let x = 0; x < w2; x += 1) grid.push(medianOfBlock(img, x0 + x * p, y0 + y * p, p).join(','));
+      const cols = new Map();
+      for (const k of grid) cols.set(k, (cols.get(k) || 0) + 1);
+      const top = Math.max(...cols.values()) / grid.length;
+      if (cols.size < 6 || top > 0.8) continue;
+      let flat = 0, tot = 0;
+      for (let y = 0; y < h2 - 1; y += 1) for (let x = 0; x < w2 - 1; x += 1) {
+        const k = grid[y * w2 + x];
+        tot += 1;
+        if (k === grid[y * w2 + x + 1] && k === grid[(y + 1) * w2 + x]) flat += 1;
+      }
+      const score = flat / Math.max(1, tot);
+      if (!best || score > best.score) best = { score, m, p, x0, y0, w: w2, h: h2 };
+    }
+  }
+  return best;
+}
+
 function artGrid(img, trim = 0.0) {
   const x0 = Math.floor(img.w * trim), y0 = Math.floor(img.h * trim);
   const w0 = img.w - 2 * x0, h0 = img.h - 2 * y0;
@@ -85,7 +125,16 @@ if (!existsSync(minePath) || !existsSync(refPath)) { console.log('need: <mine-ca
 const refBmp = '/tmp/ref-target.bmp';
 run('sips', ['-s', 'format', 'bmp', refPath, '--out', refBmp]);
 const mine = measure(loadJSON(minePath));
-const ref = measure(artGrid(loadBMP(refBmp), 0.06));      // the phone frame sits inside the screenshot's margins
+// THE REFERENCE IS MEASURED THROUGH ITS OWN ART FRAME, FOUND AND MEDIAN-SAMPLED. A screenshot cannot be compared
+// pixel by pixel - it carries resampling and compression - so each art cell is the MEDIAN of its block and the frame
+// is the crop with the fewest distinct colours, which is what art is.
+const refImg = loadBMP(refBmp);
+const found = findArt(refImg);
+const ref = measure({
+  w: found.w, h: found.h, pitch: found.p,
+  px: (x, y) => medianOfBlock(refImg, found.x0 + x * found.p, found.y0 + y * found.p, found.p),
+});
+console.log(`reference frame found: margin ${(100 * found.m).toFixed(0)}% · pitch ${found.p} · ${found.w}x${found.h} · ${found.score} sampled colours`);
 
 const TOL = { colours: 2.5, flat: 0.18, strays: 0.05, largest: 0.15, skyShare: 0.25 };
 const rows = [

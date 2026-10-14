@@ -463,12 +463,12 @@ async function decode(file, size = null) {
   // picture is now drawn at 5x the game grid and REDUCED BY A BOX AVERAGE: five by five source pixels become one
   // game pixel, at the same position, exactly as the criteria say. It is the same box average the flat route
   // already uses internally (flat.js boxDown), so the two paths agree on what a game pixel is.
-  const GAME = 5;
+  const GAME = BLOCK;                                 // the block is the rule's, not a number written here
   const small = (() => {
     const big5 = fit(w * GAME, h * GAME);
     const g5 = big5.getContext('2d');
     const src = g5.getImageData(0, 0, w * GAME, h * GAME);
-    const down = boxDown(src.data, w * GAME, h * GAME, w, h, 4);
+    const down = photoLayer(boxDown, src.data, w * GAME, h * GAME, w, h);   // src/criteria/RoadRule.js
     const out = document.createElement('canvas');
     out.width = w; out.height = h;
     const octx = out.getContext('2d');

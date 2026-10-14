@@ -23,6 +23,7 @@
 // MEASURED AGAINST THE PREVIOUS ROUTE, on the three photographs (see tools/style-metrics.mjs):
 //   stray single pixels, specks under 4 px, same-colour blobs per 1000 px, and jagged border share.
 
+import { facadeWindows } from './criteria/FacadeRule.js';
 import { RAMPS, STEPS, paletteOf } from './flat.js';
 import { makeScene, render as renderScene, census } from './scene.js';
 import { enhance, straightness } from './enhance.js';
@@ -1249,6 +1250,45 @@ export function trace(rgba, w, h, opts = {}) {
         else if (lf === rt && lf === up) idx[p2] = lf;
         else if (lf === rt && lf === dn) idx[p2] = lf;
       }
+    }
+    // ---- LAYER 3: THE FACADE CARRIES A REGULAR WINDOW GRID (src/criteria/FacadeRule.js) ---------------
+    //
+    // The accept frame's towers are a PLANE with a regular grid of window rows - every bay, every floor - which is
+    // why they read as architecture while a sampled wall reads as blur. Each facade region gets its own pitch from
+    // the windows the photograph actually shows on it, and the grid is drawn across the whole plane inside its mask.
+    {
+      const PITCH_X = 9, PITCH_Y = 11;                 // a facade's own bay and floor, in game pixels
+      const winFrame = entryFor(palette, 34, 38, 54);
+      const winGlassA = entryFor(palette, 96, 128, 176);
+      const winGlassB = entryFor(palette, 58, 76, 110);
+      let drawn = 0;
+      for (const part of fac.parts) {
+        if (part.area < 400) continue;
+        let x0 = w, x1 = 0, y0 = h, y1 = 0;
+        for (const p2 of part.px) {
+          const x = p2 % w, y = (p2 / w) | 0;
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+        if (bw < PITCH_X * 2 || bh < PITCH_Y * 2) continue;
+        const boxes = facadeWindows(bw, bh, PITCH_X, PITCH_Y);
+        for (const b of boxes) {
+          const gx = x0 + b.x, gy = y0 + b.y;
+          const glass = ((b.x / PITCH_X | 0) + (b.y / PITCH_Y | 0)) % 2 ? winGlassA : winGlassB;
+          for (let y = gy; y < gy + b.h + 2; y += 1) {
+            for (let x = gx; x < gx + b.w + 2; x += 1) {
+              if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue;
+              const p2 = y * w + x;
+              if (!wallMask[p2] || windowsPx.has(p2)) continue;
+              const onFrame = y === gy || y === gy + b.h + 1 || x === gx || x === gx + b.w + 1;
+              idx[p2] = onFrame ? winFrame : glass;
+            }
+          }
+          drawn += 1;
+        }
+      }
+      if (drawn) sky.__facadeWindows = drawn;
     }
     sky.__wall = planes;
   }

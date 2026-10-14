@@ -30,7 +30,8 @@ const REGISTRY = {
   F3: () => /stray|cleaned/i.test(readFileSync('src/vector.js', 'utf8')) && Number((gate().match(/stray[^\n]*?(\d+\.\d)%/) || [])[1] || 99) < 3,
   F4: () => /sky/i.test(gate()),
   P1: () => /PHOTOGRAPH decides the road/.test(gate()),
-  P2: null,                                    // implemented in main.js; no independent predicate yet
+  P2: () => require('node:fs').readFileSync('src/criteria/RoadRule.js', 'utf8').includes('BLOCK = 5')
+    && require('node:fs').readFileSync('src/main.js', 'utf8').includes('photoLayer'),
   P3: () => /owner map/.test(readFileSync('src/render.js', 'utf8')),
   S1: () => /SKY \(DESIGNED\)/.test(delivery()),
   B1: () => Number((delivery().match(/\[(\d+) window sprites\]/) || [])[1] || 0) >= 40,
