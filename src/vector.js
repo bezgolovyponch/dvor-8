@@ -475,7 +475,13 @@ export function trace(rgba, w, h, opts = {}) {
     const id = straight[p];
     if (id < 0) { idx[p] = skyColour; continue; }
     const c = shapeColour.get(id) || [128, 128, 128];
-    idx[p] = entryFor(palette, c[0], c[1], c[2]);
+    // A CHROMA-RICH PIXEL KEEPS ITS OWN COLOUR FAMILY. Using only the shape's MEAN colour made vegetation
+    // disappear: a patch of green inside a larger, greyer shape was averaged into the wall's tone, so the
+    // photograph's trees were lost - the opposite failure of the reference's invented trees, and the fidelity
+    // check caught it (0 foliage pixels on a fixture that has green). Where a pixel is saturated enough to have a
+    // colour of its own, that colour picks the ramp; the shape's mean decides only the quiet parts.
+    const own = rgb2hsv(rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2]);
+    idx[p] = own.s >= 0.22 ? entryFor(palette, rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2]) : entryFor(palette, c[0], c[1], c[2]);
   }
 
   // ---- 5a. THE FACADES, AND ONE TONE PER FACADE --------------------------------------------------------

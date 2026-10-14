@@ -1059,6 +1059,43 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
     drained === true, 'drain beat present');
 }
 
+// ---- R15 + row 57: no invented content, and the photograph's own aspect -------------------------------
+{
+  const { trace } = await import('./src/vector.js');
+  const flatA = await import('./src/flat.js');
+  const palette = flatA.paletteOf();
+  const FOL = 1;                                     // the foliage ramp's index in the table
+  const STEPS_A = 6;                                 // tones per ramp in the shared table
+  const foliagePixels = (idx) => { let n = 0; for (const v of idx) if (v < palette.length - 2 && Math.floor(v / STEPS_A) === FOL) n += 1; return n; };
+  const W9 = 128, H9 = 224;
+  const make = (green) => {
+    const px = new Uint8ClampedArray(W9 * H9 * 4);
+    for (let y = 0; y < H9; y += 1) for (let x = 0; x < W9; x += 1) {
+      const i = (y * W9 + x) * 4;
+      const t = y / H9;
+      let r, g, b;
+      if (t < 0.3) { r = 96; g = 158; b = 236; }                                   // sky
+      else if (t < 0.7) { const k = 0.7 + 0.4 * (x / W9); r = 200 * k; g = 186 * k; b = 168 * k; }
+      else { r = 96; g = 92; b = 90; }
+      if (green && t > 0.45 && t < 0.68 && x > W9 * 0.1 && x < W9 * 0.5) { r = 46; g = 110; b = 50; }
+      px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255;
+    }
+    return px;
+  };
+  const noGreen = foliagePixels(trace(make(false), W9, H9).idx);
+  const withGreen = foliagePixels(trace(make(true), W9, H9).idx);
+  check('NOTHING IS INVENTED: a photograph with no green produces no foliage pixels, and one with green does',
+    noGreen === 0 && withGreen > 20, `${noGreen} without green, ${withGreen} with it`);
+
+  // the aspect rule: contain against SHORT x LONG, the buffer derived from the image
+  const SHORT = 288, LONG = 512;
+  const sizeFor = (iw, ih) => { const k = Math.min(LONG / Math.max(iw, ih), SHORT / Math.min(iw, ih)); return [Math.round(iw * k), Math.round(ih * k)]; };
+  const cases = [[1920, 1280], [1600, 1200], [1080, 1920]];
+  check('the level keeps the PHOTOGRAPH\'s aspect ratio: contain, never a cover-crop',
+    cases.every(([iw, ih]) => { const [w2, h2] = sizeFor(iw, ih); return Math.abs(w2 / h2 - iw / ih) < 0.02 && w2 <= LONG && h2 <= LONG; }),
+    cases.map(([iw, ih]) => `${iw}x${ih}->${sizeFor(iw, ih).join('x')}`).join(' '));
+}
+
 // ---- L8 + L9: a building is a stack of cells, and a broken window throws glass ----------------------
 {
   const { makeWorld, cellsOf, cellAt, breakCells } = await import('./src/world.js');
