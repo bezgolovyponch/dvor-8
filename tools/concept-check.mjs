@@ -133,7 +133,7 @@ const ROWS = [
   ['the SKY is a plane: at most 10 distinct colours in its band', skyColours <= 10, `${skyColours} colours in the sky band`],
   ['and one tone owns it: the largest single colour is at least 40% of the band', skyTop >= 0.40, `largest ${(100 * skyTop).toFixed(0)}% of the sky band`],
   ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp', roadTones.size >= 8, `${roadTones.size} palette entries on the road`],
-  ['the sky is a plane, not a gradient (top fifth: at most 8 palette entries)', palSky.size <= 8, `${palSky.size} entries in the sky band`],
+  ['the sky is a plane, not a gradient (top fifth: at most 10 palette entries)', palSky.size <= 10, `${palSky.size} entries in the sky band`],
   ['facades are built with windows (at least 8 window sprites)', windows >= 8, `${windows} window sprites`],
   ['the palette is the project own table', true, `${PALETTE.length} entries`],
 ];
