@@ -21,6 +21,8 @@ create the restriction that will not allow you to go in circles.* This is that f
 
 | F11 | a **black block with speckles** over a building | the facade-rhythm window finder returned a rectangle the size of a building, and a window sprite is a dark frame round dark glass - at building size that is a slab | a window is clamped: under 15% of the frame in either direction and under 4% of its area; anything larger is a plane, and planes are painted by the facade pass | **R16** |
 
+| F12 | **a MEASUREMENT ARTEFACT reported as a property of the picture** - three times in one session | the instrument measured something other than the thing named: (a) the canvas dump sampled every SECOND pixel, so a 1-px stray was invisible and the stray share read 10.7% where the truth is 2.3%; (b) the pitch finder started at 2, so a 1:1 frame was reduced by half and every number described half the drawing; (c) the sky band was a fixed top slice that contained two towers, so the sky "failed" a bar it met | **`tools/concept-check.mjs` now prints its own PREMISES and WITHHOLDS ITS VERDICT when one is violated** (1:1 dump, the named band, a whole frame); `tools/compare-ref.mjs` prints the pitch it chose. The precaution is enforced, not noted. | **R17** |
+
 ## The restriction that stops the circles
 
 > **R13 — NO FIX IS REPORTED WITHOUT ITS PICTURE AND ITS NUMBER, AND NO FIX IS ATTEMPTED BEFORE ITS CAUSE IS

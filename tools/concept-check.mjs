@@ -116,6 +116,20 @@ const skyTop = [...skyHist.values()].sort((a2, b2) => b2 - a2)[0] / Math.max(1, 
 const roadTones = new Set();
 for (let y = Math.floor(h * 0.62); y < h; y += 2) for (let x = 0; x < w; x += 2) roadTones.add(near(px(x, y)));
 
+// THE PRECAUTION, ENFORCED. Three times a measurement of mine was an artefact of the instrument and I reported it as
+// a property of the picture: a dump that sampled every SECOND pixel (a 1-px stray was invisible, and the stray
+// share read 10.7% instead of 2.3%), a pitch finder that never tried pitch 1 (so a 1:1 frame was reduced by half
+// and every number described half the drawing), and a sky band that contained two towers (the sky "failed" a bar
+// it met). The class is the same every time: THE INSTRUMENT MEASURED SOMETHING ELSE THAN THE THING NAMED.
+//
+// So the instrument now states its own premises and REFUSES TO GIVE A VERDICT when one of them is violated. A
+// number from this tool is only quotable when these three rows pass.
+const INSTRUMENT = [
+  ['the dump is 1:1: one sample per drawn pixel', w >= 200 && h >= 400, `${w}x${h} - a half-resolution dump would read ${w * 2}x${h * 2}`],
+  ['the band measured is the one named (the sky, above any structure)', TOP / h <= 0.10, `the band is the top ${(100 * TOP / h).toFixed(0)}% of the frame`],
+  ['the frame measured is a whole frame', n === w * h && n > 0, `${n} samples for ${w}x${h}`],
+];
+
 const ROWS = [
   ['the frame is a daylight place, not a murk (mean luma 55..200)', mean >= 55 && mean <= 200, `mean luma ${mean.toFixed(0)}`],
   // A CONSTRUCTED FRAME IS MADE OF PLANES, and its largest plane is allowed to be large: a wall, the road, the
@@ -140,4 +154,13 @@ const ROWS = [
 let fail = 0;
 for (const [what, ok, detail] of ROWS) { console.log(`${ok ? 'OK  ' : 'FAIL'}  ${what}  [${detail}]`); if (!ok) fail += 1; }
 console.log(`\nGATE ${ROWS.length - fail} OK  ${fail} FAIL  (${w}x${h})`);
+// THE PREMISES ARE PRINTED WITH EVERY RESULT, and a violated premise WITHHOLDS the verdict: the rows above then
+// describe the instrument, not the picture, and R17 forbids quoting them.
+const brokenPremises = INSTRUMENT.filter(([, pass]) => !pass);
+for (const [label, pass, detail] of INSTRUMENT) {
+  console.log(`${pass ? 'OK  ' : 'BAD '} INSTRUMENT: ${label}  [${detail}]`);
+}
+if (brokenPremises.length) {
+  console.log(`VERDICT WITHHELD: ${brokenPremises.length} of the instrument's own premises failed. This is not a measurement of the picture.`);
+}
 process.exit(fail ? 1 : 0);

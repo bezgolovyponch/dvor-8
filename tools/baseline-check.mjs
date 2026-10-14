@@ -115,7 +115,12 @@ const req = read('docs/REQUIREMENTS.md');
 const reqRows = (req.match(/^\| \d+ \|.*$/gm) || []);
 // A ROW IS SETTLED WHEN ITS STATE BEGINS WITH DONE - and open otherwise, including PARTLY, which is the honest
 // state of a row that has some evidence and some work left. This was counting rows that read "DONE" as open.
-const openRows = reqRows.filter((r) => !/\*\*DONE/.test(r));
+// A ROW IS SETTLED WHEN ITS STATE CELL (the third pipe-separated field) SAYS SO. Testing the whole row for
+// OPEN|PARTLY|FIXING counted every row whose EVIDENCE TEXT mentioned those words - "was: OPEN, measured twice" -
+// so the list could never empty however much was finished, and the count became a lie in the other direction.
+// the row is "| n | title | STATE | evidence ...", so with the leading pipe the state is field 3
+const stateCell = (r) => { const f = r.split('|'); return (f.length >= 5 ? f[3] : f.length >= 4 ? f[2] : f[1] || '').trim(); };
+const openRows = reqRows.filter((r) => !/DONE|APPLIED|RULE/.test(stateCell(r)));
 const doneRows = reqRows.filter((r) => /\| DONE \||\| \*\*RULE\*\* \|/.test(r));
 ROWS.push(['L1 The checklist exists and every requirement has a state', 'docs/REQUIREMENTS.md',
   () => reqRows.length >= 28 && reqRows.every((r) => /DONE|OPEN|PARTLY|FIXING|RULE/.test(r))]);
