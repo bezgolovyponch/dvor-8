@@ -113,7 +113,9 @@ const ROWS = [
 // the states that mean "not finished" are counted here so a requirement cannot be quietly dropped.
 const req = read('docs/REQUIREMENTS.md');
 const reqRows = (req.match(/^\| \d+ \|.*$/gm) || []);
-const openRows = reqRows.filter((r) => /OPEN|PARTLY|FIXING/.test(r));
+// A ROW IS SETTLED WHEN ITS STATE BEGINS WITH DONE - and open otherwise, including PARTLY, which is the honest
+// state of a row that has some evidence and some work left. This was counting rows that read "DONE" as open.
+const openRows = reqRows.filter((r) => !/\*\*DONE/.test(r));
 const doneRows = reqRows.filter((r) => /\| DONE \||\| \*\*RULE\*\* \|/.test(r));
 ROWS.push(['L1 The checklist exists and every requirement has a state', 'docs/REQUIREMENTS.md',
   () => reqRows.length >= 28 && reqRows.every((r) => /DONE|OPEN|PARTLY|FIXING|RULE/.test(r))]);
@@ -131,5 +133,11 @@ for (const [what, where, ok] of ROWS) {
 }
 console.log(`\nBASELINE ${pass} OK  ${fail} FAIL  of ${ROWS.length}`);
 console.log(`CHECKLIST ${doneRows.length} settled, ${openRows.length} still open of ${reqRows.length} requirements`);
+// THE OPEN ROWS, BY NAME. "How much is left" must never be an opinion: the definition of complete is this list
+// reaching zero, so the list is printed with the tool that counts it.
+if (openRows.length) {
+  console.log('\nSTILL OPEN — the definition of complete is this list reaching zero:');
+  for (const r of openRows) console.log('  ' + r.replace(/\s+/g, ' ').slice(0, 150));
+}
 if (process.argv.includes('--json')) console.log(JSON.stringify(rows));
 process.exit(fail ? 1 : 0);
