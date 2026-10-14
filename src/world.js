@@ -159,7 +159,14 @@ export const CELL = 22;
 
 export function cellsOf(world, s) {
   if (!s.cells) {
-    const cols = Math.max(1, Math.round(s.w / CELL)), rows = Math.max(1, Math.round(s.h / CELL));
+    // V9'S L5: the chunks follow THE PHOTOGRAPH'S OWN COLUMN AND FLOOR SPACING where the facade has a rhythm.
+    // A structure carries the windows found on it; their median width is the bay, their median height the storey.
+    // A fixed 22 px pitch was a guess about a building the photograph had already measured for us.
+    const win = s.windows && s.windows.length ? s.windows : null;
+    const med = (xs) => { const a2 = xs.slice().sort((x, y) => x - y); return a2[Math.floor(a2.length / 2)] || 0; };
+    const pitchW = win ? Math.max(6, med(win.map((q) => q.w))) : CELL;
+    const pitchH = win ? Math.max(6, med(win.map((q) => q.h))) : CELL;
+    const cols = Math.max(1, Math.round(s.w / pitchW)), rows = Math.max(1, Math.round(s.h / pitchH));
     s.cells = { cols, rows, cw: s.w / cols, ch: s.h / rows, gone: new Set() };
   }
   return s.cells;

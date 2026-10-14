@@ -1010,6 +1010,7 @@ function throwAt(at) {
 // lifting, and only if the finger did not travel. Everywhere else a throw is on touch, with no wait.
 tiltEl.addEventListener('pointermove', (e) => {
   if (stage !== 'play' || !world || press) return;
+  if (infoOn) { aimAt(...Object.values(toWorld(e))); return; }        // info mode aims but never throws
   const at = toWorld(e);
   aimAt(at.x, at.y);
 }, { passive: true });
@@ -1148,11 +1149,18 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
   });
   tiltEl.addEventListener('pointermove', (e) => {
   if (stage !== 'play' || !world || press) return;
+  if (infoOn) { aimAt(...Object.values(toWorld(e))); return; }        // info mode aims but never throws
   const at = toWorld(e);
   aimAt(at.x, at.y);
 }, { passive: true });
 tiltEl.addEventListener('pointerdown', (e) => {
     if (!infoOn || stage !== 'play' || !world) return;
+    // THE INFO TAP OWNS THE GESTURE. It used to fall through to the throw handler on the same element, so in info
+    // mode a tap both described a thing and threw the stone at it - "info button doesn't work" is exactly what
+    // that feels like. The event stops here, and the thing stays marked until the next tap (v9 keeps its
+    // selection and blinks it, rather than flashing it away).
+    e.stopPropagation();
+    e.preventDefault();
     const at = toWorld(e);
     const t = pick(world, at.x, at.y);
     // THE OBJECT IS OUTLINED WHILE IT IS DESCRIBED. Info mode was returning a line of text about a thing the

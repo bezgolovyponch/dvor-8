@@ -1037,6 +1037,29 @@ export function trace(rgba, w, h, opts = {}) {
     skys = { skyTones, band, cloudA, cloudB, cloudC };
   }
 
+  // ---- 5i. EVERY BUILDING GETS ITS 1-PX OUTLINE AGAINST THE SKY (v9's L4) --------------------------
+  //
+  // v9's rule, verbatim: "an object's edge is every pixel that touches a pixel of another object. Buildings get a
+  // 1-px outline against the sky." The sky is known exactly at this point, so the rule is exact: a pixel that IS
+  // sky and has a neighbour that is NOT gets the shared outline colour. That is one line, in the darkest palette
+  // colour, along the real skyline of the photograph - not a drawn skyline and not a box.
+  {
+    const OUTS = palette.length - 2;
+    let drawn = 0;
+    for (let y = 1; y < h - 1; y += 1) {
+      for (let x = 1; x < w - 1; x += 1) {
+        const p2 = y * w + x;
+        if (!sky[p2]) continue;
+        if (sky[p2 - 1] && sky[p2 + 1] && sky[p2 - w] && sky[p2 + w]) continue;
+        if (idx[p2] === OUTS) continue;
+        if (cls[p2] === 2) continue;                        // vegetation keeps its own ramp (R15)
+        idx[p2] = OUTS;
+        drawn += 1;
+      }
+    }
+    if (drawn) sky.__edge = drawn;
+  }
+
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------
   const cloudColour = skys ? skys.cloudA : entryFor(palette, 250, 250, 252);
   const cloudShade = skys ? skys.cloudC : entryFor(palette, 198, 214, 232);
