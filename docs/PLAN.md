@@ -47,3 +47,29 @@ on a broken earlier one** — an event (L10) drawn over a picture that had never
 6. **L8-L9** — NEXT: buildings as stacks of their own cells; a hit removes cells storey by storey; windows
    shatter into glass particles.
 7. **L10** — in place but to be re-measured once L8/L9 exist.
+
+## THE OPERATING RULE THE CREATOR DEMANDED (added after the v9 comparison)
+
+> **NO NEW MODULES. THE ITERATION ENDS WHEN FIVE NUMBERS ARE MET ON A CLEAN FRAME OF THE REAL PHOTOGRAPH, AND
+> NOTHING IS REPORTED BEFORE THEM.** Every change must move one of these, and a change that moves none is
+> reverted, not reported.
+
+| # | measure | my frame today | target | why this number |
+|---|---|---|---|---|
+| 1 | **isolated pixels** (differ from all four neighbours) | **10.7%** | **≤ 2%** | this is the number that separates a clean 8-bit composition from mush: one pixel in ten standing alone IS the crosshatch the creator's eye catches instantly, and it is why the frame reads as noise although every module works |
+| 2 | flat share | 46% | ≥ 70% | surfaces must be fields, not textures |
+| 3 | transitions per pixel | 0.37 | ≤ 0.18 | lines must be continuous and few |
+| 4 | largest colour below the sky | 27% | ≤ 22% | no field may swallow the frame |
+| 5 | sky colours / one-tone share | 9 / 46% | ≤ 10 / ≥ 45% | already met — kept so it cannot regress |
+
+**What the comparison could and could not measure, honestly.** `tools/compare-ref.mjs` was written for this and
+its two findings are both negative and both useful: a SCREENSHOT of the creator's screen cannot be compared with
+a canvas dump at all (at any reduction it carries 47,438 distinct colours and 22.4% "isolated" pixels — that is
+WebP compression, not the art), and dumping the creator's own `DVOR-8 Street v9.dc.html` through the harness
+yields only its empty 300x150 canvas after three seconds, because that screen builds its yard on a photograph
+that has not been loaded. So the honest state of the comparison is: **the reference cannot be measured from the
+material available; my own frame can, and its isolated-pixel share is five times the target.**
+
+**The one action that follows:** suppress single-pixel speckle at the ART scale (a despeckle pass applied to the
+reduced frame, not to the 288x512 buffer), remove the remaining per-pixel tone decisions, then re-measure the five
+numbers on the same clean frame. Nothing else is built until number 1 is ≤ 2%.
