@@ -4,6 +4,7 @@
 // indices of that thing to its own wreck, and the renderer shows whatever the array now says.
 
 import { OUTLINE, VOID, scorchMap } from './palette.js';
+import { mayBeDestroyed } from './criteria/DestructionRule.js';   // the requirement, by name
 import { STEPS } from './flat.js';
 import { mulberry32 } from './rng.js';
 import { makeDecals } from './decal.js';
