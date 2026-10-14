@@ -52,6 +52,25 @@ await withPage(BASE, {}, async (page) => {
   // took every SECOND pixel, which made "neighbour" mean two art pixels away: a 1-pixel stray - exactly the fault
   // the creator's eye catches - was invisible to the measurement, and the stray-pixel cleanup I wrote moved the
   // number by 0.2% because the instrument could not see it. The dump is now every pixel.
+  // THE DUMP WAITS UNTIL THE YARD IS FINISHED BEING DRAWN. The scan wipes the frame top-down, so a dump taken
+  // during it measures the TRANSIENT: the top band reads grey and the facades read as zero window sprites, and a
+  // gate that is handed that frame reports the scan as a fault in the picture. It did exactly that - three
+  // mandatory delivery lines failed on a frame that was still being drawn. The dump is now taken when the TOP BAND
+  // IS A PLANE: retried until one colour owns at least 35% of it, which is a property of the finished sky and of
+  // nothing else that appears during the scan.
+  for (let tries = 0; tries < 12; tries += 1) {
+    const probe = await page.run(`
+      const c = document.getElementById('view') || document.querySelector('canvas');
+      const g = c.getContext('2d');
+      const band = Math.max(1, Math.floor(c.height * 0.08));
+      const d = g.getImageData(0, 0, c.width, band).data;
+      const hist = new Map();
+      for (let i = 0; i < d.length; i += 4) { const k = d[i] + ',' + d[i+1] + ',' + d[i+2]; hist.set(k, (hist.get(k) || 0) + 1); }
+      const top = [...hist.values()].sort((p, q) => q - p)[0] / (band * c.width);
+      return { share: top, w: c.width, h: c.height };`);
+    if (probe && probe.share >= 0.35) break;
+    await new Promise((r) => setTimeout(r, 700));
+  }
   const dump = await page.run(`
     const c = document.getElementById('view') || document.querySelector('canvas');
     const g = c.getContext('2d');

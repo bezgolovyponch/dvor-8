@@ -237,7 +237,18 @@ function build(rgba, w, h, dets, big = null) {
   // pipeline is not reachable from the product: it painted per pixel what should be a surface (R3), measured at
   // 10-18% flat against the constructive route's 56-81%. src/flat.js stays for the palette and the tone table.
   const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true });
-  const { regions, owner } = withWindows(toRegions(dets, rgba, w, h), st, w, h, big, rgba);
+  // THE THINGS ARE CUT OUT OF THE REDUCED PICTURE, NOT OUT OF THE PHOTOGRAPH.
+  //
+  // The reduction (areas first, in vector.js) turns the frame into flat fields; cutting the objects out of the RAW
+  // photograph left a car's pixel set ragged, and an outline drawn around a ragged set is a ring of stripes - which
+  // is exactly what the creator saw on the phone: striped circles where the cars are. The cut-out now runs on the
+  // same reduced image the picture is painted from, so a car is a SOLID mass and its outline is its silhouette.
+  const reduced = new Uint8ClampedArray(rgba.length);
+  for (let i2 = 0, p2 = 0; p2 < st.idx.length; p2 += 1, i2 += 4) {
+    const c = st.palette[st.idx[p2]] || [0, 0, 0];
+    reduced[i2] = c[0]; reduced[i2 + 1] = c[1]; reduced[i2 + 2] = c[2]; reduced[i2 + 3] = 255;
+  }
+  const { regions, owner } = withWindows(toRegions(dets, reduced, w, h), st, w, h, big, reduced);
   // THE WINDOWS THE VECTOR ROUTE FOUND ARE THINGS TOO. The per-pixel route guesses at openings in a wall
   // (frame.js, "на глаз"); the vector route reads the facade's own rhythm and returns rectangles. Either way a
   // window is a thing with hit points - so the ones the route found are added here, with their pixels marked as
@@ -1010,7 +1021,6 @@ function throwAt(at) {
 // lifting, and only if the finger did not travel. Everywhere else a throw is on touch, with no wait.
 tiltEl.addEventListener('pointermove', (e) => {
   if (stage !== 'play' || !world || press) return;
-  if (infoOn) { aimAt(...Object.values(toWorld(e))); return; }        // info mode aims but never throws
   const at = toWorld(e);
   aimAt(at.x, at.y);
 }, { passive: true });
@@ -1149,7 +1159,6 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
   });
   tiltEl.addEventListener('pointermove', (e) => {
   if (stage !== 'play' || !world || press) return;
-  if (infoOn) { aimAt(...Object.values(toWorld(e))); return; }        // info mode aims but never throws
   const at = toWorld(e);
   aimAt(at.x, at.y);
 }, { passive: true });

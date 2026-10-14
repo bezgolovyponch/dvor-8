@@ -312,14 +312,47 @@ export function trace(rgba, w, h, opts = {}) {
     for (let i = 0; i < n; i += 1) if (coreSky[i]) core += 1;
     if (core / n < 0.08) {
       const stack = [];
-      for (let x = 0; x < w; x += 1) if (!sky[x] && en.line[x] < 0.35 && edge[x] < SKY_MAX_EDGE * 2.2) { sky[x] = 1; stack.push(x); }
+      // AND IT IS BOUNDED. The first version flooded from the top edge through everything smooth, which on a
+      // photograph with a soft mid-ground swallows the middle of the frame - and on the fidelity fixture it
+      // swallowed the green mass, painted it blue and made the vegetation check read ZERO. A sky is at the TOP and
+      // it is BRIGHTER than the frame: the flood now stops at half the frame's height and refuses dark pixels.
+      // THE SKY IS AS BRIGHT AS THE SKY, not as bright as the frame. Using the frame-wide mean let the flood run
+      // over any bright ground: on the fidelity fixture it claimed 28,372 of 28,672 pixels as SKY - including the
+      // green mass - which is why the vegetation check read zero, and on a real photograph it swallows a lit
+      // pavement the same way. The reference is the TOP ROW of the picture, which is sky by definition.
+      let frameLuma = 0, k3 = 0;
+      for (let x2 = 0; x2 < w; x2 += 1) { frameLuma += luma(rgb[x2 * 3], rgb[x2 * 3 + 1], rgb[x2 * 3 + 2]); k3 += 1; }
+      frameLuma /= Math.max(1, k3);
+      // A SKYLINE IS COMPUTED FIRST, and the flood may not cross it. The flood ran before the skyline existed and
+      // used half the frame as its bound, so on any picture with a bright mid-ground it claimed the ground: on the
+      // fidelity fixture, 28,372 of 28,672 pixels - green mass included - were sky. The skyline is now read from
+      // the EDGE MAP: for each column, the first strong line below the top tenth of the frame, or the first row
+      // whose luma falls well under the top row's. Nothing below it can be sky.
+      const prelim = new Int32Array(w);
+      for (let x2 = 0; x2 < w; x2 += 1) {
+        const topL = luma(rgb[x2 * 3], rgb[x2 * 3 + 1], rgb[x2 * 3 + 2]);
+        let y2 = Math.max(1, Math.floor(h * 0.10));
+        for (; y2 < h; y2 += 1) {
+          const p2 = y2 * w + x2;
+          const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+          if (en.line[p2] > 0.5 || L < topL - 45) break;
+        }
+        prelim[x2] = Math.min(h - 1, y2);
+      }
+      const skyish = (p2) => {
+        const y = (p2 / w) | 0, x2 = p2 % w;
+        if (y > prelim[x2]) return false;                 // never below the photograph's own skyline
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        return L >= frameLuma - 6;
+      };
+      for (let x = 0; x < w; x += 1) if (!sky[x] && skyish(x) && en.line[x] < 0.35 && edge[x] < SKY_MAX_EDGE * 2.2) { sky[x] = 1; stack.push(x); }
       while (stack.length) {
         const p2 = stack.pop(), x = p2 % w, y = (p2 / w) | 0;
         const nbs = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]];
         for (const [nx, ny] of nbs) {
           if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
           const q = ny * w + nx;
-          if (sky[q] || en.line[q] > 0.35 || edge[q] > SKY_MAX_EDGE * 2.2) continue;
+          if (sky[q] || !skyish(q) || en.line[q] > 0.35 || edge[q] > SKY_MAX_EDGE * 2.2) continue;
           sky[q] = 1; stack.push(q);
         }
       }
@@ -327,6 +360,30 @@ export function trace(rgba, w, h, opts = {}) {
       for (let i = 0; i < n; i += 1) if (sky[i]) grown += 1;
       if (grown / n > 0.05) { for (let x = 0; x < w; x += 1) coreSky[x] = sky[x]; }
     }
+  }
+  // ---- THE SKY CANNOT BE MOST OF THE PICTURE ----------------------------------------------------------
+  //
+  // Every bound tried so far - brightness, half the frame, a skyline read from the edge map - was still defeated on
+  // a synthetic frame whose mid-ground is bright, and the probe showed why: 28,372 of 28,672 pixels were claimed as
+  // sky. A sky deeper than two thirds of the frame is not a sky, it is a flood, so the mask is CLAMPED to the
+  // MEDIAN column depth: a column may reach its own skyline or the median depth plus half of it, never more. This
+  // is a property of skylines, not of this fixture.
+  {
+    const depth = new Int32Array(w);
+    for (let x2 = 0; x2 < w; x2 += 1) {
+      let d2 = 0;
+      for (let y2 = 0; y2 < h; y2 += 1) if (sky[y2 * w + x2]) d2 = y2 + 1;
+      depth[x2] = d2;
+    }
+    const sorted = Array.from(depth).sort((p2, q2) => p2 - q2);
+    const median = sorted[Math.floor(sorted.length / 2)] || 0;
+    const cap = Math.max(Math.floor(h * 0.12), Math.min(Math.floor(h * 0.66), Math.round(median * 1.5)));
+    let cut = 0;
+    for (let x2 = 0; x2 < w; x2 += 1) {
+      if (depth[x2] <= cap) continue;
+      for (let y2 = cap; y2 < h; y2 += 1) { const p2 = y2 * w + x2; if (sky[p2]) { sky[p2] = 0; cut += 1; } }
+    }
+    if (cut) sky.__cut = cut;
   }
   const skyline = new Int32Array(w).fill(h);       // the first non-sky row in each column
   for (let x = 0; x < w; x += 1) for (let y = 0; y < h; y += 1) if (!sky[y * w + x]) { skyline[x] = y; break; }
@@ -340,6 +397,13 @@ export function trace(rgba, w, h, opts = {}) {
   for (let i = 0; i < n; i += 1) if (coreSky[i]) { sr += rgb[i * 3]; sg += rgb[i * 3 + 1]; sb += rgb[i * 3 + 2]; k += 1; }
   k = Math.max(1, k);
   const skyColour = entryFor(palette, sr / k, sg / k, sb / k);
+  // ---- POLICY (docs/render-policy.md): THE SKY IS DESIGNED, NOT FAITHFUL ---------------------------------
+  //
+  // The sky is the one class where the photograph carries no layout: clouds move, and the creator's Prague
+  // photograph is overcast, so fidelity painted the top of the frame rgb(224,219,215) - "the sky just missing" -
+  // while v9 (the screen the creator accepts) uses one designed blue with designed clouds. The policy table says
+  // DESIGN for the sky and FAITHFUL for the road, the cars and the green, and this is the sky's half of it.
+  const designedSky = entryFor(palette, 88, 154, 226);
 
   // ---- 2. everything that is not sky becomes shapes ------------------------------------------------------
   // A label map by colour, so shapes are areas of one colour: this is the "vector trace" input. The
@@ -472,9 +536,13 @@ export function trace(rgba, w, h, opts = {}) {
     shapeColour.set(part.id, [r / c, g / c, b / c]);
   }
   for (let p = 0; p < n; p += 1) {
-    if (sky[p]) { idx[p] = skyColour; continue; }
+    if (sky[p]) { idx[p] = designedSky; continue; }
     const id = straight[p];
-    if (id < 0) { idx[p] = skyColour; continue; }
+    // A PIXEL THAT IS IN NO SHAPE KEEPS ITS OWN COLOUR. This branch painted every unassigned pixel with the SKY
+    // entry, so anything the shape step did not claim - a green mass, a lit pavement, an entire synthetic frame -
+    // came out BLUE. That is the fault the vegetation check kept naming: the green was not eaten by the line layer
+    // or by the road, it was painted as sky. Only pixels the sky analysis actually claimed are sky.
+    if (id < 0) { idx[p] = entryFor(palette, rgb[p * 3], rgb[p * 3 + 1], rgb[p * 3 + 2]); continue; }
     const c = shapeColour.get(id) || [128, 128, 128];
     // A CHROMA-RICH PIXEL KEEPS ITS OWN COLOUR FAMILY. Using only the shape's MEAN colour made vegetation
     // disappear: a patch of green inside a larger, greyer shape was averaged into the wall's tone, so the
@@ -1024,7 +1092,7 @@ export function trace(rgba, w, h, opts = {}) {
   // bushes survive whatever the surfaces did, and nothing green is invented (only pixels the photograph itself
   // classed as foliage are touched).
   {
-    const FOLIAGE_RAMP = Math.max(0, RAMPS.findIndex((R) => R.name === 'foliage'));
+    const FOLIAGE_RAMP = Math.floor(entryFor(palette, 60, 150, 60) / STEPS);   // what the table calls green
     let painted = 0;
     for (let p2 = 0; p2 < n; p2 += 1) {
       if (cls[p2] !== 2) continue;                    // the photograph's own green, and nothing else
@@ -1078,6 +1146,110 @@ export function trace(rgba, w, h, opts = {}) {
       }
     }
     if (drawn) sky.__edge = drawn;
+  }
+
+  const windowsPx = new Set();
+  for (const q of [...windowsFound, ...gridWindows]) for (const p2 of q.px) windowsPx.add(p2);
+
+  // ---- 5i1. A WALL IS FOUND BY STRUCTURE, NOT BY HUE (the cause the delivery rule found) --------------
+  //
+  // The wall class was decided by HUE, and on the creator's overcast Prague photograph a grey tower's facade is
+  // not blue, not warm, not green - so it fell through every class, the sky fell back to the photograph's grey and
+  // the wall kept its photographic grain. The rule measured it: 9 entries, 51% flat, against a designed plane's 8
+  // and 70%. A wall is now found the way the scene analysis itself defines one: A LARGE CONNECTED REGION below the
+  // sky, full of STRAIGHT RUNS (mullions, window heads, floor lines) - which is what a facade is and what asphalt,
+  // foliage and sky are not.
+  {
+    let wallN = 0;
+    for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1) wallN += 1;
+    if (wallN / n < 0.12) {                             // the hue test did not find the facades on this photograph
+      const cand = new Uint8Array(n);
+      for (let p2 = 0; p2 < n; p2 += 1) {
+        if (sky[p2] || cls[p2] === 2) continue;
+        const y = (p2 / w) | 0;
+        if (y < h * 0.06) continue;                     // never the top edge: that is sky
+        cand[p2] = 1;
+      }
+      const { parts } = components(w, h, (p2) => cand[p2]);
+      for (const part of parts) {
+        if (part.area / n < 0.05) continue;             // a wall is a large surface
+        let straight = 0;
+        for (const p2 of part.px) if (en.line[p2] > 0.4) straight += 1;
+        if (straight / part.area < 0.06) continue;      // and it is full of straight runs
+        for (const p2 of part.px) { if (!sky[p2] && cls[p2] !== 2) cls[p2] = 1; }
+      }
+    }
+  }
+
+  // ---- 5i2. THE WALL IS DESIGNED, NOT PHOTOGRAPHED (docs/render-policy.md) ---------------------------
+  //
+  // The wall was the photograph's own pixels under the window sprites, and its grain fights the sprites: the
+  // creator's word for it is "blurred", and the delivery rule measures it as 51% flat where a designed plane is
+  // 70%+ with at most eight entries. A wall's LAYOUT is its window grid, which is drawn as sprites; the grain
+  // behind it is noise. So every building pixel is repainted as a plane in 8x8 blocks: one tone of the wall's own
+  // family, the lit face one tone up, the turned-away face two tones down - the same three-face rule the facade
+  // pass uses, applied to the whole class rather than to the shapes it happened to identify.
+  {
+    const WALLCLS = 1;                                  // the wall/building class in the scene analysis
+    // EACH FACADE IS ONE PLANE. The first version decided a face per 8x8 block against a GLOBAL mean, so a tower
+    // lit at the top and shaded at the bottom was split into many faces: the rule measured 12 entries where a
+    // designed plane allows 8. The light is now decided ONCE PER FACADE: the wall class is split into its connected
+    // regions, each region takes ONE family from its own mean colour, and its pixels are split into THREE faces by
+    // that region's own luma terciles. Three tones of one family, decided once - which is what v6's facades are.
+    // THREE THINGS THE WALL PASS MUST NOT TOUCH, or it undoes work that is already correct:
+    //   - the SKY: the designed blue is drawn above the skyline, and the wall class overlaps that band
+    //   - the WINDOW SPRITES: frame, glass and sill are drawn from the openings and must stay legible
+    //   - the OUTLINE: the photograph's own edge line
+    const protectedPx = new Set();
+    for (const q of [...windowsFound, ...gridWindows]) for (const p2 of q.px) protectedPx.add(p2);
+    const wallMask = new Uint8Array(n);
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      if (cls[p2] !== WALLCLS) continue;
+      const y = (p2 / w) | 0, x = p2 % w;
+      if (y < skyline[x] - 1) continue;                 // above the skyline it is sky, whatever the class says
+      if (protectedPx.has(p2)) continue;                // a window is drawn there
+      if (cls[p2] === 2) continue;                      // the photograph's green is never a wall (R15)
+      if (idx[p2] === palette.length - 2) continue;     // an outline pixel
+      wallMask[p2] = 1;
+    }
+    const fac = components(w, h, (p2) => wallMask[p2]);
+    let planes = 0;
+    for (const part of fac.parts) {
+      if (part.area < 40) continue;
+      let r0 = 0, g0 = 0, b0 = 0;
+      const lums = [];
+      for (const p2 of part.px) {
+        r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2];
+        lums.push(en.smooth[p2]);
+      }
+      const n0 = part.px.length;
+      const family = Math.floor(entryFor(palette, r0 / n0, g0 / n0, b0 / n0) / STEPS);
+      const toneOf = (t) => family * STEPS + Math.max(0, Math.min(STEPS - 1, t));
+      const sorted = lums.slice().sort((x, y) => x - y);
+      const t1 = sorted[Math.floor(sorted.length / 3)], t2 = sorted[Math.floor((sorted.length * 2) / 3)];
+      const faces = [toneOf(1), toneOf(2), toneOf(4)];        // shaded, plain, lit - one family, three tones
+      for (let i2 = 0; i2 < n0; i2 += 1) {
+        const p2 = part.px[i2];
+        idx[p2] = lums[i2] > t2 ? faces[2] : lums[i2] > t1 ? faces[1] : faces[0];
+      }
+      planes += 1;
+    }
+    // THE FACE BOUNDARY IS REFINED. Two faces meeting along the luma tercile leave a ragged edge, and flatness is
+    // measured over that edge: one pass of "a wall pixel whose four neighbours agree takes their tone" makes each
+    // face a field with a clean line, which is what a designed plane is.
+    {
+      const before = idx.slice();
+      for (const p2 of wallMask.keys ? [] : []) void p2;
+      for (let p2 = 0; p2 < n; p2 += 1) {
+        if (!wallMask[p2] || protectedPx.has(p2)) continue;
+        const up = before[p2 - w], dn = before[p2 + w], lf = before[p2 - 1], rt = before[p2 + 1];
+        if (up === dn && up === lf) idx[p2] = up;
+        else if (up === dn && up === rt) idx[p2] = up;
+        else if (lf === rt && lf === up) idx[p2] = lf;
+        else if (lf === rt && lf === dn) idx[p2] = lf;
+      }
+    }
+    sky.__wall = planes;
   }
 
   // ---- 5j. STRAY PIXELS ARE CLEANED (v9's rule, and the creator's eye) ---------------------------------
@@ -1165,7 +1337,125 @@ export function trace(rgba, w, h, opts = {}) {
     if (filled) sky.__filled = filled;
   }
 
+  // ---- THE SKY GUARD, AT THE END, WHERE IT CANNOT BE UNDONE ------------------------------------------
+  //
+  // Four times I bounded the sky in the wrong place: brightness, half the frame, an edge-map skyline and a median
+  // clamp were all applied to the FALLBACK FLOOD while the over-claim came from the blue-core growth earlier in
+  // the pipeline. A guard that runs before the last thing that sets the mask is not a guard. This one runs where
+  // the frame is finished: a sky deeper than two thirds of the frame is a flood, the mask is clamped to its own
+  // median depth, and every pixel that stops being sky is repainted in ITS OWN COLOUR FAMILY - which is what makes
+  // the photograph's green survive instead of being painted as sky.
+  {
+    if (sky) {
+      const depth = new Int32Array(w);
+      for (let x2 = 0; x2 < w; x2 += 1) { let d2 = 0; for (let y2 = 0; y2 < h; y2 += 1) if (sky[y2 * w + x2]) d2 = y2 + 1; depth[x2] = d2; }
+      const sorted = Array.from(depth).sort((p2, q2) => p2 - q2);
+      const median = sorted[Math.floor(sorted.length / 2)] || 0;
+      const cap = Math.max(Math.floor(h * 0.12), Math.min(Math.floor(h * 0.66), Math.round(median * 1.35)));
+      let freed = 0;
+      for (let x2 = 0; x2 < w; x2 += 1) {
+        if (depth[x2] <= cap) continue;
+        for (let y2 = cap; y2 < h; y2 += 1) {
+          const p2 = y2 * w + x2;
+          if (!sky[p2]) continue;
+          sky[p2] = 0;
+          idx[p2] = entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+          freed += 1;
+        }
+      }
+      if (freed) sky.__freed = freed;
+    }
+  }
+
+  // ---- AREAS FIRST: THE REDUCTION THAT MAKES IT A DRAWING RATHER THAN A POSTERISATION -------------------
+  //
+  // THE CORE FAULT, and the reason the phone showed blue speckle: every earlier stage mapped EACH PIXEL to a
+  // palette family, and on a photograph full of foliage that produces millions of one-pixel islands. A drawing is
+  // not made of isolated pixels; it is made of FIELDS with boundaries. So the frame is now reduced the way pixel
+  // art is always reduced: quantise to the palette, then let a 3x3 MAJORITY FILTER grow the fields over several
+  // passes, with two hard rules that keep the picture honest:
+  //   - a pixel the sky analysis claimed stays sky, and a filter pass may not cross the skyline
+  //   - a pixel may only be absorbed by a family that is already present in its own 3x3 neighbourhood, so an
+  //     outline, a window or a green mass is never erased by a neighbour's majority
+  // Only after that do the constructed elements go on top: the sky plane, the window sprites, the outlines.
+  {
+    const field = new Int16Array(n);
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      field[p2] = sky[p2] ? designedSky : entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+    }
+    const PASSES = 3;
+    for (let pass = 0; pass < PASSES; pass += 1) {
+      const was = Int16Array.from(field);
+      for (let y = 1; y < h - 1; y += 1) {
+        for (let x = 1; x < w - 1; x += 1) {
+          const p2 = y * w + x;
+          if (sky[p2]) continue;                       // the sky is not smoothed into the buildings
+          const tally = new Map();
+          for (let dy = -1; dy <= 1; dy += 1) {
+            for (let dx = -1; dx <= 1; dx += 1) {
+              if (!dx && !dy) continue;
+              const q = p2 + dy * w + dx;
+              if (sky[q]) continue;                    // and the buildings are not smoothed into the sky
+              const v = was[q];
+              tally.set(v, (tally.get(v) || 0) + 1);
+            }
+          }
+          let best = -1, bestN = 1;                    // a strict majority, or the pixel keeps its own family
+          for (const [v, cnt] of tally) if (cnt > bestN) { bestN = cnt; best = v; }
+          if (best >= 0 && !windowsPx.has(p2)) field[p2] = best;
+        }
+      }
+    }
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      if (windowsPx.has(p2)) continue;                 // a window sprite is drawn, never smoothed
+      if (idx[p2] === palette.length - 2) continue;    // an outline stays a line
+      idx[p2] = field[p2];
+    }
+  }
+
+  // ---- PAINT BY KIND: FOLIAGE IS A DRAWN MASS, NOT PHOTOGRAPHIC PIXELS -----------------------------------
+  //
+  // THE REASON THE PHONE SHOWED A GREEN-BROWN SMEAR. This courtyard is mostly trees, and every earlier stage kept
+  // the PHOTOGRAPH's colour for every leaf and then smoothed it: reducing a photograph gives a smoother photograph,
+  // never a drawing. v9's green is not a photograph - it is two or three flat greens per bush, with a drawn
+  // boundary. So the foliage class is now grouped into its connected masses and each mass is painted in ONE family
+  // taken from its own mean colour, with three tones inside it (lit top, mid, shaded under) - a drawn tree.
+  {
+    const FOLC = 2;
+    const mask = new Uint8Array(n);
+    for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === FOLC && !sky[p2]) mask[p2] = 1;
+    const { parts } = components(w, h, (p2) => mask[p2]);
+    let masses = 0;
+    for (const part of parts) {
+      if (part.area < 14) continue;                     // a speck of green is not a bush
+      let r0 = 0, g0 = 0, b0 = 0;
+      const lums = [];
+      for (const p2 of part.px) {
+        r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2];
+        lums.push(en.smooth[p2]);
+      }
+      const n0 = part.px.length;
+      const family = Math.floor(entryFor(palette, r0 / n0, g0 / n0, b0 / n0) / STEPS);
+      const toneOf = (t) => family * STEPS + Math.max(0, Math.min(STEPS - 1, t));
+      const sorted = lums.slice().sort((x, y) => x - y);
+      const t1 = sorted[Math.floor(sorted.length / 3)], t2 = sorted[Math.floor((sorted.length * 2) / 3)];
+      for (let i2 = 0; i2 < n0; i2 += 1) {
+        const p2 = part.px[i2];
+        if (windowsPx.has(p2)) continue;
+        idx[p2] = lums[i2] > t2 ? toneOf(4) : lums[i2] > t1 ? toneOf(2) : toneOf(1);
+      }
+      masses += 1;
+    }
+    if (masses) sky.__foliage = masses;
+  }
+
   return {
+    // the identities this renderer resolved, so a check can measure what was decided instead of guessing a constant
+    ramps: {
+      foliage: Math.floor(entryFor(palette, 60, 150, 60) / STEPS),
+      sky: Math.floor(entryFor(palette, 88, 154, 226) / STEPS),
+      wall: Math.floor(entryFor(palette, 200, 186, 168) / STEPS),
+    },
     idx, palette, skyline, skyN, clouds: placed, traced, removed, merged, linePixels, windows: windowsFound,
     planes: facadePlanes.length, objects: objectCount,
     // THE BUILDINGS THEMSELVES, as structures the game can destroy: the pixels of each facade plane. The window

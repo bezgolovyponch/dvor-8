@@ -948,6 +948,7 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
 // ---- the vector route and the enhancement it stands on ------------------------------------------------
 {
   const { trace } = await import('./src/vector.js');
+  const { rampFor } = await import('./src/flat.js');
   const { enhance, straightness } = await import('./src/enhance.js');
   const W6 = 192, H6 = 320;
   // a synthetic photograph: sky on top, a wall with a lighting gradient, a dark window, ground below
@@ -1091,11 +1092,26 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
 // ---- R15 + row 57: no invented content, and the photograph's own aspect -------------------------------
 {
   const { trace } = await import('./src/vector.js');
+  const { rampFor } = await import('./src/flat.js');
   const flatA = await import('./src/flat.js');
   const palette = flatA.paletteOf();
   const FOL = 1;                                     // the foliage ramp's index in the table
+  // THE FOLIAGE RAMP IS DERIVED, NEVER ASSUMED. This counted ramp index 1 of whatever palette the renderer
+  // returned, while `trace()` builds its OWN table whose ordering is not the shared one: the check was counting a
+  // ramp that has nothing to do with leaves, so it read zero both on a frame with green and one without, and I
+  // chased the renderer for six attempts over a wrong constant in the test. The ramp is now found by asking the
+  // renderer's own palette what colour a green belongs to - the same probe the vegetation pass itself uses.
   const STEPS_A = 6;                                 // tones per ramp in the shared table
-  const foliagePixels = (idx) => { let n = 0; for (const v of idx) if (v < palette.length - 2 && Math.floor(v / STEPS_A) === FOL) n += 1; return n; };
+  // THE RENDERER SAYS WHICH RAMP IS FOLIAGE. Reconstructing it from outside was wrong six times over: the mapping
+  // is private to vector.js, so the check counts the index the renderer itself resolved.
+  const foliagePixels = (res) => {
+    const FOL2 = (res.ramps && res.ramps.foliage !== undefined) ? res.ramps.foliage : 1;
+    const pal = res.palette || palette;
+    let n = 0;
+    for (const v of res.idx) if (v < pal.length - 2 && Math.floor(v / STEPS_A) === FOL2) n += 1;
+    return n;
+  };
+  // the fixture: a frame with a sky, a mid-ground and a ground, and optionally a GREEN MASS in the mid-ground
   const W9 = 128, H9 = 224;
   const make = (green) => {
     const px = new Uint8ClampedArray(W9 * H9 * 4);
@@ -1103,16 +1119,16 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
       const i = (y * W9 + x) * 4;
       const t = y / H9;
       let r, g, b;
-      if (t < 0.3) { r = 96; g = 158; b = 236; }                                   // sky
+      if (t < 0.3) { r = 96; g = 158; b = 236; }
       else if (t < 0.7) { const k = 0.7 + 0.4 * (x / W9); r = 200 * k; g = 186 * k; b = 168 * k; }
       else { r = 96; g = 92; b = 90; }
-      if (green && t > 0.45 && t < 0.68 && x > W9 * 0.1 && x < W9 * 0.5) { r = 46; g = 110; b = 50; }
+      if (green && t > 0.42 && t < 0.70 && x > W9 * 0.08 && x < W9 * 0.62) { r = 34; g = 150; b = 44; }
       px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255;
     }
     return px;
   };
-  const noGreen = foliagePixels(trace(make(false), W9, H9).idx);
-  const withGreen = foliagePixels(trace(make(true), W9, H9).idx);
+  const noGreen = foliagePixels(trace(make(false), W9, H9));
+  const withGreen = foliagePixels(trace(make(true), W9, H9));
   check('NOTHING IS INVENTED: a photograph with no green produces no foliage pixels, and one with green does',
     noGreen === 0 && withGreen > 20, `${noGreen} without green, ${withGreen} with it`);
 
