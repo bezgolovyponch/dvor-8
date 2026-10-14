@@ -21,9 +21,14 @@ const run = (c, a) => { try { return execFileSync(c, a, { encoding: 'utf8', stdi
 
 function loadBMP(path) {
   const b = readFileSync(path);
-  const off = b.readUInt32LE(10), w = b.readInt32LE(18), h = Math.abs(b.readInt32LE(22)), bpp = b.readUInt16LE(28);
+  const off = b.readUInt32LE(10), w = b.readInt32LE(18), hRaw = b.readInt32LE(22), bpp = b.readUInt16LE(28);
+  const h = Math.abs(hRaw);
+  // A NEGATIVE HEIGHT IS A TOP-DOWN BITMAP, and every reference measurement in this project was read UPSIDE DOWN
+  // because this loader flipped unconditionally: sips writes -710 for a 710-pixel image, so "the top" of my loaded
+  // frame was the page background at the bottom. That is why the reference's sky kept measuring rgb(7,0,16).
+  const topDown = hRaw < 0;
   const row = Math.floor((bpp * w + 31) / 32) * 4;
-  return { w, h, px: (x, y) => { const i = off + (h - 1 - y) * row + x * (bpp / 8); return [b[i + 2], b[i + 1], b[i]]; } };
+  return { w, h, px: (x, y) => { const i = off + (topDown ? y : h - 1 - y) * row + x * (bpp / 8); return [b[i + 2], b[i + 1], b[i]]; } };
 }
 function loadJSON(path) {
   const d = JSON.parse(readFileSync(path, 'utf8'));
@@ -119,6 +124,29 @@ function measure(img) {
   };
 }
 
+// ART-TO-ART: a screenshot of the frame that is scaled (v10a's is 1.25x) is put back on the 288x512 grid by
+// AREA-MEDIAN resampling - for each of the 288x512 cells, the median colour of the source rectangle it covers.
+// Integer pitch searching could never find a 1.25 scale, which is why every earlier attempt measured the page
+// background or a mixture. This is the same lesson as R17: put the instrument's input on the grid the numbers mean.
+function areaMedian(img, x0, y0, cw, ch, dw, dh) {
+  const px = (x, y) => img.px(Math.min(img.w - 1, Math.max(0, Math.round(x0 + x))), Math.min(img.h - 1, Math.max(0, Math.round(y0 + y))));
+  const out = { w: dw, h: dh, px: (x, y) => out._cache[y * dw + x] };
+  out._cache = [];
+  const sx = cw / dw, sy = ch / dh;
+  for (let y = 0; y < dh; y += 1) {
+    for (let x = 0; x < dw; x += 1) {
+      const rs = [], gs = [], bs = [];
+      for (let dy = 0; dy < sy; dy += 1) for (let dx = 0; dx < sx; dx += 1) {
+        const c = px(x * sx + dx, y * sy + dy);
+        rs.push(c[0]); gs.push(c[1]); bs.push(c[2]);
+      }
+      const mid = (a2) => a2.sort((u, v) => u - v)[a2.length >> 1];
+      out._cache.push([mid(rs), mid(gs), mid(bs)]);
+    }
+  }
+  return out;
+}
+
 const minePath = process.argv[2];
 const refPath = process.argv[3];
 if (!existsSync(minePath) || !existsSync(refPath)) { console.log('need: <mine-canvas.json> <reference-image>'); process.exit(2); }
@@ -129,12 +157,20 @@ const mine = measure(loadJSON(minePath));
 // pixel by pixel - it carries resampling and compression - so each art cell is the MEDIAN of its block and the frame
 // is the crop with the fewest distinct colours, which is what art is.
 const refImg = loadBMP(refBmp);
+const cropArg = process.argv.slice(4).map(Number);
+let ref;
+if (cropArg.length === 4 && cropArg.every((v) => Number.isFinite(v))) {
+  const [x0, y0, cw, ch] = cropArg;
+  ref = measure(areaMedian(refImg, x0, y0, cw, ch, 288, 512));
+  console.log(`reference: crop ${cw}x${ch} at ${x0},${y0} resampled to 288x512 by area median`);
+} else {
 const found = findArt(refImg);
-const ref = measure({
+ref = measure({
   w: found.w, h: found.h, pitch: found.p,
   px: (x, y) => medianOfBlock(refImg, found.x0 + x * found.p, found.y0 + y * found.p, found.p),
 });
-console.log(`reference frame found: margin ${(100 * found.m).toFixed(0)}% · pitch ${found.p} · ${found.w}x${found.h} · ${found.score} sampled colours`);
+console.log(`reference frame found: margin ${(100 * found.m).toFixed(0)}% · pitch ${found.p} · ${found.w}x${found.h}`);
+}
 
 const TOL = { colours: 2.5, flat: 0.18, strays: 0.05, largest: 0.15, skyShare: 0.25 };
 const rows = [
