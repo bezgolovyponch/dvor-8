@@ -57,7 +57,10 @@ function measure(img, label) {
 // drawn from.
 function pitchOf(img) {
   let best = { p: 1, iso: 1 };
-  for (let p = 2; p <= 8; p += 1) {
+  // FROM 1. The finder started at 2, so a canvas dump that is ALREADY one pixel per art pixel was forced into a
+  // 2x reduction and every number it produced described half the drawing - including the isolated share the whole
+  // comparison exists for. Pitch 1 must be a candidate.
+  for (let p = 1; p <= 8; p += 1) {
     const w2 = Math.floor(img.w / p), h2 = Math.floor(img.h / p);
     let iso = 0, tot = 0;
     const key = (x, y) => img.px(x * p, y * p).join(',');

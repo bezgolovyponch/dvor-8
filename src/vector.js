@@ -534,7 +534,18 @@ export function trace(rgba, w, h, opts = {}) {
       // whole plane takes its tone, and a block whose own mean is clearly darker takes the turned-away tone. Every
       // 8x8 area is one colour, the layout is still the photograph's (the blocks that are darker in the
       // photograph are the blocks that turn away), and the window sprites are drawn on top afterwards.
-      const shadeEntry = entryFor(palette, (r / c) * want * 0.86, (g / c) * want * 0.86, (b / c) * want * 0.86);
+      // A FACADE IS THREE PLANES, NOT TWO - v9's buildings read as SOLIDS because their faces carry real value
+      // steps. One tone plus a 14%-darker twin gives a lattice: every block the same value, the eye reads it as
+      // wallpaper rather than as a wall. The plane's own pixels are split into their luma TERCILES and each third
+      // takes a step of the SAME ramp: the lit face one tone up, the plain face at the plane's tone, the
+      // turned-away face TWO tones down. Three bands of one family, two steps apart at the extremes - which is
+      // what period art uses to make a box look like a box.
+      const family = Math.floor(entryFor(palette, r / c, g / c, b / c) / STEPS);
+      const toneAt = (n) => family * STEPS + Math.max(0, Math.min(STEPS - 1, n));
+      const baseTone = Math.max(1, Math.min(STEPS - 2, Math.round((1 - (r + g + b) / (3 * 255)) * (STEPS - 1))));
+      const litEntry = toneAt(baseTone + 1);
+      const midEntry = toneAt(baseTone);
+      const shadeEntry = toneAt(Math.max(0, baseTone - 2));
       const BLOCK = 8;
       const planeMean = (() => {
         let sum = 0, k2 = 0;
@@ -542,18 +553,27 @@ export function trace(rgba, w, h, opts = {}) {
         return k2 ? sum / k2 : 128;
       })();
       const blocks = new Map();
+      let lo = 1e9, hi = -1e9;
       for (const p2 of part.px) {
         if (sky[p2] || idx[p2] === skyColour) continue;
+        const L = en.smooth[p2];
+        if (L < lo) lo = L;
+        if (L > hi) hi = L;
         const bx = ((p2 % w) / BLOCK) | 0, by = (((p2 / w) | 0) / BLOCK) | 0;
         const k2 = by * 4096 + bx;
         const b2 = blocks.get(k2) || { sum: 0, n: 0, px: [] };
-        b2.sum += en.smooth[p2]; b2.n += 1; b2.px.push(p2);
+        b2.sum += L; b2.n += 1; b2.px.push(p2);
         blocks.set(k2, b2);
       }
+      // the plane's OWN terciles decide which face a block is: the photograph says where the light falls, and the
+      // palette says how far apart the faces stand
+      const t1 = lo + (hi - lo) / 3, t2 = lo + ((hi - lo) * 2) / 3;
       for (const b2 of blocks.values()) {
-        const dark = b2.sum / b2.n < planeMean - 14;
-        for (const p2 of b2.px) idx[p2] = dark ? shadeEntry : entry;
+        const m = b2.sum / b2.n;
+        const face = m > t2 ? litEntry : m > t1 ? midEntry : shadeEntry;
+        for (const p2 of b2.px) idx[p2] = face;
       }
+      void planeMean; void entry;
     }
   }
 

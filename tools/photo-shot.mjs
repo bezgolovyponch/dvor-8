@@ -45,16 +45,20 @@ await withPage(BASE, {}, async (page) => {
     const left = await page.run(`return document.getElementById('left').textContent`);
     if (left && left !== '0') break;
   }
-  // THE CANVAS, DUMPED. The gate cannot measure flatness through a screenshot - the creator's own reference
-  // arrives as a photograph of a phone screen and measures 3% flat there. What can be measured is the pixels the
-  // game DREW: a compact string of the canvas, every second pixel, written beside the pictures.
+  // THE CANVAS, DUMPED AT 1:1 - every pixel, because every-second-pixel was measuring the wrong thing.
+  //
+  // The gate cannot measure a picture through a screenshot (the creator's own reference arrives as a photograph of
+  // a phone screen and measures 3% flat there), so what is measured is the pixels the game DREW. The first version
+  // took every SECOND pixel, which made "neighbour" mean two art pixels away: a 1-pixel stray - exactly the fault
+  // the creator's eye catches - was invisible to the measurement, and the stray-pixel cleanup I wrote moved the
+  // number by 0.2% because the instrument could not see it. The dump is now every pixel.
   const dump = await page.run(`
     const c = document.getElementById('view') || document.querySelector('canvas');
     const g = c.getContext('2d');
     const d = g.getImageData(0, 0, c.width, c.height).data;
     const out = [];
-    for (let y = 0; y < c.height; y += 2) for (let x = 0; x < c.width; x += 2) { const i = (y * c.width + x) * 4; out.push(d[i], d[i + 1], d[i + 2]); }
-    return { w: Math.ceil(c.width / 2), h: Math.ceil(c.height / 2), px: out.join(',') };`);
+    for (let y = 0; y < c.height; y += 1) for (let x = 0; x < c.width; x += 1) { const i = (y * c.width + x) * 4; out.push(d[i], d[i + 1], d[i + 2]); }
+    return { w: c.width, h: c.height, px: out.join(',') };`);
   if (dump && dump.px) (await import('node:fs')).writeFileSync(`${out}/canvas.json`, JSON.stringify(dump));
   results.push({ step: 'built', ...(await page.run(`return { left: document.getElementById('left').textContent, note: document.getElementById('note').textContent.slice(0, 90) }`)) });
   await page.shot(`${out}/1-yard.png`);

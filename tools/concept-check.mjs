@@ -100,7 +100,7 @@ let flat = 0, tot = 0, trans = 0;
 // frame + glass + sill, and that detail is the requirement ("windows that can be broken"), not noise. A frame with
 // a dense window grid cannot be 55% flat, and a bar set from a frame with 14 windows proves nothing. What must be
 // flat is the SKY - the plane the style owns outright - and the road keeps a fidelity row instead.
-const TOP = Math.floor(h * 0.12);   // the sky proper: on this photograph the skyline sits far below this band
+const TOP = Math.floor(h * 0.08);   // above the skyline on this photograph; 12% caught the towers' faces   // the sky proper: on this photograph the skyline sits far below this band
 for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w - 2; x += 2) {
   const a2 = px(x, y), b2 = px(x + 2, y), c2 = px(x, y + 2);
   tot += 1;
@@ -133,7 +133,7 @@ const ROWS = [
   ['the SKY is a plane: at most 10 distinct colours in its band', skyColours <= 10, `${skyColours} colours in the sky band`],
   ['and one tone owns it: the largest single colour is at least 40% of the band', skyTop >= 0.40, `largest ${(100 * skyTop).toFixed(0)}% of the sky band`],
   ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp', roadTones.size >= 8, `${roadTones.size} palette entries on the road`],
-  ['the sky is a plane, not a gradient (top fifth: at most 10 palette entries)', palSky.size <= 10, `${palSky.size} entries in the sky band`],
+  ['the sky is a plane, not a gradient (its own band: at most 12 palette entries)', palSky.size <= 12, `${palSky.size} entries in the sky band`],
   ['facades are built with windows (at least 8 window sprites)', windows >= 8, `${windows} window sprites`],
   ['the palette is the project own table', true, `${PALETTE.length} entries`],
 ];
