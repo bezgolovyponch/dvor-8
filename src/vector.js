@@ -330,6 +330,7 @@ export function trace(rgba, w, h, opts = {}) {
   }
   const skyline = new Int32Array(w).fill(h);       // the first non-sky row in each column
   for (let x = 0; x < w; x += 1) for (let y = 0; y < h; y += 1) if (!sky[y * w + x]) { skyline[x] = y; break; }
+  let skys = null;
   let skyN = 0;
   for (let i = 0; i < n; i += 1) if (sky[i]) skyN += 1;
 
@@ -906,6 +907,7 @@ export function trace(rgba, w, h, opts = {}) {
       // inspired by the exaggerated vehicles in Metal Slug"): a 4-TONE RAMP from the thing's paint colour, a
       // DIAGONAL WINDSHIELD GLINT, and an AMBER RUNNING LIGHT on the outer edge - on top of the 1-px outline the
       // edges map already draws. Nothing here is a model of a car; it is the four things that make a car read.
+      const paintRamp0 = null; const glint0 = null; const amber0 = null;
       const ramp = Math.floor(body / STEPS);
       const tone = (n) => ramp * STEPS + Math.max(0, Math.min(STEPS - 1, n));
       const paintRamp = [tone(1), tone(2), tone(3), tone(4)];               // dark under, light above
@@ -915,33 +917,19 @@ export function trace(rgba, w, h, opts = {}) {
       const part = { id: 0, px: [], area: count, minX: box.minX, maxX: box.maxX, minY: box.minY, maxY: box.maxY };
       for (let p2 = 0; p2 < n; p2 += 1) if (inside[p2]) part.px.push(p2);
       const poly = simplify(outline(inside, w, h, 1, part), 1.6);
-      const bw2 = Math.max(1, box.maxX - box.minX), bh2 = Math.max(1, box.maxY - box.minY);
+      // V9'S VERDICT, TAKEN AS THE RULE: PHOTO PIXELS PLUS ONE SHARED OUTLINE.
+      //
+      // The creator's own audit of their screens says it plainly - "CARS: v6-v8 cartoon template over the photo,
+      // with real car edges showing around it REJECTED · v9 photo pixels plus one shared outline." So the car is
+      // NOT redrawn with a 4-tone ramp, a glint and a running light. It KEEPS THE PHOTO ALREADY PAINTED THERE by
+      // the shape pass, and gets exactly two things: a light clean-up (isolated pixels are handled globally by the
+      // despeckle pass) and ONE 1-PIXEL OUTLINE in the darkest palette colour, along the thing's own silhouette.
       for (const p2 of part.px) {
-        const x = p2 % w, y = (p2 / w) | 0;
         let border = false;
         for (const q of [p2 - 1, p2 + 1, p2 - w, p2 + w]) if (q < 0 || q >= n || !inside[q]) { border = true; break; }
-        if (border) { idx[p2] = OUT2; continue; }
-        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        const up = (y - box.minY) / bh2;                                   // 0 at the top of the thing
-        const across = (x - box.minX) / bw2;
-        if (L < meanL - 18) { idx[p2] = glass; continue; }                 // its own dark part: glass
-        // the glint: one diagonal band across the upper third, the lightest tone of the same ramp
-        if (up < 0.42 && Math.abs(across - (0.5 + (up - 0.2) * 0.6)) < 0.12) { idx[p2] = glint; continue; }
-        // the running light: amber at the two outer edges, a little below the middle
-        if (up > 0.5 && up < 0.68 && (across < 0.06 || across > 0.94)) { idx[p2] = amber; continue; }
-        // and the body is a RAMP, not a flat tone: dark under, light above
-        idx[p2] = paintRamp[Math.max(0, Math.min(3, Math.round((1 - up) * 3)))];
+        if (border) idx[p2] = OUT2;                       // the one shared outline, and nothing else
       }
-      // ONE PIXEL OF OUTLINE ALONG THE TRACED POLYLINE, so the silhouette is the car and not its pixel noise
-      for (let i = 0; i < poly.length; i += 1) {
-        const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
-        const steps = Math.max(Math.abs(bx - ax), Math.abs(by - ay), 1);
-        for (let k = 0; k <= steps; k += 1) {
-          const x = Math.round(ax + ((bx - ax) * k) / steps), y = Math.round(ay + ((by - ay) * k) / steps);
-          if (x < 0 || y < 0 || x >= w || y >= h) continue;
-          idx[y * w + x] = OUT2;
-        }
-      }
+      void meanL; void mean; void paintRamp0; void glint0; void amber0; void body; void glass; void lit;
       objectCount += 1;
     }
   }
@@ -1028,9 +1016,30 @@ export function trace(rgba, w, h, opts = {}) {
     if (painted) sky.__veg = painted;
   }
 
+  // ---- 5h. THE SKY, v9'S OWN DESIGN: one blue, a light band at the horizon, designed clouds ----------
+  //
+  // "Finds where the sky is in the photo, then fills it with the v6 design: one blue, a light band at the
+  // horizon, and designed clouds in white with two shades. 5 tones in total. The same sky shows through any hole
+  // torn in a building." The cloud pixels are laid down here so a hole in a wall reveals sky, not a gap.
+  {
+    const skyTones = [skyColour];
+    const band = entryFor(palette, 214, 232, 244);        // the light band at the horizon
+    const cloudA = entryFor(palette, 250, 250, 252);
+    const cloudB = entryFor(palette, 232, 236, 244);
+    const cloudC = entryFor(palette, 198, 214, 232);
+    for (let x = 0; x < w; x += 1) {
+      const line = skyline[x];
+      for (let y = Math.max(0, line - 5); y < line; y += 1) {
+        const p2 = y * w + x;
+        if (sky[p2]) idx[p2] = band;
+      }
+    }
+    skys = { skyTones, band, cloudA, cloudB, cloudC };
+  }
+
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------
-  const cloudColour = entryFor(palette, 246, 246, 250);
-  const cloudShade = entryFor(palette, 196, 202, 214);
+  const cloudColour = skys ? skys.cloudA : entryFor(palette, 250, 250, 252);
+  const cloudShade = skys ? skys.cloudC : entryFor(palette, 198, 214, 232);
   const cloudMask = new Int32Array(n).fill(-1);
   const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyN / n) * 9)));
   const size = Math.max(7, Math.round(w / 11));
