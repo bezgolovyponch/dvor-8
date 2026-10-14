@@ -89,19 +89,23 @@ for (let y = 20; y < h - 20; y += 3) for (let x = 20; x < w - 20; x += 3) {
   const a = px(x, y), b = px(x + 3, y + 3), c2 = px(x - 3, y - 3);
   if (lum(a) > 30 && lum(a) < 120 && lum(b) > lum(a) + 20 && lum(c2) > lum(a) + 20) windows += 1;
 }
-// WHAT ACTUALLY SEPARATES A CONSTRUCTED FRAME FROM A FILTERED ONE. The first version of this gate counted
-// palette entries and FAILED ON THE v6 REFERENCE TOO (50 of 50), which proved the measure wrong: a good pixel
-// frame is not the one that uses few colours, it is the one whose SURFACES ARE FLAT. Two scale-free measures:
-//   FLAT SHARE      the percentage of pixels identical to the neighbour on their right and below
-//   TRANSITIONS     colour changes per pixel along every row (low = flat planes, high = noise or dither)
+
+// FIDELITY AND FLATNESS ARE IN TENSION, AND THE CREATOR SETTLED IT: the environment must stay exactly as the
+// photograph, only pixelated (R14, docs/PLAN.md L0). So flatness is measured where the STYLE decides the layout
+// (sky, facades, objects - the top of the frame), and a FIDELITY row is measured where the PHOTOGRAPH decides it
+// (the road and ground at the bottom): a faithful pixelation of asphalt with its markings uses many tones of its
+// ramp, where a flattened one uses three.
 let flat = 0, tot = 0, trans = 0;
-for (let y = 0; y < h - 2; y += 2) for (let x = 0; x < w - 2; x += 2) {
+const TOP = Math.floor(h * 0.55);
+for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w - 2; x += 2) {
   const a2 = px(x, y), b2 = px(x + 2, y), c2 = px(x, y + 2);
   tot += 1;
   if (a2.join() === b2.join() && a2.join() === c2.join()) flat += 1;
   if (a2.join() !== b2.join()) trans += 1;
 }
-const flatShare = flat / tot, transPerPx = trans / tot;
+const flatShare = flat / Math.max(1, tot), transPerPx = trans / Math.max(1, tot);
+const roadTones = new Set();
+for (let y = Math.floor(h * 0.62); y < h; y += 2) for (let x = 0; x < w; x += 2) roadTones.add(near(px(x, y)));
 
 const ROWS = [
   ['the frame is a daylight place, not a murk (mean luma 55..200)', mean >= 55 && mean <= 200, `mean luma ${mean.toFixed(0)}`],
@@ -113,8 +117,9 @@ const ROWS = [
   ['below the sky, no single colour has swallowed the picture (<= 32%)', biggest <= 0.32, `largest colour below the sky ${(100 * biggest).toFixed(0)}%`],
   // A CONSTRUCTED FRAME USES A FEW ENTRIES PER SURFACE AND A FLAT SKY. The thresholds are calibrated on the
   // reference the creator accepts, measured with this same tool.
-  ['surfaces are FLAT: at least 55% of pixels match their right and lower neighbour', flatShare >= 0.55, `flat share ${(100 * flatShare).toFixed(0)}%`],
-  ['the frame is DRAWN, not dithered: at most 0.34 colour changes per pixel along a row', transPerPx <= 0.34, `${transPerPx.toFixed(2)} transitions/px`],
+  ['the STYLE decides the top of the frame: at least 55% of its pixels match their neighbours', flatShare >= 0.55, `flat share ${(100 * flatShare).toFixed(0)}% at the top`],
+  ['and it is drawn, not dithered: at most 0.34 colour changes per pixel there', transPerPx <= 0.34, `${transPerPx.toFixed(2)} transitions/px`],
+  ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp', roadTones.size >= 8, `${roadTones.size} palette entries on the road`],
   ['the sky is a plane, not a gradient (top fifth: at most 8 palette entries)', palSky.size <= 8, `${palSky.size} entries in the sky band`],
   ['facades are built with windows (at least 8 window sprites)', windows >= 8, `${windows} window sprites`],
   ['the palette is the project own table', true, `${PALETTE.length} entries`],

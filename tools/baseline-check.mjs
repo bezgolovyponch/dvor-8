@@ -60,6 +60,8 @@ const ROWS = [
     () => has(read('docs/knowledge-base.md'), 'slimsam-77-uniform', 'Apache-2.0', '13.8 MB quantized', '3b-1')],
   ['L1 Requirement 18 is decomposed in layers, with the licence question answered per layer', 'docs/knowledge-base.md',
     () => has(read('docs/knowledge-base.md'), 'decomposed in layers', 'nvidia/mit-b0', 'PaddleSeg', 'class-agnostic', 'THE ORDER')],
+  ['L1 THE PLAN exists: layers bottom-up, dependencies, and what cannot precede what', 'docs/PLAN.md',
+    () => { const p2 = read('docs/PLAN.md'); return has(p2, 'R14', 'FAITHFUL PIXELATED TRANSCRIPTION', 'L0', 'L8', 'L9', 'cannot be built before what'); }],
   ['L1 The MASTER specification exists: pipeline, machine specs, bars, restrictions, method', 'docs/MASTER.md',
     () => { const m = read('docs/MASTER.md'); return has(m, '288×512', '50 entries', '7,515,971', '13.8 MB quantized', 'R13', 'The method (mandatory)'); }],
   ['L1 The CLAUDE DESIGN prompt exists, with the acceptance numbers and real documentation links',

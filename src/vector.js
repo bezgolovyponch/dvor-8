@@ -920,56 +920,27 @@ export function trace(rgba, w, h, opts = {}) {
         r += rgb[p2 * 3]; g += rgb[p2 * 3 + 1]; b += rgb[p2 * 3 + 2]; c += 1;
       }
       if (!c) continue;
-      // THE ROAD REPRODUCES THE PHOTOGRAPH'S OWN PLANES. One flat tone made the largest surface of the frame a
-      // single colour - the gate measured 62% where the reference's largest is 6%, and a street that is 62% one
-      // tone is not a street. Inventing kerbs and patches would be inventing the place, so the road is split into
-      // THE PLANES THE PHOTOGRAPH ALREADY HAS: its own luma terciles, each painted flat in one tone of the road's
-      // ramp. A kerb, a gutter, a patched rectangle and a shadowed strip are all in the photograph, and each
-      // becomes a plane of its own - the LAYOUT is the photograph's, only the surface is flat.
-      const usable = pad.px.filter((p2) => luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) <= 168);
-      if (!usable.length) continue;
-      const lums = usable.map((p2) => luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2])).sort((x, y) => x - y);
-      // QUARTILES, NOT TERCILES: with three bands the largest one still owned a quarter of the picture (the gate
-      // measured 25% against a 22% bar). The photograph's own quartiles put every plane under a fifth, and they
-      // are still the photograph's - a kerb, a gutter and two shades of asphalt are what the picture contains.
-      const q1 = lums[Math.floor(lums.length * 0.34)], q2 = lums[Math.floor(lums.length * 0.67)], q3 = Infinity;
-      const bandOf = (p2) => {
-        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        return L <= q1 ? 0 : L <= q2 ? 1 : L <= q3 ? 2 : 3;
-      };
-      const sums = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
-      for (const p2 of usable) { const b2 = bandOf(p2); sums[b2][0] += rgb[p2 * 3]; sums[b2][1] += rgb[p2 * 3 + 1]; sums[b2][2] += rgb[p2 * 3 + 2]; sums[b2][3] += 1; }
-      const roadEntries = sums.map(([rr, gg, bb, cc], i2) => (cc ? entryFor(palette, rr / cc, gg / cc, bb / cc) : entryFor(palette, r / c * (0.75 + 0.15 * i2), g / c * (0.75 + 0.15 * i2), b / c * (0.75 + 0.15 * i2))));
-      // a plane is painted flat and only its BOUNDARY is a change: three smoothing passes drop lone band pixels
-      const bandMap = new Int8Array(n).fill(-1);
-      for (const p2 of usable) bandMap[p2] = bandOf(p2);
-      for (let pass = 0; pass < 3; pass += 1) {
-        const was = Int8Array.from(bandMap);
-        for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
-          const p2 = y * w + x;
-          if (was[p2] < 0) continue;
-          const nb = [was[p2 - 1], was[p2 + 1], was[p2 - w], was[p2 + w]].filter((v) => v >= 0).sort();
-          if (nb.length >= 3 && nb[1] !== was[p2]) bandMap[p2] = nb[1];
-        }
-      }
-      // THE PLANES MUST BE DISTINCT. Four bands whose means all round to the SAME palette entry are one plane with
-      // three invisible seams - which is exactly what the gate then measured: the road was still one colour, 24%
-      // of the picture. A tone is stepped within its own ramp until the entries differ.
-      const rampOf = (e) => Math.floor(e / STEPS), toneOf = (e) => e % STEPS;
-      for (let i2 = 1; i2 < roadEntries.length; i2 += 1) {
-        let guard = 0;
-        while (roadEntries.slice(0, i2).includes(roadEntries[i2]) && guard < STEPS) {
-          const r2 = rampOf(roadEntries[i2]), t2 = toneOf(roadEntries[i2]);
-          const next = Math.max(0, Math.min(STEPS - 1, t2 + (i2 % 2 ? -1 : 1)));
-          roadEntries[i2] = r2 * STEPS + next;
-          guard += 1;
-        }
-      }
+      // the road's own family, taken once from its mean colour: the faithful gradation stays inside it
+      const body0 = entryFor(palette, r / c, g / c, b / c);
+      // THE ROAD IS A FAITHFUL PIXELATION OF THE PHOTOGRAPH (R14, L0 of docs/PLAN.md).
+      //
+      // The tercile version flattened the road into three tones and thereby MOVED the photograph's own layout -
+      // the lane markings ended up as shaped blobs in the wrong places, the patches merged, and the creator said
+      // it plainly: the road has to stay exactly as it is on the photo, only pixelated. So the road is now
+      // transcribed PIXEL BY PIXEL into the palette, with the photograph's own luma deciding the tone: a marking
+      // stays where it is and keeps its width, a patch keeps its edge, a kerb keeps its line.
+      const ramps = palette.length / STEPS;
       for (const p2 of pad.px) {
         const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        if (L > 168) { idx[p2] = marking; continue; }
-        idx[p2] = roadEntries[Math.max(0, bandMap[p2])];
+        if (L > 168) { idx[p2] = marking; continue; }         // the paint the photograph has, where it has it
+        // the asphalt's own tone: the road's ramp, its tone chosen by the pixel's own value in eight steps - a
+        // faithful gradation, no dithering, and the layout untouched
+        const step = Math.max(0, Math.min(STEPS - 1, Math.round(((L - 30) / 120) * (STEPS - 1))));
+        idx[p2] = entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) === 0
+          ? step * 1
+          : Math.floor(body0 / STEPS) * STEPS + step;
       }
+      void ramps;
     }
     if (roads) sky.__roads = roads;
   }
