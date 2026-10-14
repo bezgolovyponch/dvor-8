@@ -29,6 +29,7 @@ import { sfx, unlock, setMuted } from './audio.js';
 import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
 import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, antic, WHIMSY, FLOWERS, WASH, HELP } from './kind.js';
 import { STEPS } from './flat.js';
+import { boxDown } from './flat.js';
 import { chip, surfaceAt, imprint, borderOf, edgesOf, wreckAlong, rollOver, breakCells, cellsOf } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
 import { factFor } from './lore.js';
@@ -449,7 +450,29 @@ async function decode(file, size = null) {
     return c;
   };
   const k = Math.min(DETECT_LONG / Math.max(w, h), Math.max(iw / w, ih / h));
-  const large = fit(Math.round(w * k), Math.round(h * k)), small = fit(w, h);
+  const large = fit(Math.round(w * k), Math.round(h * k));
+  // ---- P2 OF THE CREATOR'S CRITERIA: EVERY BLOCK OF 5x5 PHOTO PIXELS BECOMES ONE GAME PIXEL -------------
+  //
+  // "Every block of 5x5 photo pixels becomes one game pixel at the same position, so the game frame lines up with
+  // the photo exactly." The photograph was instead drawn straight down to 288x512 with the browser's own
+  // interpolation, which smears edges and keeps high-frequency detail that no 1-px art can hold - the mush. The
+  // picture is now drawn at 5x the game grid and REDUCED BY A BOX AVERAGE: five by five source pixels become one
+  // game pixel, at the same position, exactly as the criteria say. It is the same box average the flat route
+  // already uses internally (flat.js boxDown), so the two paths agree on what a game pixel is.
+  const GAME = 5;
+  const small = (() => {
+    const big5 = fit(w * GAME, h * GAME);
+    const g5 = big5.getContext('2d');
+    const src = g5.getImageData(0, 0, w * GAME, h * GAME);
+    const down = boxDown(src.data, w * GAME, h * GAME, w, h, 4);
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const octx = out.getContext('2d');
+    const img = octx.createImageData(w, h);
+    for (let i2 = 0; i2 < w * h * 4; i2 += 1) img.data[i2] = down[i2];
+    octx.putImageData(img, 0, 0);
+    return out;
+  })();
   // A third size, between the two, for the windows: three picture-pixels to one of the game's, when the
   // photograph has that much in it.
   const unit = large.width >= w * 3 ? 3 : 1, mid = unit > 1 ? fit(w * unit, h * unit) : null;

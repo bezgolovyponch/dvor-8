@@ -18,7 +18,7 @@ panels and messages; each row says how it is checked. `tools/baseline-check.mjs`
 | id | criterion | checked by |
 |---|---|---|
 | P1 | *"The road, sidewalk, hedge, trees, people and all 6 cars are the photo, pixelated: averaged into 288×512 and snapped to one palette, with nothing redrawn."* | the gate's road row (≥8 tones of the road's own ramp, layout unmoved) |
-| P2 | *"Every block of 5×5 photo pixels becomes one game pixel at the same position, so the game frame lines up with the photo exactly."* | **NOT MET** — my reduction is a 3×3 majority filter, not the 5×5 block average; recorded as the first missing piece in `docs/DONE.md` |
+| P2 | *"Every block of 5×5 photo pixels becomes one game pixel at the same position, so the game frame lines up with the photo exactly."* | **MET** — the photograph is drawn at 5× the game grid and reduced by `flat.js boxDown`: five by five source pixels become one game pixel at the same position. The mush went with the browser interpolation that the criterion replaces |
 | P3 | *"Each car gets a 1-px outline."* | the owner-map outline in `render.js` |
 
 ## The sky
