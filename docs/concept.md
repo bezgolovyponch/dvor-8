@@ -14,6 +14,12 @@ it is there is removed, not kept "for later". This is checked, not hoped for:
 
 ### Every part, and its reason
 
+- `scene.js` — **the picture as parts, painted in one fixed order.** Holds ground, sky, walls, foliage and objects,
+  each carrying the method it must be drawn by, and walks them in that order and no other: a kind whose source is
+  the photograph may not be smoothed, a kind whose source is the design may not keep the photograph's pixels. It
+  exists because a frame built by passes into one buffer is not a picture, it is the residue of an order of
+  operations — which is how ten delivery lines passed while the screen stayed a posterised photograph.
+
 | Part | Why it is there |
 |---|---|
 | `detect.js` | The point of the game: the targets are the real things in your photograph. Without it they are patterns. |
