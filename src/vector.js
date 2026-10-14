@@ -302,6 +302,32 @@ export function trace(rgba, w, h, opts = {}) {
       if (!grew) break;
     }
   }
+  // AN OVERCAST SKY IS STILL A SKY. The blue test above finds a blue sky; on a grey day - the creator's Prague
+  // photograph is overcast - it finds nothing, and the top of the frame was painted as noisy shapes instead of a
+  // plane: the gate measured 52% flat with 0.39 colour changes per pixel in the sky band. So if the blue core is
+  // small, the sky is found the way the scene analysis found it: WHATEVER IS CONNECTED TO THE TOP EDGE, IS SMOOTH
+  // (low edge strength) AND HAS NO LONG STRAIGHT LINES (which is what separates sky from a distant city).
+  {
+    let core = 0;
+    for (let i = 0; i < n; i += 1) if (coreSky[i]) core += 1;
+    if (core / n < 0.08) {
+      const stack = [];
+      for (let x = 0; x < w; x += 1) if (!sky[x] && en.line[x] < 0.35 && edge[x] < SKY_MAX_EDGE * 2.2) { sky[x] = 1; stack.push(x); }
+      while (stack.length) {
+        const p2 = stack.pop(), x = p2 % w, y = (p2 / w) | 0;
+        const nbs = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]];
+        for (const [nx, ny] of nbs) {
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const q = ny * w + nx;
+          if (sky[q] || en.line[q] > 0.35 || edge[q] > SKY_MAX_EDGE * 2.2) continue;
+          sky[q] = 1; stack.push(q);
+        }
+      }
+      let grown = 0;
+      for (let i = 0; i < n; i += 1) if (sky[i]) grown += 1;
+      if (grown / n > 0.05) { for (let x = 0; x < w; x += 1) coreSky[x] = sky[x]; }
+    }
+  }
   const skyline = new Int32Array(w).fill(h);       // the first non-sky row in each column
   for (let x = 0; x < w; x += 1) for (let y = 0; y < h; y += 1) if (!sky[y * w + x]) { skyline[x] = y; break; }
   let skyN = 0;
@@ -493,10 +519,33 @@ export function trace(rgba, w, h, opts = {}) {
       // THE WALL IS BUILT, NOT PHOTOGRAPHED: one tone for the plane, and a second, darker tone on the pixels
       // whose own edges say the surface turns away - so a facade reads as masonry with light on it rather than
       // as a photograph someone tinted.
+      // THE WALL IS A PLANE, NOT A PER-PIXEL DECISION (row 51).
+      //
+      // The first version chose the wall's tone PER PIXEL (`en.line > 0.25 ? shade : entry`), which carried the
+      // photograph's own noise into the surface: the gate measured 49% flat and 0.41 colour changes per pixel at
+      // the top of the frame, where the style is supposed to decide. A plane is now painted in BLOCKS of 8x8: the
+      // whole plane takes its tone, and a block whose own mean is clearly darker takes the turned-away tone. Every
+      // 8x8 area is one colour, the layout is still the photograph's (the blocks that are darker in the
+      // photograph are the blocks that turn away), and the window sprites are drawn on top afterwards.
       const shadeEntry = entryFor(palette, (r / c) * want * 0.86, (g / c) * want * 0.86, (b / c) * want * 0.86);
+      const BLOCK = 8;
+      const planeMean = (() => {
+        let sum = 0, k2 = 0;
+        for (const p2 of part.px) { if (sky[p2] || idx[p2] === skyColour) continue; sum += en.smooth[p2]; k2 += 1; }
+        return k2 ? sum / k2 : 128;
+      })();
+      const blocks = new Map();
       for (const p2 of part.px) {
         if (sky[p2] || idx[p2] === skyColour) continue;
-        idx[p2] = en.line[p2] > 0.25 ? shadeEntry : entry;
+        const bx = ((p2 % w) / BLOCK) | 0, by = (((p2 / w) | 0) / BLOCK) | 0;
+        const k2 = by * 4096 + bx;
+        const b2 = blocks.get(k2) || { sum: 0, n: 0, px: [] };
+        b2.sum += en.smooth[p2]; b2.n += 1; b2.px.push(p2);
+        blocks.set(k2, b2);
+      }
+      for (const b2 of blocks.values()) {
+        const dark = b2.sum / b2.n < planeMean - 14;
+        for (const p2 of b2.px) idx[p2] = dark ? shadeEntry : entry;
       }
     }
   }

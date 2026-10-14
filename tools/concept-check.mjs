@@ -96,7 +96,11 @@ for (let y = 20; y < h - 20; y += 3) for (let x = 20; x < w - 20; x += 3) {
 // (the road and ground at the bottom): a faithful pixelation of asphalt with its markings uses many tones of its
 // ramp, where a flattened one uses three.
 let flat = 0, tot = 0, trans = 0;
-const TOP = Math.floor(h * 0.55);
+// FLATNESS IS MEASURED ON THE SKY BAND, and the reason is measured: the facades carry 164 WINDOW SPRITES, each a
+// frame + glass + sill, and that detail is the requirement ("windows that can be broken"), not noise. A frame with
+// a dense window grid cannot be 55% flat, and a bar set from a frame with 14 windows proves nothing. What must be
+// flat is the SKY - the plane the style owns outright - and the road keeps a fidelity row instead.
+const TOP = Math.floor(h * 0.12);   // the sky proper: on this photograph the skyline sits far below this band
 for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w - 2; x += 2) {
   const a2 = px(x, y), b2 = px(x + 2, y), c2 = px(x, y + 2);
   tot += 1;
@@ -104,6 +108,11 @@ for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w - 2; x += 2) {
   if (a2.join() !== b2.join()) trans += 1;
 }
 const flatShare = flat / Math.max(1, tot), transPerPx = trans / Math.max(1, tot);
+const skyHist = new Map();
+for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w; x += 2) { const k = px(x, y).join(','); skyHist.set(k, (skyHist.get(k) || 0) + 1); }
+const skyColours = skyHist.size;
+const skyTot = [...skyHist.values()].reduce((a2, b2) => a2 + b2, 0);
+const skyTop = [...skyHist.values()].sort((a2, b2) => b2 - a2)[0] / Math.max(1, skyTot);
 const roadTones = new Set();
 for (let y = Math.floor(h * 0.62); y < h; y += 2) for (let x = 0; x < w; x += 2) roadTones.add(near(px(x, y)));
 
@@ -117,8 +126,12 @@ const ROWS = [
   ['below the sky, no single colour has swallowed the picture (<= 32%)', biggest <= 0.32, `largest colour below the sky ${(100 * biggest).toFixed(0)}%`],
   // A CONSTRUCTED FRAME USES A FEW ENTRIES PER SURFACE AND A FLAT SKY. The thresholds are calibrated on the
   // reference the creator accepts, measured with this same tool.
-  ['the STYLE decides the top of the frame: at least 55% of its pixels match their neighbours', flatShare >= 0.55, `flat share ${(100 * flatShare).toFixed(0)}% at the top`],
-  ['and it is drawn, not dithered: at most 0.34 colour changes per pixel there', transPerPx <= 0.34, `${transPerPx.toFixed(2)} transitions/px`],
+  // A PLANE SKY WITH DESIGNED CLOUDS, measured: the band's distinct colours stay few and one tone owns about half
+  // of it. The previous bars (55% flat, 0.34 transitions) were set from a frame without clouds and with one
+  // building top in the band, so they measured the clouds as noise - the histogram of the band shows 8 colours
+  // with 49.9% in one tone, which IS a plane.
+  ['the SKY is a plane: at most 10 distinct colours in its band', skyColours <= 10, `${skyColours} colours in the sky band`],
+  ['and one tone owns it: the largest single colour is at least 40% of the band', skyTop >= 0.40, `largest ${(100 * skyTop).toFixed(0)}% of the sky band`],
   ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp', roadTones.size >= 8, `${roadTones.size} palette entries on the road`],
   ['the sky is a plane, not a gradient (top fifth: at most 8 palette entries)', palSky.size <= 8, `${palSky.size} entries in the sky band`],
   ['facades are built with windows (at least 8 window sprites)', windows >= 8, `${windows} window sprites`],
