@@ -33,8 +33,14 @@ if (missing) {
 }
 // the preamble must still carry its five load-bearing statements, or it has been edited into decoration
 const pre = readFileSync('docs/PREAMBLE.md', 'utf8');
+// THE PREAMBLE MUST STILL CARRY THE CONCEPT, NOT ONLY THE FINDINGS. These strings are the load-bearing logic of the
+// project: the photograph as a source of facts, one method per kind, the outline and destroyable sets, the outline
+// following the shape, one palette, and the chain gating what may be shown.
 const must = ['THE CRITICAL BUG', 'A conversion pipeline cannot produce a construction result',
-  'An outline that marks everything marks nothing', 'gates **showing**', 'named after the requirement'];
+  'An outline that marks everything marks nothing', 'gates **showing**', 'named after the requirement',
+  'THE CONCEPT LOGIC', 'a source of FACTS, not of pixels', 'outlined kinds are **buildings and cars only**',
+  'the outline follows\n  the shape', 'one 50-entry palette'];// the filter itself
+
 const gone = must.filter((m) => !pre.includes(m));
 if (gone.length) {
   console.log(`PREFLIGHT FAILED: the preamble lost ${gone.length} of its load-bearing statements: ${gone.join(' · ')}`);

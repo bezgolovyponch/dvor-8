@@ -498,7 +498,11 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     // region's OWNER map instead: a pixel belongs to the outline when one of its four neighbours belongs to a
     // DIFFERENT region. That is v9's rule - "an object's edge is every pixel that touches a pixel of another
     // object" - and it cannot stripe an interior, because an interior pixel's neighbours are all its own.
+    // THE OUTLINE FOLLOWS THE SHAPE, BECAUSE THE SHAPE IS VERSIONED. Caching by id alone meant a damaged thing kept
+    // the outline of its original silhouette - the wreck was drawn inside an untouched contour. `world.touch()`
+    // bumps the version on every damage path, so a cached outline is used only while the version still matches.
     let edges = world.edgesCache.get(r.id);
+    if (edges && edges.ver !== (r.ver || 0)) edges = null;
     if (!edges) {
       const own = world.owner || null;
       const list = [];
@@ -510,7 +514,8 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
         }
       }
       edges = own ? list : edgesOf(world, r);
-      world.edgesCache.set(r.id, edges);
+      world.edgesCache.set(r.id, { ver: r.ver || 0, edges });
+      edges = world.edgesCache.get(r.id).edges;
     }
     const blink = (seconds * 2 + r.id * 0.37) % 1 > 0.82;      // a blink, out of step with its neighbours
     const aimed = world.aim && world.aim.id === r.id;

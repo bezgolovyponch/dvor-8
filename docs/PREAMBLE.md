@@ -4,6 +4,33 @@ This file is prepended to every piece of work in this project. It exists because
 round began wherever attention landed. Nothing is started, changed or reported before this is read and
 `node tools/preflight.mjs` passes.
 
+
+## 0. THE CONCEPT LOGIC — the causal chain every change must fit into
+
+**The photograph is a source of FACTS, not of pixels.** The facts are: where the sky ends, where each facade stands
+and what its column and floor pitch is, where the road runs, which mass is a tree, where the cars and the people are.
+Nothing else is taken from it.
+
+**Every kind then has exactly one method**, decided by whether its value IS its appearance:
+
+| kind | source of its look | method |
+|---|---|---|
+| sky | none — designed | one blue plane, horizon band, designed clouds |
+| buildings | layout only | a plane in 2–3 tones + a **regular window grid** on the photo's own pitch + a 1-px outline against the sky |
+| windows | layout only | drawn sprites: frame · glass · sill — **destroyable, never outlined** |
+| road, pavement, markings, shadows | the photograph | **converted**: 5×5 area mean, one game pixel per block at the same position, never smoothed |
+| cars, people, bins, bicycles | the photograph | **converted**: cut out of the reduced picture, one silhouette outline |
+
+**The rules that follow, and never bend:** outlined kinds are **buildings and cars only**; destroyable kinds are
+**buildings, cars and windows**; **a person is never a target**; **damage changes the shape, so the outline follows
+the shape** (version-stamped cache); **one 50-entry palette** for the whole frame, dithering only in the sky's
+horizon band.
+
+**Why the chain of work is what it is:** the facts must be read before the kinds can be drawn (layers 1–3), the kinds
+must exist before they can be outlined (4–5), an outline cannot follow a shape that cannot change (6), and nothing
+may be shown until the frame can be compared to the accepted one (7). **A step built on a missing earlier step is
+the whole history of this project's failures.**
+
 ## 1. The task
 
 **DVOR-8** — a photograph of a courtyard, taken on a phone, becomes a playable 8-bit level: the real cars, benches,

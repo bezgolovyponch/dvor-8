@@ -46,6 +46,7 @@ const REGISTRY = {
   I1: () => /wrecks it IN ITS OWN SHAPE/.test(suite()) && /breakCells/.test(suite()),
   I2: () => /#f04f78/.test(readFileSync('src/render.js', 'utf8')) && /#30e1b9/.test(readFileSync('src/render.js', 'utf8')),
   I3: null,                                    // the on-page baseline panel with a re-run button: not built
+  D1: () => /export function touch/.test(readFileSync('src/world.js', 'utf8')) && /edges\.ver !== \(r\.ver/.test(readFileSync('src/render.js', 'utf8')),
   R1: null,                                    // the reference frame comparison: tool exists, not wired
 };
 

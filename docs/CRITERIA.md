@@ -46,6 +46,12 @@ panels and messages; each row says how it is checked. `tools/baseline-check.mjs`
 | I2 | *"An object's edge is every pixel that touches a pixel of another object. Buildings get a 1-px outline against the sky. Aiming shows a pink edge, info mode a cyan one, and a selected object blinks cyan and yellow."* | `render.js`: aim pink, info cyan, selection blinking; outline from the owner map |
 | I3 | *"Baseline: the 10 checks … run automatically every time the page loads, and the results are shown on the page. There's also a button to run them again."* | **NOT MET** — my checks run from the command line; v10 shows them on the page with a re-run button |
 
+## The outlines follow the shape
+
+| id | criterion — the creator's own words | checked by |
+|---|---|---|
+| D1 | *"the buildings and cars have to be destructable, so their outline will be also changing as the shape changes"* | `world.touch()` bumps a version on every damage path; `render.js` caches an outline only while the version matches, so a wrecked thing is outlined by its WRECKED silhouette |
+
 ## The reference itself
 
 | id | criterion | checked by |

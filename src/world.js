@@ -105,6 +105,9 @@ export function insideBorder(poly, x, y) {
  * a hole torn out along the border where it landed, and the void only at the centre - never a black box, which
  * is what "wrecked" looked like before (D48, and the audit's row 26).
  */
+/** THE SHAPE CHANGED: bump the version so every cached outline of this thing is rebuilt (docs/MECHANICS.md). */
+export function touch(region) { if (region) region.ver = (region.ver || 0) + 1; return region; }
+
 export function wreckAlong(world, region, at = null, strength = 1) {
   const poly = borderOf(world, region);
   const edge = new Set(edgesOf(world, region));
@@ -125,6 +128,7 @@ export function wreckAlong(world, region, at = null, strength = 1) {
       world.idx[p] = world.dent[world.idx[p]] ?? world.idx[p]; dented += 1;
     }
   }
+  touch(region);
   return { poly, edge: edge.size, torn, dented, holed };
 }
 
@@ -235,6 +239,7 @@ export function breakCells(world, s, at, strength = 1, rnd = Math.random) {
   }
   s.gone = true;
   for (let cy = 0; cy < c.rows; cy += 1) { let any = false; for (let cx = 0; cx < c.cols; cx += 1) if (!c.gone.has(cy * c.cols + cx)) any = true; if (any) s.gone = false; }
+  touch(s);
   return { taken, windows };
 }
 
