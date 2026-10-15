@@ -158,13 +158,73 @@ const mine = measure(loadJSON(minePath));
 // is the crop with the fewest distinct colours, which is what art is.
 const refImg = loadBMP(refBmp);
 const cropArg = process.argv.slice(4).map(Number);
+
+// THE CROP IS FOUND, NOT SUPPLIED. The creator's screenshots are the reference; the grid is ASSUMED to be 288x512
+// (the frame says so: "288x512 · PX = 2") and the UNKNOWN is only where the phone sits and at what scale. So the
+// search is over crops: for each candidate rectangle, resample to 288x512 by area median and keep the one that
+// looks like art - flat, with structure. Integer pitch searches could never do this because the scale is fractional
+// (v10a's is 1.25x).
+function snap(img, palette) {
+  const d2 = (a2, b2) => { const dr = a2[0] - b2[0], dg = a2[1] - b2[1], db = a2[2] - b2[2]; return dr * dr + dg * dg + db * db; };
+  const cache = new Map();
+  return { w: img.w, h: img.h, px: (x, y) => {
+    const c = img.px(x, y), k = c.join(',');
+    if (cache.has(k)) return cache.get(k);
+    let best = palette[0], bd = 1e9;
+    for (const q of palette) { const d = d2(c, q); if (d < bd) { bd = d; best = q; } }
+    cache.set(k, best);
+    return best;
+  } };
+}
+
+function dominant(img, n = 40) {
+  const hist = new Map();
+  for (let y = 0; y < img.h; y += 1) for (let x = 0; x < img.w; x += 1) { const k = img.px(x, y).join(','); hist.set(k, (hist.get(k) || 0) + 1); }
+  return [...hist.entries()].sort((a2, b2) => b2[1] - a2[1]).slice(0, n).map(([k]) => k.split(',').map(Number));
+}
+
+function findFrame(img) {
+  let best = null;
+  const sizes = [0.86, 0.90, 0.94, 0.98];
+  for (const frac of sizes) {
+    const cw = Math.round(img.w * frac), ch = Math.round(cw * (512 / 288));
+    if (ch > img.h) continue;
+    for (let x0 = 0; x0 + cw <= img.w; x0 += Math.max(1, Math.round(img.w * 0.02))) {
+      for (let y0 = 0; y0 + ch <= img.h; y0 += Math.max(1, Math.round(img.h * 0.02))) {
+        const small = snap(areaMedian(img, x0, y0, cw, ch, 288, 512), dominant(areaMedian(img, x0, y0, cw, ch, 288, 512), 40));
+        const cols = new Map();
+        for (let y = 0; y < 512; y += 4) for (let x = 0; x < 288; x += 4) { const k = small.px(x, y).join(','); cols.set(k, (cols.get(k) || 0) + 1); }
+        const top = Math.max(...cols.values()) / ((512 / 4) * (288 / 4));
+        if (cols.size < 6 || cols.size > 64 || top > 0.8) continue;       // art after snapping: tens of colours
+        let flat = 0, tot = 0;
+        for (let y = 0; y < 511; y += 2) for (let x = 0; x < 287; x += 2) {
+          const k = small.px(x, y).join(','); tot += 1;
+          if (k === small.px(x + 1, y).join(',') && k === small.px(x, y + 1).join(',')) flat += 1;
+        }
+        const score = flat / Math.max(1, tot) - Math.abs(cols.size - 34) / 200;   // art-like: flat, tens of colours
+        if (!best || score > best.score) best = { score, x0, y0, cw, ch, colours: cols.size, flat: flat / tot };
+      }
+    }
+  }
+  return best;
+}
 let ref;
 if (cropArg.length === 4 && cropArg.every((v) => Number.isFinite(v))) {
   const [x0, y0, cw, ch] = cropArg;
   ref = measure(areaMedian(refImg, x0, y0, cw, ch, 288, 512));
   console.log(`reference: crop ${cw}x${ch} at ${x0},${y0} resampled to 288x512 by area median`);
+} else if (process.env.FIND_FRAME === '1') {
+  const fr = findFrame(refImg);
+  if (!fr) { console.log('no frame found in the reference'); process.exit(2); }
+  ref = measure(areaMedian(refImg, fr.x0, fr.y0, fr.cw, fr.ch, 288, 512));
+  console.log(`reference frame FOUND: ${fr.cw}x${fr.ch} at ${fr.x0},${fr.y0} -> 288x512 · ${fr.colours} colours · ${(100 * fr.flat).toFixed(0)}% flat`);
 } else {
 const found = findArt(refImg);
+if (!found || found.score < 0.5) {
+  console.log(`THE REFERENCE COULD NOT BE READ AS ART: best candidate ${found ? (100 * found.score).toFixed(0) + '% flat' : 'none'}.`);
+  console.log('No verdict is given: feed the 288x512 PNG of the frame, or a crop whose art grid the locator can find.');
+  process.exit(2);
+}
 ref = measure({
   w: found.w, h: found.h, pitch: found.p,
   px: (x, y) => medianOfBlock(refImg, found.x0 + x * found.p, found.y0 + y * found.p, found.p),

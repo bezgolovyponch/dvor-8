@@ -1,0 +1,37 @@
+// THE BULLETPROOF ACTION CHAIN — the one command every request follows, in the order the dependencies impose.
+//
+// The project kept losing track because each round began wherever attention landed: a render pass, a doc, a
+// measurement. This chain is the answer to "what do I do now" and it cannot be skipped, because each step refuses to
+// pass the baton when it fails, and the failure names the next action.
+//
+//   1 CRITERIA     every criterion of the creator's own definition has a predicate, and it is MET
+//   2 COMPOSITION  every element of the accepted frame is bound to requirement -> class -> baseline -> predicate
+//   3 SUITE        the behaviour is right (node test.mjs)
+//   4 DELIVERY     the twelve mandatory lines, including the definition of done and the criteria file
+//   5 REFERENCE    the frame against the accepted frame, art against art (when art is supplied)
+//
+// Step 5 is the gate on SHOWING anything; steps 1-4 are the gate on CONTINUING.
+import { execFileSync } from 'node:child_process';
+const run = (cmd, args, env = {}) => { try { return { out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } }), code: 0 }; } catch (e) { return { out: (e.stdout || '') + (e.stderr || ''), code: e.status ?? 1 }; } };
+
+const steps = [
+  ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], {}],
+  ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
+  ['3 SUITE', 'node', ['test.mjs'], {}],
+  ['4 DELIVERY', 'node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/chain', process.env.PHOTO || 'photos-test/5.jpg', 'ЦУНАМИ'], {}],
+];
+if (process.env.REFERENCE) steps.push(['5 REFERENCE', 'node', ['tools/reference-check.mjs', (process.env.OUT || '/tmp/chain') + '/canvas.json', process.env.REFERENCE], {}]);
+
+console.log('THE CHAIN — each step must pass before the next is read\n');
+let stopped = null;
+for (const [name, cmd, args, env] of steps) {
+  const { out, code } = run(cmd, args, env);
+  const last = out.trim().split('\n').filter(Boolean).slice(-2).join(' | ');
+  console.log(`${code === 0 ? 'PASS' : 'FAIL'}  ${name.padEnd(14)} ${last.slice(0, 130)}`);
+  if (code !== 0 && !stopped) { stopped = name; if (!process.env.KEEP_GOING) break; }
+}
+if (stopped) {
+  console.log(`\nTHE CHAIN STOPPED AT ${stopped}. The failures above name the next action; nothing is shown until it passes.`);
+  process.exit(1);
+}
+console.log('\nTHE CHAIN PASSED — every criterion, every binding, the suite and the rule. The frame may be shown.');
