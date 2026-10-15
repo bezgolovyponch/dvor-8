@@ -70,6 +70,21 @@ const cleanFrame = params.get('clean') === '1';
 // (a phone uses the native picker), and a hidden input cannot be filled by a test runner - which is why the page
 // gate had to inject a synthetic File and hung on it. This is a testing affordance, not a product change: it does
 // nothing unless the parameter is present, and the input stays a two-pixel transparent sliver in the corner.
+// `?photo=<url>` LOADS A PHOTOGRAPH WITHOUT A FILE PICKER. A phone uses the native picker and a test runner cannot
+// set a file input at all (both Playwright's fill and the harness's synthetic File are dead ends, and the synthetic
+// one hung the decoder). This hook fetches the picture, wraps it as a File and hands it to the SAME handler the
+// picker uses, so the real path is exercised - detection, build, damage, the lot - with nothing but a navigation.
+if (params.get('photo') && typeof document !== 'undefined') {
+  setTimeout(async () => {
+    try {
+      const blob = await fetch(params.get('photo')).then((r) => r.blob());
+      const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' });
+      await fromFile(file);
+    } catch (error) {
+      nothingFound(`Не получилось: ${error.message}`);
+    }
+  }, 300);
+}
 if (params.get('test') === '1' && typeof document !== 'undefined') {
   setTimeout(() => {
     for (const id of ['shot', 'shot2', 'pic', 'pic2']) {
