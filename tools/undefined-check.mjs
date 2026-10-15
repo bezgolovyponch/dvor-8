@@ -61,7 +61,8 @@ const declaredIn = (src) => {
 let bad = 0;
 const isModule = (spec) => spec.endsWith('.js') && !/^https?:/.test(spec);
 for (const f of files) {
-  const src = readFileSync(f, 'utf8');
+  const raw = readFileSync(f, 'utf8');
+  const src = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/[^\n]*$/gm, ' ');
   for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
     const spec = m[2];
     if (!isModule(spec)) continue;
@@ -80,7 +81,7 @@ for (const f of files) {
 for (const f of files) {
   const src = readFileSync(f, 'utf8');
   const decl = declaredIn(src);
-  const body = src.replace(/\/\/[^\n]*/g, ' ');
+  const body = src;
   for (const name of exported) {
     if (decl.has(name)) continue;
     if (!new RegExp(`\\b${name}\\b(?!\\s*:)`).test(body)) continue;   // not used as a value here (a key is not a use)

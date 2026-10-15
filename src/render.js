@@ -1,6 +1,7 @@
 // Drawing. The picture is rebuilt from indices through the current table on every frame, which is what
 // lets a filter change everything at once and a broken thing simply be a wreck.
 
+import { mayBeOutlined } from './criteria/OutlineRule.js';   // the requirement, by name (docs/MECHANICS.md)
 import { lookThrough, css, OUTLINE } from './palette.js';
 import { inFocus } from './modes.js';
 import { glyph, ADVANCE, GLYPH_W, GLYPH_H } from './font.js';
@@ -501,8 +502,12 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     // THE OUTLINE FOLLOWS THE SHAPE, BECAUSE THE SHAPE IS VERSIONED. Caching by id alone meant a damaged thing kept
     // the outline of its original silhouette - the wreck was drawn inside an untouched contour. `world.touch()`
     // bumps the version on every damage path, so a cached outline is used only while the version still matches.
+    // A CACHE HIT MUST UNWRAP. The entry is { ver, edges }; the first version returned the wrapper itself, so the
+    // draw loop iterated an object - "TypeError: edges is not iterable" - which is the frame the creator saw as a
+    // blue mush with one green patch: the pass threw and nothing after it was drawn.
     let edges = world.edgesCache.get(r.id);
-    if (edges && edges.ver !== (r.ver || 0)) edges = null;
+    if (edges && edges.ver === (r.ver || 0)) edges = edges.edges;
+    else edges = null;
     if (!edges) {
       const own = world.owner || null;
       const list = [];
