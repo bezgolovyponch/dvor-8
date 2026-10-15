@@ -30,10 +30,18 @@ const steps = [
   const out = process.env.PAGE_OUT || '/tmp/chain-page';
   const { out: pageOut } = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', out, process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'],
     { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1' });
-  const built = /"step":"built"[^}]*"left":"(\d+)"/.exec(pageOut);
-  const errs = /"step":"errors","errors":\[([^\]]*)\]/.exec(pageOut);
-  const left = built ? Number(built[1]) : 0;
-  const clean = errs ? errs[1].trim().length <= 2 : false;
+  // THE STEP LINES ARE JSON: READ THEM AS JSON. A regex over the harness's stdout reported `left 0, console DIRTY`
+  // for a page that was in fact clean (`errors: []`), which is the fourth time one of my instruments described
+  // itself instead of the thing it measured. Each line the harness prints IS a JSON object; the last one for a
+  // step is that step's result.
+  const stepsOf = new Map();
+  for (const line of pageOut.split('\n')) {
+    const t = line.trim();
+    if (!t.startsWith('{')) continue;
+    try { const o = JSON.parse(t); if (o && o.step) stepsOf.set(o.step, o); } catch { /* not a step line */ }
+  }
+  const left = Number((stepsOf.get('built') || {}).left || 0);
+  const clean = ((stepsOf.get('errors') || {}).errors || []).length === 0;
   const ok = left > 0 && clean;
   console.log(`${ok ? 'PASS' : 'FAIL'}  6 PAGE         a yard built from a real photograph: left ${left}, console ${clean ? 'clean' : 'DIRTY'}`);
   if (!ok) {

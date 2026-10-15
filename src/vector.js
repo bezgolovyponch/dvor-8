@@ -71,35 +71,31 @@ export const CLEAN = {
 let paintingSky = false;
 function entryFor(palette, r, g, b) {
   const { h, s, v } = rgb2hsv(r, g, b);
-  const wantSky = paintingSky && s > 0.10 && h >= SKY_HUE[0] && h <= SKY_HUE[1];
-  const wantLeaf = h >= FOLIAGE_HUE[0] && h <= FOLIAGE_HUE[1] && s > 0.12;
   let family = null;
-  if (wantSky) family = 'sky';
-  else if (wantLeaf) family = 'foliage';
-  // A GREY IS NOT AUTOMATICALLY COOL. The first version sent every desaturated pixel to the metal ramp, which
-  // in this palette is blue-tinted, so a concrete wall and an asphalt road came out blue - the loudest failure
-  // in the first r9 render. A grey goes to the ramp on ITS OWN side of neutral: bluish to metal, otherwise stone.
-  else if (s < 0.14) family = b > r + 18 ? 'metal' : 'stone';
-  else if (h < 20 || h >= 340) family = 'earth';                          // reds and browns: brick, soil, rust
-  else if (h < 45) family = 'warm';                                       // orange and amber: sand, lit stone
-  else if (h < 65) family = 'sand';                                       // yellow
-  else family = 'stone';                                                  // anything left
+  let bestD = Infinity;
+  for (const R of RAMPS) {
+    if (R.name === 'sky' && !paintingSky) continue;          // the sky belongs to the sky mask alone
+    let dh = Math.abs(R.hue - h);
+    if (dh > 180) dh = 360 - dh;
+    // hue dominates, saturation and value break ties: a desaturated pixel is claimed by the nearest hue it HAS
+    const d = (dh / 180) * 1.0 + Math.abs((R.sat || 0) - s) * 0.35;
+    if (d < bestD) { bestD = d; family = R.name; }
+  }
+  if (!family) family = 'stone';
+  // WITHIN THE FAMILY, THE NEAREST TONE. The edit that replaced the cascade cut this loop out and the function
+  // returned undefined, so every pixel took entry 0: two colours and 97% of the frame in one of them. Restored,
+  // and it is the only place a tone is chosen.
   const want = RAMPS.findIndex((R) => R.name === family);
-  let best = 0, bestD = Infinity;
-  for (let i = 0; i < palette.length - 2; i += 1) {
-    if (Math.floor(i / STEPS) !== (want < 0 ? Math.floor(i / STEPS) : want)) continue;
+  const base = (want < 0 ? 3 : want) * STEPS;
+  let bestTone = base, bestToneD = Infinity;
+  for (let t = 0; t < STEPS; t += 1) {
+    const i = base + t;
     const c = palette[i];
+    if (!c) continue;
     const d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
-    if (d < bestD) { bestD = d; best = i; }
+    if (d < bestToneD) { bestToneD = d; bestTone = i; }
   }
-  if (bestD === Infinity) {   // no ramp of that family: fall back to the nearest of all
-    for (let i = 0; i < palette.length - 2; i += 1) {
-      const c = palette[i];
-      const d = (c[0] - r) ** 2 + (c[1] - g) ** 2 + (c[2] - b) ** 2;
-      if (d < bestD) { bestD = d; best = i; }
-    }
-  }
-  return best;
+  return bestTone;
 }
 
 // ---- connected components, iterative: a 288x512 frame is 147k pixels and recursion would blow the stack ----
@@ -1121,11 +1117,17 @@ export function trace(rgba, w, h, opts = {}) {
   // horizon, and designed clouds in white with two shades. 5 tones in total. The same sky shows through any hole
   // torn in a building." The cloud pixels are laid down here so a hole in a wall reveals sky, not a gap.
   {
-    const skyTones = [skyColour];
+    // ALL FIVE SKY TONES ARE CHOSEN WITH THE SKY FLAG ON. Wrapping only the band left the clouds resolving to the
+    // stone ramp, so the criterion "one blue with designed clouds" was being met by a grey sky with grey clouds -
+    // which is exactly what the frame showed.
+    paintingSky = true;
+    const skyColourDesigned = entryFor(palette, 88, 154, 226);
+    const skyTones = [skyColourDesigned];
     const band = entryFor(palette, 214, 232, 244);        // the light band at the horizon
     const cloudA = entryFor(palette, 250, 250, 252);
     const cloudB = entryFor(palette, 232, 236, 244);
     const cloudC = entryFor(palette, 198, 214, 232);
+    paintingSky = false;
     for (let x = 0; x < w; x += 1) {
       const line = skyline[x];
       for (let y = Math.max(0, line - 5); y < line; y += 1) {
@@ -1359,8 +1361,10 @@ export function trace(rgba, w, h, opts = {}) {
   }
 
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------
+  paintingSky = true;
   const cloudColour = skys ? skys.cloudA : entryFor(palette, 250, 250, 252);
   const cloudShade = skys ? skys.cloudC : entryFor(palette, 198, 214, 232);
+  paintingSky = false;
   const cloudMask = new Int32Array(n).fill(-1);
   const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyN / n) * 9)));
   const size = Math.max(7, Math.round(w / 11));
@@ -1533,8 +1537,22 @@ export function trace(rgba, w, h, opts = {}) {
   // The remaining kinds (ground, walls, objects) still travel their old paths and are marked as such: this is the
   // architecture taking over one kind at a time, not a rewrite that breaks the picture to prove a point.
   {
+    // A SKY THAT IS WHITE IS STILL A SKY. On an overcast photograph the blue-core test finds nothing, and the frame
+    // was left with the photograph's own grey sky while the criterion says "one blue with designed clouds". If the
+    // mask covers less than a twentieth of the frame, the sky is taken to be everything ABOVE THE SKYLINE the
+    // renderer already computed - which is the geometry, not a guess.
+    let skyCount = 0;
+    for (let p2 = 0; p2 < n; p2 += 1) if (sky[p2]) skyCount += 1;
+    let skyMask = sky;
+    if (skyCount / n < 0.05) {
+      skyMask = new Uint8Array(n);
+      for (let x2 = 0; x2 < w; x2 += 1) {
+        const top2 = Math.max(1, skyline[x2] - 1);
+        for (let y2 = 0; y2 < top2; y2 += 1) skyMask[y2 * w + x2] = 1;
+      }
+    }
     const scene = makeScene(w, h);
-    scene.sky = { mask: sky, tone: designedSky };
+    scene.sky = { mask: skyMask, tone: designedSky };
     const FOLC = 2;
     const mask = new Uint8Array(n);
     for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === FOLC && !sky[p2]) mask[p2] = 1;

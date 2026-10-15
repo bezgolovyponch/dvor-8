@@ -48,8 +48,13 @@ for (const f of files) {
 // import was never added, the check passed, and the phone failed. The check now takes every name exported anywhere
 // in src/ as a CANDIDATE and requires each one that is used in a file to be imported or declared there. The
 // candidate set is small and exact, so there are no invented findings.
+// THE CANDIDATE SET IS THE RULE MODULES, AND ONLY THEM. Taking every name exported anywhere in src/ produced 486
+// findings - `sky`, `stone`, `metal`, `step` are also local variables, object keys and parameters elsewhere, so the
+// check accused files of not importing their own locals. That is the crude-measurement disease again. The class that
+// actually broke the product three times is narrower and exact: A NAME EXPORTED BY A CRITERIA MODULE AND USED
+// ELSEWHERE MUST BE IMPORTED THERE. That set is small, has no collisions, and is the whole bug class.
 const exported = new Set();
-for (const names of exportsOf.values()) for (const n of names) exported.add(n);
+for (const [file, names] of exportsOf) if (/criteria[\/\\]/.test(file)) for (const n of names) exported.add(n);
 const declaredIn = (src) => {
   const d = new Set();
   for (const m of src.matchAll(/\b(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)) d.add(m[1]);
@@ -79,9 +84,13 @@ for (const f of files) {
 }
 
 for (const f of files) {
-  const src = readFileSync(f, 'utf8');
+  const raw = readFileSync(f, 'utf8');
+  const src = raw;
   const decl = declaredIn(src);
-  const body = src;
+  // COMMENTS ARE NOT USES. The import scan strips them; the use scan must too, or a file is accused of using a name
+  // that appears only in a sentence about it - which is how `BLOCK`, `NEVER` and `predicate` were "found" in four
+  // files that do not use them at all.
+  const body = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/[^\n]*$/gm, ' ').replace(/\/\/[^\n]*/g, ' ');
   for (const name of exported) {
     if (decl.has(name)) continue;
     if (!new RegExp(`\\b${name}\\b(?!\\s*:)`).test(body)) continue;   // not used as a value here (a key is not a use)
