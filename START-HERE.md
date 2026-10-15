@@ -16,16 +16,30 @@ node tools/chain.mjs         # criteria → composition → suite → delivery �
 
 A step that fails names the next action. Steps 0–4 gate continuing; `6 PAGE` and `6b FAMILIES` gate showing.
 
+## Where the self-evaluation stands (measured in the live page)
+
+```
+REGIONS 65 · HOUSES 6 — outlined 6/6, one mass each      ← row 65, DONE
+           · CARS 4 — outlined 4/4, one mass each        ← worst clustering was 24 patches, now 1
+           · WINDOWS 55 — outlined 0/55                  ← destroyable, never outlined
+page: 65 targets · console clean · 116 tones, largest 31% (no collapse)
+```
+
+Buildings exist as things because **COCO has no building class**: they are the world's own `structures` (6 on the
+creator's photograph), turned into regions.
+
 ## The next action, exactly
 
-**Row 65: buildings are not regions.** The live self-evaluation prints
-`REGIONS 61 · CARS 4 outlined 4 · worstClusters 1 · WINDOWS 55 outlined 0 · OUTLINED_KINDS 0 buildings`.
-The detector's building boxes are dropped between detection and region building, so buildings are never outlined
-and never destroyable. Make a building a thing with a mask (largest connected cluster, as cars now are), then
-re-run the probe and expect `OUTLINED_KINDS` to contain buildings.
+**The sky.** It is painted blue into `idx` — measured: the right palette entry (`rgb(86,118,185)`) over 37,435 px,
+read from the page as `window.__skyPainted` — and the canvas's top band still measures
+`34% pale grey · 31% mid grey · 24% dark grey · 4% blue`. One of three things is true, and the test that decides
+between them is written in `docs/PREAMBLE.md` §7: read the canvas's own top band and `__skyPainted` in the SAME run.
 
-**And behind it, row 66: the sky is painted blue into `idx` (37,435 px, `window.__skyPainted`) and the canvas's top
-band still measures grey.** The three candidates and the one-command test are in `docs/PREAMBLE.md` §7.
+- **band blue there** → the product is right and my capture is wrong (the fourth instrument lie to fix);
+- **band grey there** → the overwrite is real: bisect the passes after the sky paint, one dump per stage.
+
+**After that: the frame is neutral where the accepted frame is blue** — the facades carry the photograph's grey-blue
+in three tones instead of drawn planes under a designed sky (`docs/V10A.md` is the target, element by element).
 
 ## The rules that cost the most to learn (all recorded in `docs/`)
 
