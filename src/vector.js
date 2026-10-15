@@ -60,9 +60,18 @@ export const CLEAN = {
 };
 
 /** The palette entry nearest a colour, but with the family chosen by HUE and the tone by VALUE (rule 4). */
+// THE SKY FAMILY BELONGS TO THE SKY MASK AND TO NOTHING ELSE.
+//
+// This sent ANY blue-ish pixel to the sky family: `s > 0.10 && blue hue`. On a photograph of a blue-grey city -
+// grey-blue facades, blue-grey asphalt, overcast light - that is nearly every pixel, and the drawn frame came out
+// 96% sky by the family gate: the blue mush with one green patch, where the foliage pass was the only one that
+// escaped. A pixel is painted in the sky family only while the sky itself is being painted; everywhere else a
+// blue-ish colour goes to the palette's blue-tinted NEUTRAL (metal), which is what a shadowed wall and wet asphalt
+// actually are.
+let paintingSky = false;
 function entryFor(palette, r, g, b) {
   const { h, s, v } = rgb2hsv(r, g, b);
-  const wantSky = s > 0.10 && h >= SKY_HUE[0] && h <= SKY_HUE[1];
+  const wantSky = paintingSky && s > 0.10 && h >= SKY_HUE[0] && h <= SKY_HUE[1];
   const wantLeaf = h >= FOLIAGE_HUE[0] && h <= FOLIAGE_HUE[1] && s > 0.12;
   let family = null;
   if (wantSky) family = 'sky';
@@ -1543,7 +1552,11 @@ export function trace(rgba, w, h, opts = {}) {
       scene.foliage.push({ px: part.px, lums, t1, t2, tones: [toneOf(1), toneOf(2), toneOf(4)] });
     }
     const painted = renderScene(scene, idx, {
-      paintSky: (sc, out) => { for (let p2 = 0; p2 < n; p2 += 1) if (sc.sky.mask[p2]) out[p2] = sc.sky.tone; },
+      paintSky: (sc, out) => {
+        paintingSky = true;
+        for (let p2 = 0; p2 < n; p2 += 1) if (sc.sky.mask[p2]) out[p2] = entryFor(palette, 88, 154, 226);
+        paintingSky = false;
+      },
       paintFoliage: (sc, out, mass) => {
         for (let i2 = 0; i2 < mass.px.length; i2 += 1) {
           const p2 = mass.px[i2];

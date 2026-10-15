@@ -16,6 +16,7 @@ const run = (cmd, args, env = {}) => { try { return { out: execFileSync(cmd, arg
 
 const steps = [
   ['0 PREFLIGHT', 'node', ['tools/preflight.mjs'], {}],
+  ['0b IMPORTS', 'node', ['tools/undefined-check.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], {}],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],
@@ -37,6 +38,18 @@ const steps = [
   console.log(`${ok ? 'PASS' : 'FAIL'}  6 PAGE         a yard built from a real photograph: left ${left}, console ${clean ? 'clean' : 'DIRTY'}`);
   if (!ok) {
     console.log('\nTHE CHAIN STOPPED AT 6 PAGE. A page gate that cannot build a yard verifies nothing: the suite, the criteria and the composition all passed while the real path was broken.');
+    process.exit(1);
+  }
+}
+// STEP 6b - THE COLOUR-COLLAPSE GATE, on the frame step 6 just drew. Every other check passed while the frame was
+// 96% one colour family; this is the one that asks whether the picture uses the families the photograph uses.
+{
+  const dump = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
+  const { out: fam, code } = run('node', ['tools/family-check.mjs', dump], {});
+  const last = fam.trim().split('\n').filter(Boolean).slice(-1)[0];
+  console.log(`${code === 0 ? 'PASS' : 'FAIL'}  6b FAMILIES    ${last.slice(0, 120)}`);
+  if (code !== 0 && !process.env.KEEP_GOING) {
+    console.log('\nTHE CHAIN STOPPED AT 6b FAMILIES: the drawn frame does not use the families the photograph uses.');
     process.exit(1);
   }
 }
