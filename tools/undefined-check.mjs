@@ -26,7 +26,14 @@ for (const f of files) {
   const src = readFileSync(f, 'utf8');
   const names = new Set();
   for (const m of src.matchAll(/export\s+(?:async\s+)?(?:function|class)\s+([A-Za-z_$][\w$]*)/g)) names.add(m[1]);
-  for (const m of src.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) names.add(m[1]);
+  // EVERY DECLARATOR, not only the first: `export const LONG = 512, SHORT = 288;` exports two names, and reading
+  // only the first made this very check report SHORT as missing - its own blind spot, in its first run.
+  for (const m of src.matchAll(/export\s+(?:const|let|var)\s+([^;\n]+)/g)) {
+    for (const part of m[1].split(',')) {
+      const n = part.trim().split(/[=:]/)[0].trim();
+      if (/^[A-Za-z_$][\w$]*$/.test(n)) names.add(n);
+    }
+  }
   for (const m of src.matchAll(/export\s*\{([^}]*)\}/g)) for (const part of m[1].split(',')) {
     const n = part.trim().split(/\s+as\s+/).pop().trim();
     if (n) names.add(n);
@@ -42,6 +49,7 @@ for (const f of files) {
   for (const m of src.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
     const spec = m[2];
     if (!isModule(spec)) continue;
+    if (spec.includes('vendor/')) continue;                 // minified third-party bundles: not ours to parse
     const target = resolve(dirname(resolve(f)), spec);
     if (!existsSync(target)) { console.log(`MISSING FILE  ${f} imports ${spec}`); bad += 1; continue; }
     const exp = exportsOf.get(target) || new Set();
