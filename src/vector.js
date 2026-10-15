@@ -1289,6 +1289,33 @@ export function trace(rgba, w, h, opts = {}) {
         }
       }
       if (drawn) sky.__facadeWindows = drawn;
+
+      // ---- GRAIN REMOVAL (docs/AUDIT.md, step 4): NO PHOTOGRAPH REMAINS INSIDE A WALL -----------------
+      //
+      // The audit found the wall still carried the photograph's grain underneath the grid, because the facade loop
+      // only reached pixels inside its own connected parts and left the rest as sampled colour. A wall is a PLANE:
+      // every wall-class pixel that is not a window, a sky pixel or an outline now takes the wall's own mid tone of
+      // its own family. After this, the only things inside a facade are plane tones and window sprites.
+      {
+        let r0 = 0, g0 = 0, b0 = 0, k0 = 0;
+        for (let p2 = 0; p2 < n; p2 += 1) {
+          if (cls[p2] !== WALLCLS || sky[p2] || windowsPx.has(p2)) continue;
+          r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2]; k0 += 1;
+        }
+        if (k0) {
+          const family = Math.floor(entryFor(palette, r0 / k0, g0 / k0, b0 / k0) / STEPS);
+          const midTone = family * STEPS + 2;
+          let cleaned = 0;
+          for (let p2 = 0; p2 < n; p2 += 1) {
+            if (cls[p2] !== WALLCLS || sky[p2] || windowsPx.has(p2)) continue;
+            if (idx[p2] === palette.length - 2) continue;          // an outline stays a line
+            if (Math.floor(idx[p2] / STEPS) === family) continue;  // already this plane's family
+            idx[p2] = midTone;
+            cleaned += 1;
+          }
+          sky.__grainRemoved = cleaned;
+        }
+      }
     }
     sky.__wall = planes;
   }

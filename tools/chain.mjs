@@ -15,6 +15,7 @@ import { execFileSync } from 'node:child_process';
 const run = (cmd, args, env = {}) => { try { return { out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } }), code: 0 }; } catch (e) { return { out: (e.stdout || '') + (e.stderr || ''), code: e.status ?? 1 }; } };
 
 const steps = [
+  ['0 PREFLIGHT', 'node', ['tools/preflight.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], {}],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],
