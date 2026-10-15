@@ -30,6 +30,7 @@ import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
 import { plant, stepBlooms, wash, washable, dropParcel, help, parcelAt, blossomBurst, antic, WHIMSY, FLOWERS, WASH, HELP } from './kind.js';
 import { STEPS } from './flat.js';
 import { boxDown } from './flat.js';
+import { photoLayer, BLOCK } from './criteria/RoadRule.js';   // THE PHOTOGRAPH LAYER, BY NAME (P2)
 import { chip, surfaceAt, imprint, borderOf, edgesOf, wreckAlong, rollOver, breakCells, cellsOf } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
 import { factFor } from './lore.js';

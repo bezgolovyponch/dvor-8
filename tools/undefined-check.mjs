@@ -42,6 +42,22 @@ for (const f of files) {
   exportsOf.set(resolve(f), names);
 }
 
+// THE BLIND SPOT THAT SHIPPED "BLOCK is not defined" TWICE. This check verified that every EXISTING import
+// resolves; it never verified that every USED symbol was imported. And my patch script "confirmed" the fix by
+// grepping for the string `criteria/RoadRule.js` - which the COMMENT on the next line already contained. So the
+// import was never added, the check passed, and the phone failed. The check now takes every name exported anywhere
+// in src/ as a CANDIDATE and requires each one that is used in a file to be imported or declared there. The
+// candidate set is small and exact, so there are no invented findings.
+const exported = new Set();
+for (const names of exportsOf.values()) for (const n of names) exported.add(n);
+const declaredIn = (src) => {
+  const d = new Set();
+  for (const m of src.matchAll(/\b(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/g)) d.add(m[1]);
+  for (const m of src.matchAll(/import\s*\{([^}]*)\}/g)) for (const part of m[1].split(',')) { const n = part.trim().split(/\s+as\s+/).pop().trim(); if (n) d.add(n); }
+  for (const m of src.matchAll(/\b([A-Za-z_$][\w$]*)\s*[:=]\s*(?:function|\()/g)) d.add(m[1]);
+  for (const m of src.matchAll(/(?:function\s*[A-Za-z_$\w$]*\s*)?\(([^)]*)\)\s*(?:=>|\{)/g)) for (const part of m[1].split(',')) { const n = part.trim().replace(/[={].*$/, '').trim(); if (/^[A-Za-z_$][\w$]*$/.test(n)) d.add(n); }
+  return d;
+};
 let bad = 0;
 const isModule = (spec) => spec.endsWith('.js') && !/^https?:/.test(spec);
 for (const f of files) {
@@ -58,6 +74,18 @@ for (const f of files) {
       if (!name) continue;
       if (!exp.has(name)) { console.log(`NOT EXPORTED  ${f} imports { ${name} } from ${spec}`); bad += 1; }
     }
+  }
+}
+
+for (const f of files) {
+  const src = readFileSync(f, 'utf8');
+  const decl = declaredIn(src);
+  const body = src.replace(/\/\/[^\n]*/g, ' ');
+  for (const name of exported) {
+    if (decl.has(name)) continue;
+    if (!new RegExp(`\\b${name}\\b(?!\\s*:)`).test(body)) continue;   // not used as a value here (a key is not a use)
+    console.log(`USED NOT IMPORTED  ${f} uses ${name}, which src/ exports, but this file neither imports nor declares it`);
+    bad += 1;
   }
 }
 

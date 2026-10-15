@@ -19,7 +19,7 @@ const steps = [
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], {}],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],
-  ['4 DELIVERY', 'node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/chain', process.env.PHOTO || 'photos-test/5.jpg', 'ЦУНАМИ'], {}],
+  ['4 DELIVERY', 'node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/chain', process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'], {}],
 ];
 // STEP 6 - THE PAGE GATE. Every other gate tests code in isolation from the page: the suite calls trace() and
 // makeWorld() in Node, so it never touches the file input, the decode, the detector, the build or the HUD. That is
@@ -27,7 +27,7 @@ const steps = [
 // REAL photograph and refuses to pass unless a yard was actually built (left > 0) and the console is clean.
 {
   const out = process.env.PAGE_OUT || '/tmp/chain-page';
-  const { out: pageOut } = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', out, process.env.PHOTO || 'photos-test/5.jpg', 'ЦУНАМИ'],
+  const { out: pageOut } = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', out, process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'],
     { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1' });
   const built = /"step":"built"[^}]*"left":"(\d+)"/.exec(pageOut);
   const errs = /"step":"errors","errors":\[([^\]]*)\]/.exec(pageOut);
