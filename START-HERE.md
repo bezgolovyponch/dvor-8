@@ -51,3 +51,16 @@ in three tones instead of drawn planes under a designed sky (`docs/V10A.md` is t
 5. **Never report instead of building where the input exists.** Look → name the one fault → fix → look again.
 6. **The photograph is a source of FACTS, not of pixels**: road/ground/cars keep its pixels, sky/buildings/windows
    are drawn.
+
+## Driving the page from a browser plugin (no harness, no file picker)
+
+```
+open  http://127.0.0.1:4312/game/index.html?clean=1&photo=/game/photos-test/v10a.jpg
+wait  ~8 s (the note reads «нашёл за N с: машина ×4, окон N»)
+click button|ПРОВЕРИТЬ        # the on-page self-test panel
+screenshot                    # and LOOK at the frame
+```
+
+Two documented test hooks make this possible, both inert unless the parameter is present:
+`?photo=<url>` loads a photograph through the **same handler as the picker** (a test runner cannot set a file input,
+and a synthetic File hung the decoder); `?test=1` reveals the inputs for a runner that needs them.
