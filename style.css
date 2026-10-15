@@ -163,3 +163,11 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 #bar.hidden .barDrop { display: none; }
 #bar .palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; text-align: left; }
 #bar .row { display: flex; flex-wrap: wrap; gap: 4px; text-align: left; }
+
+/* THE SELF-TEST PANEL (docs/CRITERIA.md I3): the checks shown in the picture, with a re-run button. */
+.selfTest { margin: 6px 10px 12px; padding: 8px 10px; border-radius: 10px; background: #1b0b33ee; border: 2px solid #30e1b9; }
+.selfRun { font: italic 900 12px/1 'Arial Black', Impact, sans-serif; color: #1b0b33; background: #f9c22b; border: 0; border-radius: 6px; padding: 6px 10px; }
+.selfRows { margin-top: 6px; display: grid; gap: 2px; }
+.selfRow { font: 11px/1.35 ui-monospace, monospace; color: #cfe9ff; }
+.selfRow b { color: #30e1b9; margin-right: 6px; }
+.selfRow i { color: #8fa9c9; font-style: normal; margin-left: 6px; }

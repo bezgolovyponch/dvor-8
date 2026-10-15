@@ -143,5 +143,14 @@
 </main>
 
 <script type="module" src="src/main.js"></script>
+  <!-- THE SELF-TEST PANEL, ON THE PAGE (docs/CRITERIA.md I3, docs/V10A.md element 8): the creator's accepted frame
+       shows its checks inside the picture with a re-run button. This runs the checks a browser can honestly compute -
+       palette-only, outlined kinds, window sprites, the sky plane, the picture's size, page errors - and prints every
+       verdict. The deeper checks (criteria predicates, composition bindings, the reference comparison) stay in
+       `node tools/chain.mjs`, and the panel says so rather than pretending. -->
+  <div id="selfTest" class="selfTest">
+    <button id="selfRun" class="selfRun" type="button">ПРОВЕРИТЬ</button>
+    <div id="selfRows" class="selfRows"></div>
+  </div>
 </body>
 </html>

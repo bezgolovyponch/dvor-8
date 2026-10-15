@@ -116,7 +116,7 @@ export function wreckAlong(world, region, at = null, strength = 1) {
   const poly = borderOf(world, region);
   const edge = new Set(edgesOf(world, region));
   const cx = at ? at.x : region.cx, cy = at ? at.y : region.cy;
-  const R = Math.max(2, Math.min(12, (Math.sqrt(region.area) / 3) * strength));  * profile.hole   // the material's own hole size (D2)
+  const R = Math.max(2, Math.min(12, (Math.sqrt(region.area) / 3) * strength * profile.hole));   // the material's own hole (D2)
   const voidI = world.palette.length - 1;
   let torn = 0, dented = 0, holed = 0;
   for (const p of region.pixels) {

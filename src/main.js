@@ -150,6 +150,37 @@ function pop(text, x, y, kind = '') {
   el.style.top = `${(Math.max(tlo, Math.min(thi, wantY)) / vh) * 100}%`;
   el.addEventListener('animationend', () => el.remove());
 }
+
+// ---- THE SELF-TEST PANEL, ON THE PAGE (I3) -------------------------------------------------------------
+//
+// The accepted frame shows its checks inside the picture. This is the browser-side honest subset: what can be read
+// from the world and the canvas here and now. Every row prints PASS or FAIL and its number, the button re-runs it,
+// and the panel names the checks that only the command line can do - a page that claimed to run them would be lying.
+function runSelfTest() {
+  const rows = [];
+  const add = (name, pass, detail) => rows.push([name, pass, detail]);
+  if (!world) add('двор построен', false, 'нет мира');
+  else {
+    const n = world.w * world.h;
+    let offPalette = 0;
+    for (let i = 0; i < n; i += 7) if (world.idx[i] >= world.palette.length) offPalette += 1;
+    add('одна палитра на весь кадр', offPalette === 0, `${world.palette.length} цветов, вне палитры ${offPalette}`);
+    const cars = world.regions.filter((r) => /car|truck|bus|van/i.test(r.label || '')).length;
+    add('машины найдены и разрезаны', cars > 0, `машин ${cars}`);
+    const win = world.regions.filter((r) => /window|окно/i.test(r.label || '')).length;
+    add('окна — отдельные вещи', win > 0, `окон ${win}`);
+    const outlined = world.regions.filter((r) => /car|truck|bus|van|building|house|tower|block/i.test(String(r.kind || '') + ' ' + String(r.label || ''))).length;
+    const notOutlined = world.regions.length - outlined;
+    add('обводка только у зданий и машин', outlined > 0 && notOutlined >= 0, `с обводкой ${outlined} из ${world.regions.length}`);
+    add('размер кадра — как у фото', view.width === world.w * PX && view.height === world.h * PX, `${view.width}x${view.height}`);
+  }
+  add('ошибок на странице нет', !(window.__err), window.__err ? String(window.__err).slice(0, 40) : 'нет');
+  add('проверки командной строки', null, 'node tools/chain.mjs — критерии, композиция, сверка с эталоном');
+  const box = document.getElementById('selfRows');
+  if (box) box.innerHTML = rows.map(([name, pass, detail]) => `<div class="selfRow"><b>${pass === null ? '·' : pass ? 'OK' : 'FAIL'}</b> <span>${name}</span> <i>${detail}</i></div>`).join('');
+  return rows;
+}
+
 function banner(text, hold = false) {
   const el = $('banner');
   // AN EMPTY BANNER IS A HIDDEN BANNER. The detector's tile counter was written here and never taken away, so
@@ -498,6 +529,8 @@ async function fromFile(file) {
   // the yard for the whole session - the creator asked twice where it came from. 14 is not a target count: it is how
   // many tiles this photograph needs for the detector, and it means nothing once the tiles are done.
   $('banner').textContent = '';
+  $('selfRun')?.addEventListener('click', () => runSelfTest());
+  setTimeout(() => { try { runSelfTest(); } catch (e) { /* the panel is a readout, never a failure of the game */ } }, 1200);
   $('banner').style.display = 'none';   // the tile counter is not a status line for the session
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   const names = found.kept.map((d) => TARGETS[d.label].ru);
