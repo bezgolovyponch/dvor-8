@@ -58,21 +58,30 @@ await withPage(BASE, {}, async (page) => {
   // mandatory delivery lines failed on a frame that was still being drawn. The dump is now taken when the TOP BAND
   // IS A PLANE: retried until one colour owns at least 35% of it, which is a property of the finished sky and of
   // nothing else that appears during the scan.
-  for (let tries = 0; tries < 12; tries += 1) {
+  for (let tries = 0; tries < 40; tries += 1) {   // up to 28 s: the build, the scan and the first draws take that long
     const probe = await page.run(`
-      const c = document.getElementById('view') || document.querySelector('canvas');
+      const c = document.getElementById('yard') || document.getElementById('view');
       const g = c.getContext('2d');
       const band = Math.max(1, Math.floor(c.height * 0.08));
       const d = g.getImageData(0, 0, c.width, band).data;
       const hist = new Map();
-      for (let i = 0; i < d.length; i += 4) { const k = d[i] + ',' + d[i+1] + ',' + d[i+2]; hist.set(k, (hist.get(k) || 0) + 1); }
+      let blue = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const k = d[i] + ',' + d[i+1] + ',' + d[i+2];
+        hist.set(k, (hist.get(k) || 0) + 1);
+        if (d[i+2] > d[i] + 25) blue += 1;
+      }
       const top = [...hist.values()].sort((p, q) => q - p)[0] / (band * c.width);
-      return { share: top, w: c.width, h: c.height };`);
-    if (probe && probe.share >= 0.35) break;
+      return { share: top, blue: blue / (band * c.width), w: c.width, h: c.height };`);
+    // THE WAIT IS FOR THE DRAWN SKY, NOT FOR "A FLAT BAND". The old condition - one colour owning 35% of the top band
+    // - is satisfied by the PHOTOGRAPH's own overcast sky, so the dump and the shots were taken of the SCAN state,
+    // not of the drawn frame: grey sky, dimmed photograph. That is why the sky was "fixed" four times while the
+    // product's canvas measured 72% blue the whole time. The drawn sky's own signature is the condition now.
+    if (probe && probe.blue >= 0.5) break;
     await new Promise((r) => setTimeout(r, 700));
   }
   const dump = await page.run(`
-    const c = document.getElementById('view') || document.querySelector('canvas');
+    const c = document.getElementById('yard') || document.getElementById('view');
     const g = c.getContext('2d');
     const d = g.getImageData(0, 0, c.width, c.height).data;
     const out = [];

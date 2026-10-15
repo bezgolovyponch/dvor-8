@@ -1613,6 +1613,10 @@ export function trace(rgba, w, h, opts = {}) {
         for (let p2 = 0; p2 < n; p2 += 1) if (sc.sky.mask[p2]) { out[p2] = entryFor(palette, 88, 154, 226); painted += 1; }
         paintingSky = false;
         if (typeof window !== 'undefined') window.__skyPainted = painted;   // the probe: did the sky reach the frame?
+        // THE TAG: the sky's pixels are marked with the outline index, so the same function can count at its own
+        // return how many of them survived. That distinguishes "a pass overwrote them" from "the returned array is
+        // not the painted one" - the two possibilities left, and both invisible from outside.
+        for (let p2 = 0; p2 < n; p2 += 1) if (sc.sky.mask[p2]) out[p2] = palette.length - 2;
       },
       paintFoliage: (sc, out, mass) => {
         for (let i2 = 0; i2 < mass.px.length; i2 += 1) {
@@ -1623,6 +1627,11 @@ export function trace(rgba, w, h, opts = {}) {
       },
     });
     sky.__scene = census(scene);
+    {
+      let alive = 0;
+      for (let p2 = 0; p2 < n; p2 += 1) if (idx[p2] === palette.length - 2) alive += 1;
+      if (typeof window !== 'undefined') window.__skyTagged = alive;
+    }
     void painted;
   }
 
