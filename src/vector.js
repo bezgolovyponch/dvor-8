@@ -887,10 +887,14 @@ export function trace(rgba, w, h, opts = {}) {
     // A WINDOW IS A SPRITE OF THREE PARTS, the way v6 builds one: a dark FRAME round the opening, the GLASS
     // inside it, and a SILL of one lighter row under the frame. The first version painted each window as one
     // dark rectangle, which is a hole in a photograph rather than a window in a wall.
-    const winEntry = entryFor(palette, 40, 42, 58);
-    const glassEntry = entryFor(palette, 58, 74, 104);
-    const frameEntry = entryFor(palette, 176, 178, 190);
-    const sillEntry = entryFor(palette, 208, 206, 198);
+    // A WINDOW IS GLASS IN A LIGHT FRAME, NOT A BLACK HOLE. These were a near-black navy ring (40,42,58) round dark
+    // blue glass, so on a grey facade every window read as a black or blue BLOCK - the creator's "objects clustering
+    // is wrong". v6's sprite is the other way round: the frame is the light tone of the wall and the glass is a mid
+    // blue-grey that reads as reflecting sky, with a paler sill under it. Three tones, none of them near-black.
+    const frameEntry = entryFor(palette, 196, 198, 202);   // the frame: light, like the wall it sits in
+    const winEntry = entryFor(palette, 150, 158, 172);     // the inner lip: one step down from the frame
+    const glassEntry = entryFor(palette, 92, 116, 152);    // the glass: a mid blue-grey, sky reflected
+    const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
     for (const q of [...windowsFound, ...gridWindows]) {
       // glass inside, frame round it: the outer ring of the opening is the frame, the rest is glass
       for (const p2 of q.px) {
@@ -1267,7 +1271,14 @@ export function trace(rgba, w, h, opts = {}) {
     // The accept frame's towers are a PLANE with a regular grid of window rows - every bay, every floor - which is
     // why they read as architecture while a sampled wall reads as blur. Each facade region gets its own pitch from
     // the windows the photograph actually shows on it, and the grid is drawn across the whole plane inside its mask.
-    {
+    // OFF, AND WHY. This drew a REGULAR grid of window sprites across the BOUNDING BOX of each wall region with a
+    // near-black frame. The boxes did not correspond to the building's own windows - they were a guess laid over a
+    // rectangle - and the frame colour was the darkest entry, so the creator's phone showed BLACK RECTANGLES pasted
+    // on the facades ("objects clustering is wrong"). The windows that DO follow the photograph are the sprites the
+    // rhythm pass found (windowsFound + gridWindows); those stay. A grid is only legitimate when its pitch and its
+    // origin come from the facade itself, which is the next piece of work, not this block.
+    const FACADE_GRID = false;
+    if (FACADE_GRID) {
       const PITCH_X = 9, PITCH_Y = 11;                 // a facade's own bay and floor, in game pixels
       const winFrame = entryFor(palette, 34, 38, 54);
       const winGlassA = entryFor(palette, 96, 128, 176);
