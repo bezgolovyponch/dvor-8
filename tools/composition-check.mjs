@@ -11,17 +11,23 @@ let broken = 0;
 console.log('THE COMPOSITION — element by element, from the accepted frame to the class that draws it\n');
 for (const r of rows) {
   const links = [];
-  const mod = (r.module.match(/`([^`]+\.js)`/) || [])[1];
-  const exists = mod ? existsSync('src/criteria/' + mod.split('/').pop()) || existsSync(mod) : false;
+  // THE PATH IS RESOLVED, NOT ASSUMED: a row may name a criteria module, a page file or a tool.
+  const named = [...r.module.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+  const mod = named.find((x) => /\.(js|html|css|md)$/.test(x)) || (named[0] || '');
+  const candidates = [mod, 'src/' + mod, 'src/criteria/' + mod, 'tools/' + mod, 'docs/' + mod];
+  const file = candidates.find((c) => existsSync(c)) || '';
+  const exists = !!file;
   links.push([`${mod}`, exists]);
   // the requirement must be quoted in that module's header, so writing the code means reading the requirement
-  let quoted = false;
-  if (exists) {
-    const file = existsSync(mod) ? mod : 'src/criteria/' + mod.split('/').pop();
-    const src = readFileSync(file, 'utf8').slice(0, 1400);
-    const key = (r.requirement.match(/\*"([^"]{20,60})/) || [])[1] || '';
-    quoted = key ? src.replace(/\s+/g, ' ').includes(key.replace(/\s+/g, ' ').slice(0, 40)) : true;
-  } else quoted = false;
+  let quoted = true;
+  if (file && file.endsWith('.js')) {
+    const src = readFileSync(file, 'utf8').slice(0, 2600).replace(/\s+/g, ' ');
+    // EVERY phrase the row quotes must appear in the module's header, so the code carries the requirement
+    const quotes = [...r.requirement.matchAll(/\*"([^"]{12,})"/g)].map((m) => m[1].replace(/\s+/g, ' ').trim());
+    const missing = quotes.filter((q) => !src.includes(q.slice(0, Math.min(60, q.length))));
+    quoted = quotes.length === 0 ? true : missing.length === 0;
+    if (!quoted) console.log(`         · missing quote: "${(missing[0] || '').slice(0, 60)}" in ${file}`);
+  } else quoted = !!file;
   links.push(['requirement quoted in the module', quoted]);
   // every predicate named must exist in the criteria registry
   const preds = (r.predicate.match(/[A-Z]\d+/g) || []);

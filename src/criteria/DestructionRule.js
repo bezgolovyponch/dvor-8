@@ -3,6 +3,11 @@
 //
 // This module owns one decision: MAY THIS KIND BE DESTROYED? Buildings, cars and windows. Never the trees, never the
 // ground, never a person.
+//
+// The requirement this module carries, verbatim (docs/COMPOSITION.md element 9):
+//   "Throw at a window: the glass breaks. Hit the same spot again: it cracks, then darkens, then the panels fall off
+//    and leave the frame, then the frame falls. Anything above a missing piece falls after it, and the rubble stays."
+
 export const DESTROYABLE_KINDS = /car|truck|bus|van|building|house|tower|block|window/i;
 export const NEVER = /person|people|human|child|dog|cat/i;
 
