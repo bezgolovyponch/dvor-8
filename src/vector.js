@@ -1556,10 +1556,22 @@ export function trace(rgba, w, h, opts = {}) {
     for (let p2 = 0; p2 < n; p2 += 1) if (sky[p2]) skyCount += 1;
     let skyMask = sky;
     if (skyCount / n < 0.05) {
+      // THE SKYLINE COMES FROM THE PHOTOGRAPH, NOT FROM THE EMPTY MASK. This fallback used `skyline[]`, which is
+      // DERIVED FROM THE SKY MASK - so with an empty mask every column's skyline is zero and the fallback painted
+      // NOTHING: the frame kept the photograph's own grey sky while the designed blue was computed and dropped. The
+      // line is now read from the picture itself, the same rule the sky analysis uses: the first row in each column
+      // where a strong edge appears or the brightness falls well below the top row's.
       skyMask = new Uint8Array(n);
+      const cap = Math.floor(h * 0.55);
       for (let x2 = 0; x2 < w; x2 += 1) {
-        const top2 = Math.max(1, skyline[x2] - 1);
-        for (let y2 = 0; y2 < top2; y2 += 1) skyMask[y2 * w + x2] = 1;
+        const topL = luma(rgb[x2 * 3], rgb[x2 * 3 + 1], rgb[x2 * 3 + 2]);
+        let y2 = Math.max(1, Math.floor(h * 0.06));
+        for (; y2 < cap; y2 += 1) {
+          const p2 = y2 * w + x2;
+          if (en.line[p2] > 0.5) break;
+          if (luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) < topL - 45) break;
+        }
+        for (let y3 = 0; y3 < y2; y3 += 1) skyMask[y3 * w + x2] = 1;
       }
     }
     const scene = makeScene(w, h);
@@ -1583,8 +1595,10 @@ export function trace(rgba, w, h, opts = {}) {
     const painted = renderScene(scene, idx, {
       paintSky: (sc, out) => {
         paintingSky = true;
-        for (let p2 = 0; p2 < n; p2 += 1) if (sc.sky.mask[p2]) out[p2] = entryFor(palette, 88, 154, 226);
+        let painted = 0;
+        for (let p2 = 0; p2 < n; p2 += 1) if (sc.sky.mask[p2]) { out[p2] = entryFor(palette, 88, 154, 226); painted += 1; }
         paintingSky = false;
+        if (typeof window !== 'undefined') window.__skyPainted = painted;   // the probe: did the sky reach the frame?
       },
       paintFoliage: (sc, out, mass) => {
         for (let i2 = 0; i2 < mass.px.length; i2 += 1) {

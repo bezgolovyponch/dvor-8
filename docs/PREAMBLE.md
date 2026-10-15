@@ -83,3 +83,21 @@ permissible report from a broken chain is the step it stopped at.
 judgement.
 **Never:** adjust an instrument to agree with me; show a frame that has not passed step 5; claim a result whose
 premise is not printed.
+
+## 7. THE OPEN QUESTION (written down rather than carried in my head)
+
+**The sky.** On the creator's photograph the designed blue resolves to the correct palette entry — measured:
+`rgb(86,118,185)`, the sky ramp's entry 3 — and the sky paint covers **37,435 pixels, a quarter of the frame**
+(`window.__skyPainted` read from the page). The skyline fallback for an empty mask is in, and it reads the line from
+the picture (first strong edge or a brightness drop below the top row) rather than from the empty mask.
+
+**Yet the canvas's top band measures 34% pale grey / 31% mid grey / 24% dark grey / 4% blue.** So the blue is written
+into `idx` and does not appear in the drawn canvas. The remaining possibilities, in order:
+
+1. the frame the dump and the screenshots capture is drawn *before* the scene block's paint (a transient), or
+2. a pass after `trace()` in the caller rewrites those indices, or
+3. the byte I measure is not the byte drawn (the dump's canvas is not the canvas the renderer paints).
+
+**The decisive test, and it is one command:** read the canvas's own top band *from the page* in the same run that
+reads `window.__skyPainted`, and print both — if the band is blue there, the product is right and my capture is
+wrong; if it is grey, the overwrite is real and the next step is to bisect the passes after the sky paint.
