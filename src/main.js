@@ -286,6 +286,7 @@ function build(rgba, w, h, dets, big = null) {
     reduced[i2] = c[0]; reduced[i2 + 1] = c[1]; reduced[i2 + 2] = c[2]; reduced[i2 + 3] = 255;
   }
   const { regions, owner } = withWindows(toRegions(dets, reduced, w, h), st, w, h, big, reduced);
+
   // THE WINDOWS THE VECTOR ROUTE FOUND ARE THINGS TOO. The per-pixel route guesses at openings in a wall
   // (frame.js, "на глаз"); the vector route reads the facade's own rhythm and returns rectangles. Either way a
   // window is a thing with hit points - so the ones the route found are added here, with their pixels marked as
@@ -328,6 +329,24 @@ function build(rgba, w, h, dets, big = null) {
 }
 function begin() {
   world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env, structures: yard.st.structures });
+  // ---- BUILDINGS BECOME REGIONS, FROM THE WORLD'S OWN STRUCTURES -----------------------------------------
+  //
+  // COCO/EfficientDet has no building class, so a building can never arrive from the detector - which is why the
+  // live world held cars and windows and NOT ONE BUILDING, and why buildings were never outlined and never
+  // destroyable, although the criteria name them first. They exist already: `world.structures` holds six of them on
+  // the creator's photograph, each a mask with its own cells and health. Each becomes a region here, so the outline
+  // rule (buildings and cars) and the destruction rule (buildings, cars, windows) apply to them at last.
+  for (const b2 of (world.structures || [])) {
+    if (!b2.pixels || b2.pixels.length < 400) continue;
+    const id2 = world.regions.length;
+    for (const p2 of b2.pixels) if (world.owner[p2] === -1) world.owner[p2] = id2;
+    world.regions.push({
+      id: id2, kind: 'building', label: 'дом', score: 1,
+      pixels: b2.pixels, x: b2.x, y: b2.y, w: b2.w, h: b2.h,
+      cx: b2.x + b2.w / 2, cy: b2.y + b2.h / 2,
+      hp: 3, hits: 0, seen: true, gone: false,
+    });
+  }
   // THE WORLD IS READABLE FROM THE PAGE, on purpose: the self-evaluation (clustering, outlines, cars) runs in the
   // browser against the LIVE world, and a probe that cannot see it can only guess. It is a read-only handle.
   if (typeof window !== 'undefined') window.__world = world;

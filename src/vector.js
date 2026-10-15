@@ -395,6 +395,7 @@ export function trace(rgba, w, h, opts = {}) {
   const skyline = new Int32Array(w).fill(h);       // the first non-sky row in each column
   for (let x = 0; x < w; x += 1) for (let y = 0; y < h; y += 1) if (!sky[y * w + x]) { skyline[x] = y; break; }
   let skys = null;
+  let wallParts = [];
   let skyN = 0;
   for (let i = 0; i < n; i += 1) if (sky[i]) skyN += 1;
 
@@ -1340,6 +1341,19 @@ export function trace(rgba, w, h, opts = {}) {
       }
     }
     sky.__wall = planes;
+    // the buildings, as masks, ready to become regions in the game
+    const wallParts = [];
+    for (const part of fac.parts) {
+      if (part.area < 400) continue;
+      let x0 = w, x1 = 0, y0 = h, y1 = 0;
+      for (const p2 of part.px) {
+        const x = p2 % w, y = (p2 / w) | 0;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+      }
+      wallParts.push({ pixels: Int32Array.from(part.px), x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 });
+    }
+    sky.__wallParts = wallParts.length;
   }
 
   // ---- 5j. STRAY PIXELS ARE CLEANED (v9's rule, and the creator's eye) ---------------------------------
@@ -1613,6 +1627,7 @@ export function trace(rgba, w, h, opts = {}) {
   }
 
   return {
+    wallParts,
     // the identities this renderer resolved, so a check can measure what was decided instead of guessing a constant
     ramps: {
       foliage: Math.floor(entryFor(palette, 60, 150, 60) / STEPS),
