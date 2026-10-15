@@ -51,6 +51,8 @@ for (const f of files) {
       if (!exp.has(name)) { console.log(`NOT EXPORTED  ${f} imports { ${name} } from ${spec}`); bad += 1; }
     }
   }
+}
+
 if (bad) {
   console.log(`\n${bad} broken import(s). Each one is a page-level failure the suite cannot see.`);
   process.exit(1);
