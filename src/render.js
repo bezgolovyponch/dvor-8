@@ -522,9 +522,18 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
       world.edgesCache.set(r.id, { ver: r.ver || 0, edges });
       edges = world.edgesCache.get(r.id).edges;
     }
+    // AN OUTLINE THAT MARKS EVERYTHING MARKS NOTHING. Every visible region was outlined - cyan when idle, pink when
+    // aimed, yellow when blinking - so the moment buildings became regions the frame filled with cyan hatching over
+    // the architecture and rings round every car. The rule is the creator's own: the outline shows WHAT YOU ARE
+    // POINTING AT. Idle things are not outlined at all; the aimed thing is pink; the info/selected thing is cyan and
+    // blinks yellow. Once damage has marked a thing, its wreck keeps a faint outline, which is how a player reads
+    // what is already broken.
+    const aimed = !!(world.aim && world.aim.id === r.id);
+    const picked = !!(world.infoMark && world.infoMark.id === r.id) || !!(world.sel && world.sel === r.id);
+    const broken = r.hits > 0;
+    if (!aimed && !picked && !broken) continue;
     const blink = (seconds * 2 + r.id * 0.37) % 1 > 0.82;      // a blink, out of step with its neighbours
-    const aimed = world.aim && world.aim.id === r.id;
-    const colour = aimed ? '#f04f78' : r.hits ? '#ffffff' : blink ? '#ffd23f' : '#3fe0f0';
+    const colour = aimed ? '#f04f78' : picked ? (blink ? '#f9c22b' : '#30e1b9') : '#8a93a6';
     for (const p2 of edges) {
       const ex = p2 % world.w, ey = (p2 / world.w) | 0;
       if (ex < cx - 1 || ex > cx + w) continue;
