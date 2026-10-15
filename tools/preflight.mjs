@@ -11,6 +11,7 @@ const REQUIRED = [
   ['docs/COMPOSITION.md', 'element -> requirement -> class -> baseline'],
   ['docs/MECHANICS.md', 'outlined kinds, destroyable kinds'],
   ['docs/STRATEGY.md', 'the plan and its dependencies'],
+  ['docs/SOURCES.md', 'every method traced to a real external source'],
   ['src/criteria/RoadRule.js', 'the photograph layer'],
   ['src/criteria/SkyRule.js', 'the sky'],
   ['src/criteria/FacadeRule.js', 'the buildings'],
