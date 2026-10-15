@@ -4,7 +4,7 @@
 // indices of that thing to its own wreck, and the renderer shows whatever the array now says.
 
 import { OUTLINE, VOID, scorchMap } from './palette.js';
-import { mayBeDestroyed } from './criteria/DestructionRule.js';   // the requirement, by name
+import { mayBeDestroyed, damageProfile } from './criteria/DestructionRule.js';   // the requirement, by name
 import { STEPS } from './flat.js';
 import { mulberry32 } from './rng.js';
 import { makeDecals } from './decal.js';
@@ -109,10 +109,14 @@ export function insideBorder(poly, x, y) {
 export function touch(region) { if (region) region.ver = (region.ver || 0) + 1; return region; }
 
 export function wreckAlong(world, region, at = null, strength = 1) {
+  // PER-MATERIAL DAMAGE (docs/AUDIT.md step 6): glass shatters wide, brick chips, metal dents and hardly ever goes
+  // through. The profile decides the scrape and the hole; without it every material broke by one generic path, which
+  // is why damage read as noise rather than as damage.
+  const profile = damageProfile(region);
   const poly = borderOf(world, region);
   const edge = new Set(edgesOf(world, region));
   const cx = at ? at.x : region.cx, cy = at ? at.y : region.cy;
-  const R = Math.max(2, Math.min(12, (Math.sqrt(region.area) / 3) * strength));
+  const R = Math.max(2, Math.min(12, (Math.sqrt(region.area) / 3) * strength));  * profile.hole   // the material's own hole size (D2)
   const voidI = world.palette.length - 1;
   let torn = 0, dented = 0, holed = 0;
   for (const p of region.pixels) {

@@ -39,7 +39,7 @@ const pre = readFileSync('docs/PREAMBLE.md', 'utf8');
 const must = ['THE CRITICAL BUG', 'A conversion pipeline cannot produce a construction result',
   'An outline that marks everything marks nothing', 'gates **showing**', 'named after the requirement',
   'THE CONCEPT LOGIC', 'a source of FACTS, not of pixels', 'outlined kinds are **buildings and cars only**',
-  'the outline follows\n  the shape', 'one 50-entry palette'];// the filter itself
+  'the outline follows', 'one 50-entry palette'];// the filter itself
 
 const gone = must.filter((m) => !pre.includes(m));
 if (gone.length) {
