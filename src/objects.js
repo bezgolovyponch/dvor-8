@@ -130,6 +130,37 @@ export function toRegions(dets, rgba, w, h) {
         if (best > loose) pixels.push(p);
       }
     }
+    // A THING IS ONE MASS, NOT A SCATTER OF PATCHES. The cut-out kept every pixel inside the box that differed
+    // from the ring, so a car came back as a dozen disjoint patches - measured on the creator's photograph: one car
+    // was 1960 pixels in FOURTEEN clusters, another 556 in seven. An outline drawn from such a set traces patch
+    // boundaries, which is exactly the "objects clustering is wrong" on the phone. The set is now reduced to its
+    // LARGEST CONNECTED CLUSTER, which is the thing; the patches were the photograph's grain.
+    if (pixels.length >= 12) {
+      const inside = new Set(pixels);
+      const seen = new Set();
+      let best = null;
+      for (const p0 of pixels) {
+        if (seen.has(p0)) continue;
+        const stack = [p0];
+        const group = [];
+        seen.add(p0);
+        while (stack.length) {
+          const q = stack.pop();
+          group.push(q);
+          const qx = q % w, qy = (q / w) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = qx + dx, ny = qy + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const r2 = ny * w + nx;
+            if (!inside.has(r2) || seen.has(r2)) continue;
+            seen.add(r2);
+            stack.push(r2);
+          }
+        }
+        if (!best || group.length > best.length) best = group;
+      }
+      if (best && best.length >= 12) pixels = best;
+    }
     if (pixels.length < 12) continue;
     const id = regions.length;
     for (const p of pixels) owner[p] = id;

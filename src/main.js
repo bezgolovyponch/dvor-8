@@ -328,6 +328,9 @@ function build(rgba, w, h, dets, big = null) {
 }
 function begin() {
   world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env, structures: yard.st.structures });
+  // THE WORLD IS READABLE FROM THE PAGE, on purpose: the self-evaluation (clustering, outlines, cars) runs in the
+  // browser against the LIVE world, and a probe that cannot see it can only guess. It is a read-only handle.
+  if (typeof window !== 'undefined') window.__world = world;
   fx = makeFx(world);
   me = null; drink = makeDrink(); queue = [...yard.more]; like = yard.home; grown = mulberry32(daySeed(today));   // today's street
   // The sky is the day's too (D28): the same day's number gives the same yard, the same street and the same
