@@ -21,6 +21,25 @@ const steps = [
   ['3 SUITE', 'node', ['test.mjs'], {}],
   ['4 DELIVERY', 'node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/chain', process.env.PHOTO || 'photos-test/5.jpg', 'ЦУНАМИ'], {}],
 ];
+// STEP 6 - THE PAGE GATE. Every other gate tests code in isolation from the page: the suite calls trace() and
+// makeWorld() in Node, so it never touches the file input, the decode, the detector, the build or the HUD. That is
+// how a missing import could ship while 320 checks passed - the phone found it. This step drives the REAL page on a
+// REAL photograph and refuses to pass unless a yard was actually built (left > 0) and the console is clean.
+{
+  const out = process.env.PAGE_OUT || '/tmp/chain-page';
+  const { out: pageOut } = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', out, process.env.PHOTO || 'photos-test/5.jpg', 'ЦУНАМИ'],
+    { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1' });
+  const built = /"step":"built"[^}]*"left":"(\d+)"/.exec(pageOut);
+  const errs = /"step":"errors","errors":\[([^\]]*)\]/.exec(pageOut);
+  const left = built ? Number(built[1]) : 0;
+  const clean = errs ? errs[1].trim().length <= 2 : false;
+  const ok = left > 0 && clean;
+  console.log(`${ok ? 'PASS' : 'FAIL'}  6 PAGE         a yard built from a real photograph: left ${left}, console ${clean ? 'clean' : 'DIRTY'}`);
+  if (!ok) {
+    console.log('\nTHE CHAIN STOPPED AT 6 PAGE. A page gate that cannot build a yard verifies nothing: the suite, the criteria and the composition all passed while the real path was broken.');
+    process.exit(1);
+  }
+}
 if (process.env.REFERENCE) steps.push(['5 REFERENCE', 'node', ['tools/reference-check.mjs', (process.env.OUT || '/tmp/chain') + '/canvas.json', process.env.REFERENCE], {}]);
 
 console.log('THE CHAIN — each step must pass before the next is read\n');

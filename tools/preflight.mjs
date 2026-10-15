@@ -17,6 +17,7 @@ const REQUIRED = [
   ['src/criteria/OutlineRule.js', 'outlines'],
   ['src/criteria/DestructionRule.js', 'destruction'],
   ['tools/chain.mjs', 'the chain'],
+  ['tools/undefined-check.mjs', 'the page-level import check'],
   ['tools/criteria-check.mjs', 'criteria as predicates'],
   ['tools/composition-check.mjs', 'the composition bindings'],
   ['tools/reference-check.mjs', 'the comparison to the accepted frame'],

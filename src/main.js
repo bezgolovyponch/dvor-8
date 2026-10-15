@@ -445,14 +445,27 @@ function waterLands(rock) {
 async function decode(file, size = null) {
   // Decoded through an <img>: every phone browser does that, and it turns the photograph the right way
   // up from its EXIF orientation without being asked.
-  const url = URL.createObjectURL(file);
-  const image = await new Promise((resolve, reject) => {
-    const el = new Image();
-    el.onload = () => resolve(el);
-    el.onerror = () => reject(new Error('снимок не читается'));
-    el.src = url;
-  }).finally(() => setTimeout(() => URL.revokeObjectURL(url), 1000));
-  const iw = image.naturalWidth, ih = image.naturalHeight;
+  // TWO WAYS TO DECODE, BECAUSE ONE OF THEM CAN HANG. This waited on an <img> load of a blob URL, and with a File
+  // built inside the page - which is exactly how a harness injects a photograph - that load never fires: no error,
+  // no timeout, the promise simply never settles, and the game sat on its first screen. The browser's own decoder
+  // takes the File directly and resolves for both a real camera file and a synthetic one, so it is tried first and
+  // the image element stays as the fallback for browsers without it.
+  let image = null;
+  try {
+    if (typeof createImageBitmap === 'function') image = await createImageBitmap(file);
+  } catch (error) {
+    image = null;
+  }
+  if (!image) {
+    const url = URL.createObjectURL(file);
+    image = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('снимок не читается'));
+      el.src = url;
+    }).finally(() => setTimeout(() => URL.revokeObjectURL(url), 1000));
+  }
+  const iw = image.naturalWidth || image.width, ih = image.naturalHeight || image.height;
   // THE PHOTOGRAPH DECIDES THE SHAPE OF THE LEVEL.
   //
   // This used to force every photograph into one of two frames (SHORT x LONG or LONG x SHORT) and COVER-crop
@@ -496,6 +509,11 @@ async function decode(file, size = null) {
   // already uses internally (flat.js boxDown), so the two paths agree on what a game pixel is.
   const GAME = BLOCK;                                 // the block is the rule's, not a number written here
   const small = (() => {
+    // FAIL-SAFE: the 5x5 block average is the rule (P2), but a photo must ALWAYS load. If the big-canvas path throws
+    // or is unavailable, the picture is taken the direct way and the rule reports itself as unmet rather than
+    // leaving the game on a screen that says nothing. A hang here is what the page gate caught: the note after
+    // decode() never printed, so the whole photo path was dead in the browser.
+    try {
     const big5 = fit(w * GAME, h * GAME);
     const g5 = big5.getContext('2d');
     const src = g5.getImageData(0, 0, w * GAME, h * GAME);
@@ -507,6 +525,10 @@ async function decode(file, size = null) {
     for (let i2 = 0; i2 < w * h * 4; i2 += 1) img.data[i2] = down[i2];
     octx.putImageData(img, 0, 0);
     return out;
+    } catch (error) {
+      window.__blockFallback = String(error && error.message || error);
+      return fit(w, h);
+    }
   })();
   // A third size, between the two, for the windows: three picture-pixels to one of the game's, when the
   // photograph has that much in it.
@@ -1119,6 +1141,7 @@ tiltEl.addEventListener('pointerup', (e) => {
 tiltEl.addEventListener('pointercancel', () => { press = null; });
 
 const shoot = (e) => {
+  window.__shots = (window.__shots || 0) + 1;      // the page gate's instrument: did the change event arrive at all?
   unlock();
   const file = e.target.files?.[0];
   e.target.value = '';
