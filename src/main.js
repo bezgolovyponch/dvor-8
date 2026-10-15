@@ -66,6 +66,20 @@ let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
 // where the sky is measured, and a tsunami grade tints the whole frame blue (restriction R6).
 const params = new URLSearchParams(location.search);
 const cleanFrame = params.get('clean') === '1';
+// `?test=1` REVEALS THE FILE INPUTS so an automated browser can drive the real photo path. They are hidden by design
+// (a phone uses the native picker), and a hidden input cannot be filled by a test runner - which is why the page
+// gate had to inject a synthetic File and hung on it. This is a testing affordance, not a product change: it does
+// nothing unless the parameter is present, and the input stays a two-pixel transparent sliver in the corner.
+if (params.get('test') === '1' && typeof document !== 'undefined') {
+  setTimeout(() => {
+    for (const id of ['shot', 'shot2', 'pic', 'pic2']) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.hidden = false;
+      el.style.cssText = 'position:fixed;left:2px;top:2px;width:14px;height:14px;opacity:0.01;z-index:9';
+    }
+  }, 400);
+}
 let weather = makeWeather('clear');               // the day's sky (weather.js)
 let disaster = null;                              // the sky misbehaving (disaster.js), or null
 let beforeCanvas = null;                          // the photograph the yard came from, for the card's БЫЛО half
