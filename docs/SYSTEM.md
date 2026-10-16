@@ -156,3 +156,43 @@ ORDER OF VERIFICATION:  piece checks → style-check → pairing-check → refer
 | P9 damage | **verified** by the destruction predicates |
 | P10 HUD | **verified** — four controls, order and colours measured |
 | P11 instruments | **verified by mutation** on three gates |
+
+---
+
+# THE OUTPUT FRAME, RETRIEVED FROM THE VIDEO (reference/video-output-frame.png, t = 9.8 s of 30.2 s)
+
+The recording is 30.2 s: **first the photograph** (the audit view with the 5×5 caption), **then the corresponding
+output** — the game frame, in play, with `880 очки`, `РАЗБИТО 8`, three of five danger segments lit and the bottom bar.
+Its colours were read off the recording and they CONFIRM the style that was derived from the still screenshot:
+
+| role | measured in the video's output frame | our palette after the fix | verdict |
+|---|---|---|---|
+| sky | `rgb(77,155,231)` — hue **210**, sat **0.76**, light 0.60 | hue 209, sat 0.75, tone `rgb(47,131,224)` | **matches** |
+| clouds | `rgb(255,255,255)` pure white | the sky ramp's top tone = white | **matches** |
+| road / concrete grey | `rgb(98,94,104)` — hue **264**, sat 0.05, light **0.39** | stone tone 2 `rgb(99,87,107)`, light 0.38 | **matches** |
+| dark structures | `rgb(74,70,81)` — hue **262**, sat 0.07, light 0.30 | stone tone 1 `rgb(65,54,68)` | close |
+| UI navy | `rgb(24,17,31)` | — | to add to the style |
+| outline | `rgb(8,0,25)` | `rgb(11,0,24)` | **matches** (one family) |
+| window glass | `rgb(77,100,180)` and `rgb(49,62,122)` — **BLUE** | sprite uses `rgb(92,116,152)` grey-blue | **correction needed: the glass is bluer** |
+
+## What the output frame shows, object by object — the construction rules it fixes
+
+1. **The tower** is a **drawn plane**: a dark blue-grey field, a **dense regular grid of windows in rows** (floor by
+   floor), the glass in **two blues** (`rgb(77,100,180)` lit, `rgb(49,62,122)` shaded), and **warm horizontal floor
+   bands** between the rows. **No photographic texture anywhere inside it.** Its outline is **GOLD** while it is being
+   inspected — not pink, not cyan.
+2. **The mid-rise** is the **checkerboard**: alternating white and dark-blue tiles on its own silhouette, with a
+   pitched roof line, drawn flat.
+3. **The sky** is one flat blue plane with **white, flat-bottomed clouds** — large, few, and never touching the
+   skyline.
+4. **The cars and the road** are the photograph's own pixels, posterised, in place — the white BMW in front, the dark
+   cars behind, the bike symbol on the asphalt.
+5. **Debris**: small white dots scattered where things have been broken, around the tower's base and the trees.
+6. **The reticle**: a small circle with a cross, on the point being aimed at.
+7. **The bar**: ⓘ (cyan ring) · weapon panel (**cyan** border, **pink** offset shadow) · СТИХИЯ ( **pink** border,
+   **cyan** shadow) · a big **gold** `rgb(249,194,43)` round throw button with a dark triangle; the held stone rests on
+   the road at the frame's bottom edge.
+
+**THE TWO CORRECTIONS THIS RETRIEVAL IMPOSES ON THE BUILD:**
+* **the aimed outline is GOLD**, so the renderer's aimed colour changes from pink to the palette's gold;
+* **the window glass is BLUE** (`rgb(77,100,180)` / `rgb(49,62,122)`), not the grey-blue sprite in use.

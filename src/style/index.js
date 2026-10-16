@@ -36,9 +36,20 @@ export const STYLE = {
     windowRows: 'floor by floor', checkerboard: 'where the photograph shows alternating bays',
   },
 
-  window: { sprite: ['sill', 'frame', 'lip', 'glass'], destroyable: true, outlined: false },
+  window: {
+    sprite: ['sill', 'frame', 'lip', 'glass'],
+    // MEASURED from the video's output frame: the glass is BLUE, in two tones - rgb(77,100,180) lit and
+    // rgb(49,62,122) shaded - and the frame around it is light. The grey-blue sprite in use was wrong.
+    glassLit: [77, 100, 180], glassShade: [49, 62, 122],
+    destroyable: true, outlined: false,
+  },
 
-  outline: { kinds: ['building', 'car'], when: ['aimed', 'picked', 'damaged'], never: ['window', 'person'] },
+  outline: {
+    kinds: ['building', 'car'], when: ['aimed', 'picked', 'damaged'], never: ['window', 'person'],
+    // MEASURED from the video: the inspected building's outline is GOLD while it is being aimed at. Colour by state:
+    aimed: [249, 194, 43], picked: [48, 225, 185], damaged: [138, 147, 166],
+  },
+  ui: { navy: [24, 17, 31], gold: [249, 194, 43], pink: [240, 81, 121], cyan: [66, 220, 184] },
 
   hud: { left: ['очки', 'разбито'], right: ['осталось', 'опасность'], bar: ['info', 'weapon', 'disaster', 'throw'] },
 };
