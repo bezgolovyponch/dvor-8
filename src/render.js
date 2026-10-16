@@ -447,13 +447,17 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   // read as a selection rather than as a border) and the ALREADY-DAMAGED one (a faint grey #8a93a6). An idle,
   // undamaged, un-aimed thing carries none: nothing is baked into the picture at build time (see makeWorld).
   //
-  // THE OUTLINE IS THE THING'S OWN SILHOUETTE IN THE OWNER MAP. A pixel of the thing is on the outline only
+  // THE OUTLINE IS THE THING'S OWN SILHOUETTE IN THE owner map. A pixel of the thing is on the outline only
   // when one of its four neighbours belongs to a DIFFERENT region or to no region; a border between two
   // pixels of the SAME region is inside the thing and is never drawn. That is what stops a structure made of
   // sub-parts from coming out as a grid of boxes: the sub-parts are one region, so their borders are
   // interior. It replaces two rules that drew far too widely — `edgesOf`'s "a neighbour outside the region's
   // own pixel list" (which marked the internal borders of every region whose pixel list is not one solid
   // mass) and the build-time darkening of every region's border.
+  //
+  // OUTLINED KINDS, FROM docs/MECHANICS.md: BUILDINGS AND CARS, AND NOTHING ELSE. The kind decision lives in
+  // src/criteria/OutlineRule.js, named after the requirement; this pass draws what it allows, and only for a
+  // thing that is being pointed at or is already broken.
   //
   // PLANES ARE NOT THINGS (R12). The ground, a facade read as a field, anything above a share of the frame:
   // such a region's mask is thousands of holes, so its "silhouette" is thousands of little rings and drawing
@@ -467,27 +471,28 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   // THE OUTLINE FOLLOWS THE SHAPE, BECAUSE THE SHAPE IS VERSIONED. Caching by id alone meant a damaged thing
   // kept the outline of its original silhouette — the wreck was drawn inside an untouched contour.
   // `world.touch()` bumps the version on every damage path, so a cached outline is used only while the
-  // version still matches. A CACHE HIT MUST UNWRAP: the entry is { ver, edges }, and the first version
-  // returned the wrapper itself, so the draw loop iterated an object — "TypeError: edges is not iterable" —
-  // which is the frame the creator saw as a blue mush with one green patch: the pass threw and nothing after
-  // it was drawn.
+  // version still matches.
   const silhouette = (r) => {
-    const hit = world.edgesCache.get(r.id);
-    if (hit && hit.ver === (r.ver || 0)) return hit.edges;
-    const own = world.owner || null;
-    let list = null;
-    if (own) {
-      list = [];
-      for (const p of r.pixels) {
-        if (own[p] !== r.id) continue;          // a pixel the thing does not own is not part of its shape
-        const x = p % world.w, y = (p / world.w) | 0;
-        if (x === 0 || y === 0 || x === world.w - 1 || y === world.h - 1
-          || own[p - 1] !== r.id || own[p + 1] !== r.id || own[p - world.w] !== r.id || own[p + world.w] !== r.id) list.push(p);
+    let edges = world.edgesCache.get(r.id);                   // the entry is { ver, edges }
+    if (!edges || edges.ver !== (r.ver || 0)) {
+      const own = world.owner || null;
+      let list = null;
+      if (own) {
+        list = [];
+        for (const p of r.pixels) {
+          if (own[p] !== r.id) continue;        // a pixel the thing does not own is not part of its shape
+          const x = p % world.w, y = (p / world.w) | 0;
+          if (x === 0 || y === 0 || x === world.w - 1 || y === world.h - 1
+            || own[p - 1] !== r.id || own[p + 1] !== r.id || own[p - world.w] !== r.id || own[p + world.w] !== r.id) list.push(p);
+        }
       }
+      edges = own ? list : edgesOf(world, r);
+      world.edgesCache.set(r.id, { ver: r.ver || 0, edges });
     }
-    const edges = own ? list : edgesOf(world, r);
-    world.edgesCache.set(r.id, { ver: r.ver || 0, edges });
-    return world.edgesCache.get(r.id).edges;
+    // A CACHE HIT MUST UNWRAP. The entry is { ver, edges }; the first version returned the wrapper itself, so
+    // the draw loop iterated an object — "TypeError: edges is not iterable" — which is the frame the creator
+    // saw as a blue mush with one green patch: the pass threw and nothing after it was drawn.
+    return edges.edges;
   };
   // ONE PIXEL OF THE THING'S OWN OUTLINE, WITH ONE PIXEL OF DARK UNDER IT, so it reads on anything it is
   // drawn over. A plane gets nothing: it is not a thing you point at, it is what things stand on.

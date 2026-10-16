@@ -7,6 +7,7 @@
 // day's news from news.js. frame.js finds the windows in the walls, glass.js says how one breaks, decal.js
 // keeps the colour thrown at the yard, parts.js throws the pieces. This file wires them to the page and the finger.
 
+import { downscaleContrast, expandContrast } from './pieces/downscale.js';   // the published reduction logic (PixelOE), confirmed by its own check
 import { styliseVector } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
@@ -582,7 +583,10 @@ async function decode(file, size = null) {
     const big5 = fit(w * GAME, h * GAME);
     const g5 = big5.getContext('2d');
     const src = g5.getImageData(0, 0, w * GAME, h * GAME);
-    const down = photoLayer(boxDown, src.data, w * GAME, h * GAME, w, h);   // src/criteria/RoadRule.js
+    // the photograph's own layer: contrast-aware reduction, expanded first so thin structure survives
+    const expanded = expandContrast(src.data, w * GAME, h * GAME);
+    const { px: down } = downscaleContrast(expanded, w * GAME, h * GAME, (w * GAME) / w);
+    if (typeof window !== 'undefined') window.__downscale = 'contrast';
     const out = document.createElement('canvas');
     out.width = w; out.height = h;
     const octx = out.getContext('2d');

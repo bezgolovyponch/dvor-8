@@ -351,7 +351,7 @@ export function trace(rgba, w, h, opts = {}) {
     // sky: the placement then rejected every cloud position for "not enough sky here" and placed NOTHING
     // (measured: placed 0, want 4, skyPixels 54 020). The flood fills the smooth, edge-free, connected-to-the-top
     // region, clouds included, and it is bounded by the same blue line and edge tests as before.
-    if (core / n < 0.45) {
+    if (core / n < 0.08) {
       const stack = [];
       // AND IT IS BOUNDED. The first version flooded from the top edge through everything smooth, which on a
       // photograph with a soft mid-ground swallows the middle of the frame - and on the fidelity fixture it
@@ -1991,7 +1991,12 @@ export function trace(rgba, w, h, opts = {}) {
     // the picture itself (bright and blue, connected to the top). That is the honest source of truth for "this pixel
     // is sky", and it needs no horizon, no wall mask and no threshold: every candidate joins the sky's region, so the
     // photograph's own cloud dapple is painted over with the designed blue and its white puffs.
-    for (let p2 = 0; p2 < n; p2 += 1) if (skyCand[p2] === 1 && !windowsPx.has(p2)) skyMaskFinal[p2] = 1;
+    // AND THE SKY MUST BE CONNECTED TO THE TOP. Using the raw candidate set made the region 57% of a frame whose
+    // photograph has 43% sky: bright, near-neutral pavement and road pixels pass the blue/bright test without being
+    // sky at all, and every one of them became a flat blue plane. The connected set (`sky`) is the candidates joined
+    // to the TOP EDGE by the flood - a road cannot be sky because it does not touch the sky. That is the rule the
+    // creator's own pair imposes: the photograph decides WHERE the sky is.
+    for (let p2 = 0; p2 < n; p2 += 1) if (sky[p2] && !windowsPx.has(p2)) skyMaskFinal[p2] = 1;
     paintingSky = true;
     const skyEntry = entryFor(palette, 88, 154, 226);
     paintingSky = false;
