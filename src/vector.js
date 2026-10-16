@@ -396,6 +396,7 @@ export function trace(rgba, w, h, opts = {}) {
   for (let x = 0; x < w; x += 1) for (let y = 0; y < h; y += 1) if (!sky[y * w + x]) { skyline[x] = y; break; }
   let skys = null;
   let wallParts = [];
+  let skyMaskFinal = null;      // the sky's region, kept so the LAST write before the return can be the sky itself
   let skyN = 0;
   for (let i = 0; i < n; i += 1) if (sky[i]) skyN += 1;
 
@@ -1588,6 +1589,7 @@ export function trace(rgba, w, h, opts = {}) {
         for (let y3 = 0; y3 < y2; y3 += 1) skyMask[y3 * w + x2] = 1;
       }
     }
+    skyMaskFinal = skyMask;
     const scene = makeScene(w, h);
     scene.sky = { mask: skyMask, tone: designedSky };
     const FOLC = 2;
@@ -1633,6 +1635,21 @@ export function trace(rgba, w, h, opts = {}) {
       if (typeof window !== 'undefined') window.__skyTagged = alive;
     }
     void painted;
+  }
+
+  // ---- THE SKY IS THE LAST THING PAINTED (the overwrite is finally moot) --------------------------------
+  //
+  // Measured before this: the sky paint wrote 37,435 pixels and the frame carried almost none of them, so some
+  // pass between that paint and this return was rewriting them - and naming that pass would have cost another
+  // round of instrumentation for a fault that is trivially avoided. Whatever wrote over the sky, the sky is now
+  // written again here, once, immediately before the frame leaves this function.
+  if (skyMaskFinal) {
+    paintingSky = true;
+    const skyEntry = entryFor(palette, 88, 154, 226);
+    paintingSky = false;
+    let repainted = 0;
+    for (let p2 = 0; p2 < n; p2 += 1) if (skyMaskFinal[p2]) { idx[p2] = skyEntry; repainted += 1; }
+    if (typeof window !== 'undefined') window.__skyFinal = repainted;
   }
 
   return {
