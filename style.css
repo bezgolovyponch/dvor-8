@@ -169,32 +169,32 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 #bar .round { flex: 0 0 auto; width: 13.5%; min-width: 40px; aspect-ratio: 1 / 1; padding: 0; border-radius: 50%;
   display: flex; align-items: center; justify-content: center; }
 #bar .round:active { transform: translate(3px, 3px); box-shadow: none; }
-#bar .round.info { background: #1b1220; border: 3px solid #30e1b9; color: #30e1b9; box-shadow: 3px 3px 0 #f04f78;
+#bar #infoBtn { background: #1b1220; border: 3px solid #30e1b9; color: #30e1b9; box-shadow: 3px 3px 0 #f04f78;
   font: italic 900 19px/1 var(--display); }
-#bar .round.info[aria-pressed="true"] { background: #30e1b9; color: #1b1220; }
-#bar .round.throw { background: #f9c22b; border: 3px solid var(--ink); box-shadow: 3px 3px 0 #f04f78; }
-#bar .round.throw i { width: 0; height: 0; border-left: 16px solid var(--ink); border-top: 9px solid transparent;
+#bar #infoBtn[aria-pressed="true"] { background: #30e1b9; color: #1b1220; }
+#bar #throwBtn { background: #f9c22b; border: 3px solid var(--ink); box-shadow: 3px 3px 0 #f04f78; }
+#bar #throwBtn i { width: 0; height: 0; border-left: 16px solid var(--ink); border-top: 9px solid transparent;
   border-bottom: 9px solid transparent; margin-left: 4px; }
 /* The arrow that folds the bar away is not one of the four: it appears only once the bar IS folded, and it is
    then the only way back. */
-#bar .round.more { display: none; background: #1b1220; border: 3px solid #f04f78; box-shadow: 3px 3px 0 #30e1b9;
+#bar #barMore { display: none; background: #1b1220; border: 3px solid #f04f78; box-shadow: 3px 3px 0 #30e1b9;
   color: #fff; font: 900 14px/1 var(--display); }
 #bar .barDrop { display: flex; flex-direction: row; align-items: center; gap: 2%; flex: 1 1 0; min-width: 0; text-align: left; }
 #bar .fold { flex: 1 1 0; width: auto; min-width: 0; margin: 0; text-align: left; }
 #bar.hidden .barDrop { display: none; }
-#bar.hidden .round.more { display: flex; }
+#bar.hidden #barMore { display: flex; }
 
 /* THE PANELS. The icon, the name centred in what is left, and the small arrow, in the accepted frame's order. */
 #bar .pill { display: flex; align-items: center; gap: 5px; width: 100%; box-sizing: border-box; min-height: 40px;
   padding: 4px 6px; background: #1b1220; color: #fff; list-style: none; cursor: pointer;
   user-select: none; -webkit-user-select: none; font: italic 900 min(11px, .95vh)/1 var(--display); letter-spacing: .01em; }
 #bar .pill::after { content: none; }                    /* the caret is in the markup, not the global fold arrow */
-#bar .pill.weapon { border: 3px solid #30e1b9; box-shadow: 3px 3px 0 #f04f78; }
-#bar .pill.fate { border: 3px solid #f04f78; box-shadow: 3px 3px 0 #30e1b9; }
+#bar #palettePill { border: 3px solid #30e1b9; box-shadow: 3px 3px 0 #f04f78; }
+#bar #fatePill { border: 3px solid #f04f78; box-shadow: 3px 3px 0 #30e1b9; }
 #bar .pill b { flex: 1 1 auto; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; }
 #bar .pill .caret { font-style: normal; font-size: 9px; }
-#bar .pill.weapon .caret { color: #30e1b9; }
-#bar .pill.fate .caret { color: #f04f78; }
+#bar #palettePill .caret { color: #30e1b9; }
+#bar #fatePill .caret { color: #f04f78; }
 #bar .pill:active { transform: translate(3px, 3px); box-shadow: none; }
 /* the thing in the hand: the accepted frame's faceted stone, tinted per throwable so the icon is not a lie */
 #bar .wicon { flex: 0 0 auto; width: 17px; height: 17px; clip-path: polygon(31% 3%, 73% 9%, 97% 41%, 88% 79%, 51% 99%, 13% 83%, 2% 45%, 11% 15%);

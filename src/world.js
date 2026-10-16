@@ -280,17 +280,20 @@ export const DEBRIS_MAX = 220;     // pieces a broken thing throws; more than th
 
 export function makeWorld({ w, h, photo, idx, palette, regions, owner, seed = 1, env = null, structures = null }) {
   const picture = Uint8Array.from(idx);
-  // The outline index is the palette's second-to-last entry. It used to be the OUTLINE constant, which is
-  // COLOURS — correct only for the median-cut route's 28-colour table. A flat palette is shorter, so the
-  // constant wrote past the end and the thing's outline became an undefined colour.
-  const OUT = palette.length - 2;
-  // A dark line round each thing, so it stands off the yard the way a sprite does.
-  for (const r of regions) {
-    for (const p of r.pixels) {
-      const x = p % w, y = (p / w) | 0;
-      if (x === 0 || y === 0 || x === w - 1 || y === h - 1 || owner[p - 1] !== r.id || owner[p + 1] !== r.id || owner[p - w] !== r.id || owner[p + w] !== r.id) picture[p] = OUT;
-    }
-  }
+  // AN OUTLINE IS A STATE, NOT A PROPERTY OF THE PICTURE.
+  //
+  // What stood here drew a dark line round EVERY region of the yard at build time — each pixel of a thing
+  // whose 4-neighbour belonged to something else — so the frame arrived already outlined: a ring round each
+  // idle car, and a BOX round each of the fifty-four windows, i.e. box-shaped outlines drawn over the
+  // architecture of a frame nobody had touched. Measured on the creator's photograph: 7 218 of the frame's
+  // 147 456 pixels (4.9%) were that line, 4 511 of them window borders and 2 654 car rings, and it was the
+  // whole of the frame's ink.
+  //
+  // The rule is the opposite (src/criteria/OutlineRule.js, docs/MECHANICS.md, docs/V10A.md item 5): an
+  // outline marks WHAT YOU POINT AT. Only three states draw one — aimed (pink #f04f78), picked/info (cyan
+  // #30e1b9, blinking to #f9c22b) and already-damaged (faint grey #8a93a6) — and only the outline pass in
+  // src/render.js draws them, from the owner map, as the thing's own silhouette. An idle, undamaged,
+  // un-aimed thing carries none, and the picture is the painter's alone.
   return {
     w, h, photo, seed, palette, scorch: scorchMap(palette), dent: dentMap(palette),
     sw: w, yards: [{ x: 0, w, base: 0, made: false, palette }],   // one yard wide until street.js adds more

@@ -104,3 +104,21 @@ Assembly order, and no pass may write a pixel another piece owns:
 
 The game in one sentence: **you photograph your own yard and then you break it.** What is broken stays broken; people
 are never targets. The photograph must stay recognisable — that is the identity, not the drawing.
+
+## THE STYLE COMES FIRST (docs/STYLE.md, src/style/index.js, tools/style-check.mjs)
+
+The conversion is primary, and the STYLE governs it: the style is defined and constructed BEFORE a photograph is
+converted, then applied. Every value in `src/style/index.js` is measured from the creator's accepted frame
+(`reference/v10a-target-hi.webp`) unless marked CHOICE, and `tools/style-check.mjs` measures a converted frame
+against it — so "is it in the style?" is a check, not an opinion. Eight conformance lines; seven pass on the current
+frame, and the eighth is named with its numbers below.
+
+THE ONE OPEN TENSION, measured: two style lines pull against each other on a DARK photograph.
+  * "grey warmth and lightness" wants the dominant grey at lightness 0.35 (the accepted frame: rgb(89,85,95)), which
+    needs the converted frame's dark end lifted;
+  * "no wash: many tones, none dominant" forbids one tone owning more than 35%, and lifting the dark end makes one.
+  Lifting one tone satisfies the spread and misses the lightness; lifting two satisfies the lightness and breaks the
+  spread. THE RESOLUTION IS NOT A THRESHOLD: the PLANES (walls, road) must be BUILT in the style's middle register
+  from the start — tones 2..4 of the neutral ramps, never 0..1 — so nothing has to be lifted afterwards. That is a
+  change in the facade piece (`src/pieces/facade.js` already takes its tones as a parameter: pass tones.slice(2))
+  and in the ground's tone choice, not in the style and not in `register.js`.

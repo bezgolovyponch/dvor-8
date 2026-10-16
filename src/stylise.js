@@ -22,6 +22,7 @@
 // The frame is the PHOTOGRAPH'S OWN SHAPE. flat.js works at whatever size it is given, and main.js derives
 // that size from the image, so a tall phone photograph makes a tall level.
 
+import { liftRegister } from './style/register.js';   // the style's own register, applied AFTER the conversion
 import { trace } from './vector.js';
 import { render as renderFlat, RAMPS, STEPS, outlineOf, voidOf } from './flat.js';
 import { SKY, OTHER } from './surfaces.js';
@@ -60,6 +61,10 @@ export function styliseFlat(rgba, w, h, opts = {}) {
     what[i] = ramp && ramp.name === 'sky' ? SKY : OTHER;
   }
 
+  // THE STYLE'S REGISTER, APPLIED LAST. The conversion copies the photograph's own darkness; the style (measured
+  // from the accepted frame: dominant grey rgb(89,85,95), lightness 0.35) uses the palette's MIDDLE register and
+  // reserves the darkest tones for outlines. This is the last write to the frame, so nothing can undo it.
+  liftRegister(st.idx, { protect: st.windowsPx instanceof Set ? st.windowsPx : new Set() });
   return {
     idx: st.idx,
     palette: st.palette,
@@ -103,6 +108,10 @@ export function styliseVector(rgba, w, h, opts = {}) {
   for (let i = 0; i < n; i += 1) what[i] = st.idx[i] === out ? OTHER : (st.skyline[i % w] > ((i / w) | 0) ? SKY : OTHER);
   const label = new Int32Array(n).fill(-1);
   const regions = { label, rampOf: [], role: new Uint8Array(0), nr: 0, size: [], box: [], cx: [], cy: [] };
+  // THE STYLE'S REGISTER, APPLIED LAST. The conversion copies the photograph's own darkness; the style (measured
+  // from the accepted frame: dominant grey rgb(89,85,95), lightness 0.35) uses the palette's MIDDLE register and
+  // reserves the darkest tones for outlines. This is the last write to the frame, so nothing can undo it.
+  liftRegister(st.idx, { protect: st.windowsPx instanceof Set ? st.windowsPx : new Set() });
   return {
     idx: st.idx, palette: st.palette, smooth: rgba,
     surfaces: { what, horizon: 0, skyShare: st.skyShare },

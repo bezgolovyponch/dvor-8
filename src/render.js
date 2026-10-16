@@ -440,111 +440,104 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     if (b.x > cx + w + 6 || b.x < cx - 6) continue;
     for (const px of bloomPixels(pal, STEPS, b, seconds)) { ctx.fillStyle = css(pal[px.i]); ctx.fillRect(px.x, px.y, 1, 1); }
   }
-  // THE HIGHLIGHT STATES, ported from the v6 screen: pink for the thing being aimed at, cyan for the thing the
-  // info button is describing, and the SELECTED one BLINKS - v6 alternates its edges between cyan and yellow
-  // every eighth frame, and that blink is what makes a selection read as a selection rather than as a border.
-  const drawEdges = (poly, colour) => {
-    if (!poly || poly.length < 3) return;
-    ctx.save();
-    ctx.strokeStyle = colour;
-    ctx.lineWidth = PX;
-    ctx.beginPath();
-    for (let i = 0; i < poly.length; i += 1) {
-      const [ax, ay] = poly[i], [bx, by] = poly[(i + 1) % poly.length];
-      if (i === 0) ctx.moveTo(ax, ay);
-      ctx.lineTo(bx, by);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    ctx.restore();
-  };
-  const AIM = '#f04f78', INFO = '#30e1b9', SEL = '#f9c22b';
-  if (world.aim && world.aim.edges) {
-    ctx.fillStyle = AIM;
-    for (const p of world.aim.edges) ctx.fillRect(p % world.w, (p / world.w) | 0, 1, 1);
-  } else if (world.aim && world.aim.poly) drawEdges(world.aim.poly, AIM);
-  const mark = world.infoMark;
-  if (mark && seconds < mark.until) {
-    const blink = Math.floor(seconds * 8) % 2 === 0;
-    if (mark.edges) {
-      ctx.fillStyle = blink ? SEL : INFO;
-      for (const p of mark.edges) ctx.fillRect(p % world.w, (p / world.w) | 0, 1, 1);
-    } else drawEdges(mark.poly, blink ? SEL : INFO);
-  }
-
-  // THE THING IS OUTLINED IN ITS OWN SHAPE — v6's rule, and the whole point of the edges map.
+  // ---- THE OUTLINE PASS: ONE RULE, THREE STATES, AND NOTHING ELSE ---------------------------------------
   //
-  // What stood here was a BOX: four corner brackets drawn from the region's x/y/w/h, which is what the creator
-  // photographed and called bullshit - a rectangle round a car says "a car might be in here", while an outline
-  // says "THIS is the car". Every visible thing now draws its own silhouette: the pixels where a neighbour is not
-  // part of it (world.edgesOf), cached per region because the shape does not change while the yard stands.
-  // OUTLINED KINDS, FROM docs/MECHANICS.md: BUILDINGS AND CARS, AND NOTHING ELSE. This loop used to outline every
-  // visible region, so a frame with twenty targets read as twenty rings - and windows were outlined too, doubling
-  // them on every facade. The creator's rule: buildings and cars get the outline; windows are destroyable but not
-  // outlined; trees, ground, people and street furniture get nothing.
-  // the decision lives in src/criteria/OutlineRule.js, named after the requirement
-
-  for (const r of world.regions) {
-    if (!r.seen || r.gone || r.x > cx + w || r.x + r.w < cx) continue;
-    if (!mayBeOutlined(r)) continue;
-    // OUTLINES ARE FOR THINGS, NOT FOR PLANES (R12). The trace of a large, noisy region is thousands of scattered
-    // pixels, and drawing every one of them crosshatched whole buildings. Above a share of the frame the outline
-    // is skipped; the plane is drawn by the painter instead.
-    if (r.area > world.w * world.h * 0.05) continue;
-    if (scanY === null && !inFocus(mode, world, r, fxx, fyy)) continue;
-    world.edgesCache = world.edgesCache || new Map();
-    // THE OUTLINE IS THE SILHOUETTE, NOT EVERY INTERNAL EDGE. This used `edgesOf`, which marks a pixel that
-    // differs from ANY neighbour - so a region whose interior varies at all was outlined around its interior
-    // specks, and the car on the creator's phone came out as a STRIPED RING. The outline is drawn from the
-    // region's OWNER map instead: a pixel belongs to the outline when one of its four neighbours belongs to a
-    // DIFFERENT region. That is v9's rule - "an object's edge is every pixel that touches a pixel of another
-    // object" - and it cannot stripe an interior, because an interior pixel's neighbours are all its own.
-    // THE OUTLINE FOLLOWS THE SHAPE, BECAUSE THE SHAPE IS VERSIONED. Caching by id alone meant a damaged thing kept
-    // the outline of its original silhouette - the wreck was drawn inside an untouched contour. `world.touch()`
-    // bumps the version on every damage path, so a cached outline is used only while the version still matches.
-    // A CACHE HIT MUST UNWRAP. The entry is { ver, edges }; the first version returned the wrapper itself, so the
-    // draw loop iterated an object - "TypeError: edges is not iterable" - which is the frame the creator saw as a
-    // blue mush with one green patch: the pass threw and nothing after it was drawn.
-    let edges = world.edgesCache.get(r.id);
-    if (edges && edges.ver === (r.ver || 0)) edges = edges.edges;
-    else edges = null;
-    if (!edges) {
-      const own = world.owner || null;
-      const list = [];
-      if (own) {
-        for (const p2 of r.pixels) {
-          const x = p2 % world.w, y = (p2 / world.w) | 0;
-          if (x === 0 || y === 0 || x === world.w - 1 || y === world.h - 1) { list.push(p2); continue; }
-          if (own[p2 - 1] !== r.id || own[p2 + 1] !== r.id || own[p2 - world.w] !== r.id || own[p2 + world.w] !== r.id) list.push(p2);
-        }
+  // An outline marks WHAT YOU POINT AT. Three states may draw one — the AIMED thing (pink #f04f78), the
+  // PICKED/INFO one (cyan #30e1b9, blinking to #f9c22b every eighth frame, which is what makes a selection
+  // read as a selection rather than as a border) and the ALREADY-DAMAGED one (a faint grey #8a93a6). An idle,
+  // undamaged, un-aimed thing carries none: nothing is baked into the picture at build time (see makeWorld).
+  //
+  // THE OUTLINE IS THE THING'S OWN SILHOUETTE IN THE OWNER MAP. A pixel of the thing is on the outline only
+  // when one of its four neighbours belongs to a DIFFERENT region or to no region; a border between two
+  // pixels of the SAME region is inside the thing and is never drawn. That is what stops a structure made of
+  // sub-parts from coming out as a grid of boxes: the sub-parts are one region, so their borders are
+  // interior. It replaces two rules that drew far too widely — `edgesOf`'s "a neighbour outside the region's
+  // own pixel list" (which marked the internal borders of every region whose pixel list is not one solid
+  // mass) and the build-time darkening of every region's border.
+  //
+  // PLANES ARE NOT THINGS (R12). The ground, a facade read as a field, anything above a share of the frame:
+  // such a region's mask is thousands of holes, so its "silhouette" is thousands of little rings and drawing
+  // them crosshatches the whole picture — the pink/cyan hatching the creator photographed. The guard was
+  // already here; it never fired for the world's own structures because they carry no `area` field, so it is
+  // measured on the pixel count now.
+  const AIM = '#f04f78', INFO = '#30e1b9', SEL = '#f9c22b', WRECK = '#8a93a6';
+  const PLANE = world.w * world.h * 0.05;                     // above this share a region is a plane, not a thing
+  const planar = (r) => Math.max(r.area || 0, r.pixels.length) > PLANE;
+  world.edgesCache = world.edgesCache || new Map();
+  // THE OUTLINE FOLLOWS THE SHAPE, BECAUSE THE SHAPE IS VERSIONED. Caching by id alone meant a damaged thing
+  // kept the outline of its original silhouette — the wreck was drawn inside an untouched contour.
+  // `world.touch()` bumps the version on every damage path, so a cached outline is used only while the
+  // version still matches. A CACHE HIT MUST UNWRAP: the entry is { ver, edges }, and the first version
+  // returned the wrapper itself, so the draw loop iterated an object — "TypeError: edges is not iterable" —
+  // which is the frame the creator saw as a blue mush with one green patch: the pass threw and nothing after
+  // it was drawn.
+  const silhouette = (r) => {
+    const hit = world.edgesCache.get(r.id);
+    if (hit && hit.ver === (r.ver || 0)) return hit.edges;
+    const own = world.owner || null;
+    let list = null;
+    if (own) {
+      list = [];
+      for (const p of r.pixels) {
+        if (own[p] !== r.id) continue;          // a pixel the thing does not own is not part of its shape
+        const x = p % world.w, y = (p / world.w) | 0;
+        if (x === 0 || y === 0 || x === world.w - 1 || y === world.h - 1
+          || own[p - 1] !== r.id || own[p + 1] !== r.id || own[p - world.w] !== r.id || own[p + world.w] !== r.id) list.push(p);
       }
-      edges = own ? list : edgesOf(world, r);
-      world.edgesCache.set(r.id, { ver: r.ver || 0, edges });
-      edges = world.edgesCache.get(r.id).edges;
     }
-    // AN OUTLINE THAT MARKS EVERYTHING MARKS NOTHING. Every visible region was outlined - cyan when idle, pink when
-    // aimed, yellow when blinking - so the moment buildings became regions the frame filled with cyan hatching over
-    // the architecture and rings round every car. The rule is the creator's own: the outline shows WHAT YOU ARE
-    // POINTING AT. Idle things are not outlined at all; the aimed thing is pink; the info/selected thing is cyan and
-    // blinks yellow. Once damage has marked a thing, its wreck keeps a faint outline, which is how a player reads
-    // what is already broken.
-    const aimed = !!(world.aim && world.aim.id === r.id);
-    const picked = !!(world.infoMark && world.infoMark.id === r.id) || !!(world.sel && world.sel === r.id);
-    const broken = r.hits > 0;
-    if (!aimed && !picked && !broken) continue;
-    const blink = (seconds * 2 + r.id * 0.37) % 1 > 0.82;      // a blink, out of step with its neighbours
-    const colour = aimed ? '#f04f78' : picked ? (blink ? '#f9c22b' : '#30e1b9') : '#8a93a6';
-    for (const p2 of edges) {
-      const ex = p2 % world.w, ey = (p2 / world.w) | 0;
+    const edges = own ? list : edgesOf(world, r);
+    world.edgesCache.set(r.id, { ver: r.ver || 0, edges });
+    return world.edgesCache.get(r.id).edges;
+  };
+  // ONE PIXEL OF THE THING'S OWN OUTLINE, WITH ONE PIXEL OF DARK UNDER IT, so it reads on anything it is
+  // drawn over. A plane gets nothing: it is not a thing you point at, it is what things stand on.
+  const inkOutline = (r, colour) => {
+    if (!r || planar(r)) return;
+    for (const p of silhouette(r)) {
+      const ex = p % world.w, ey = (p / world.w) | 0;
       if (ex < cx - 1 || ex > cx + w) continue;
       ctx.fillStyle = '#0b0018';
-      ctx.fillRect(ex, ey + 1, 1, 1);                            // one pixel of dark under it, so it reads on anything
+      ctx.fillRect(ex, ey + 1, 1, 1);                           // one pixel of dark under it, so it reads on anything
       ctx.fillStyle = colour;
       ctx.fillRect(ex, ey, 1, 1);
     }
+  };
+  // how much it can still take, as pips under it
+  const pips = (r) => {
     const x0 = r.x - 2, y1 = r.y + r.h + 1;
-    // how much it can still take, as pips under it
     for (let n = 0; n < r.hp - r.hits; n += 1) { ctx.fillStyle = '#0b0018'; ctx.fillRect(x0 + n * 4, y1 + 2, 4, 3); ctx.fillStyle = '#f0286e'; ctx.fillRect(x0 + n * 4, y1 + 2, 3, 2); }
+  };
+  // THE THING YOU POINT AT — pink, and whatever it is: a window you are about to break is a thing being
+  // pointed at, so this path does not ask mayBeOutlined. That kind rule belongs to the standing marks below.
+  if (world.aim && world.aim.id != null) {
+    const aimedThing = world.regions[world.aim.id];
+    inkOutline(aimedThing, AIM);
+    if (aimedThing && !planar(aimedThing)) pips(aimedThing);
+  }
+  // THE THING YOU ASKED ABOUT — cyan, blinking yellow, for as long as the answer is on screen.
+  const mark = world.infoMark;
+  if (mark && seconds < mark.until && mark.id != null) {
+    const marked = world.regions[mark.id];
+    inkOutline(marked, Math.floor(seconds * 8) % 2 === 0 ? SEL : INFO);
+    if (marked && !planar(marked)) pips(marked);
+  }
+
+  // WHAT IS ALREADY BROKEN keeps a faint grey outline of its wreck, and that is the third and last state.
+  // The kinds are docs/MECHANICS.md's: BUILDINGS AND CARS, and nothing else. This loop used to outline every
+  // visible region, so a frame with twenty targets read as twenty rings — and windows were outlined too,
+  // doubling them on every facade. Buildings and cars get the outline; windows are destroyable but not
+  // outlined; trees, ground, people and street furniture get nothing. The decision lives in
+  // src/criteria/OutlineRule.js, named after the requirement.
+  for (const r of world.regions) {
+    if (!r.seen || r.gone || !r.hits) continue;               // idle and undamaged: no outline at all
+    if (r.x > cx + w || r.x + r.w < cx) continue;
+    if (!mayBeOutlined(r)) continue;
+    if (planar(r)) continue;                                 // R12: a plane is what things stand on, not a thing
+    if (scanY === null && !inFocus(mode, world, r, fxx, fyy)) continue;
+    if (world.aim && world.aim.id === r.id) continue;        // drawn pink above
+    if (mark && mark.id === r.id && seconds < mark.until) continue;   // drawn cyan/yellow above
+    inkOutline(r, WRECK);
+    pips(r);
   }
   if (folk && scanY === null) {
     // cones first, then the people on top, so a body is never hidden inside its own sight line

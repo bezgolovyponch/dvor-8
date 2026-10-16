@@ -203,7 +203,7 @@ function runSelfTest() {
     const outlined = world.regions.filter((r) => /car|truck|bus|van|building|house|tower|block/i.test(String(r.kind || '') + ' ' + String(r.label || ''))).length;
     const notOutlined = world.regions.length - outlined;
     add('обводка только у зданий и машин', outlined > 0 && notOutlined >= 0, `с обводкой ${outlined} из ${world.regions.length}`);
-    add('размер кадра — как у фото', view.width === world.w * PX && view.height === world.h * PX, `${view.width}x${view.height}`);
+    add('размер кадра — как у фото', ($('#yard') || {}).width === world.w * PX && ($('#yard') || {}).height === world.h * PX, `${($('#yard') || {}).width}x${($('#yard') || {}).height}`);
   }
   add('ошибок на странице нет', !(window.__err), window.__err ? String(window.__err).slice(0, 40) : 'нет');
   add('проверки командной строки', null, 'node tools/chain.mjs — критерии, композиция, сверка с эталоном');
@@ -1345,7 +1345,10 @@ tiltEl.addEventListener('pointerdown', (e) => {
     // brackets but in the help colour.
     if (t) {
       const edges = edgesOf(world, t);                     // the thing's own silhouette, not its box
-      world.infoMark = { edges, until: clock + 6, label: t.label, kind: t.kind };
+      // `id` NAMES THE THING THE ANSWER IS ABOUT. Without it the renderer cannot tell which region the mark
+      // stands for, so the picked state could not draw its cyan outline at all — the pass asks
+      // `world.infoMark.id === r.id`, and the field was never there.
+      world.infoMark = { id: t.id, edges, until: clock + 6, label: t.label, kind: t.kind };
       pop(t.label.toUpperCase(), t.cx, t.y - 8, 'tag');
     } else {
       world.infoMark = null;
@@ -1397,7 +1400,7 @@ $('barMore')?.addEventListener('click', (e) => {
 // chip, so the chip's own handler stays the only place that knows what choosing means.
 {
   const pill = $('palettePill'), box = $('paletteBox'), arrow = $('paletteMore');
-  let timer = 0, held = false;
+  let timer = 0, heldAt = 0;
   const openList = () => {
     foldBox($('fateBox'), false);                       // one drawer at a time: they share the bar's width
     foldBox(box, true);
@@ -1407,15 +1410,17 @@ $('barMore')?.addEventListener('click', (e) => {
     CHIPS.get(order[(order.indexOf(hand) + step + order.length) % order.length])?.click();
   };
   pill?.addEventListener('pointerdown', () => {
-    held = false;
+    heldAt = 0;
     clearTimeout(timer);
-    timer = setTimeout(() => { held = true; openList(); }, 420);
+    timer = setTimeout(() => { heldAt = Date.now(); openList(); }, 420);
   });
   for (const kind of ['pointerup', 'pointercancel', 'pointerleave']) pill?.addEventListener(kind, () => clearTimeout(timer));
   pill?.addEventListener('click', (e) => {
     e.preventDefault();
     if (arrow && arrow.contains(e.target)) { openList(); return; }           // the arrow is the whole list
-    if (held) { held = false; return; }                                     // the hold already opened it
+    // the click a hold leaves behind is not a second choice — but a later tap still cycles (the hold is over
+    // in under a second, and a tap that means "next weapon" must not be swallowed by a hold ten seconds ago)
+    if (heldAt && Date.now() - heldAt < 900) { heldAt = 0; return; }
     nextWeapon(1);
   });
   pill?.addEventListener('keydown', (e) => {
