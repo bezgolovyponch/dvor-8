@@ -64,7 +64,14 @@ export function styliseFlat(rgba, w, h, opts = {}) {
   // THE STYLE'S REGISTER, APPLIED LAST. The conversion copies the photograph's own darkness; the style (measured
   // from the accepted frame: dominant grey rgb(89,85,95), lightness 0.35) uses the palette's MIDDLE register and
   // reserves the darkest tones for outlines. This is the last write to the frame, so nothing can undo it.
-  liftRegister(st.idx, { protect: st.windowsPx instanceof Set ? st.windowsPx : new Set() });
+  // THE BUILDINGS ARE PROTECTED FROM THE GROUND'S LIFT. Without this the tower's own dark plane was lifted away
+  // (match-check: "dark plane dominates" 46% -> 3%) because in a tower's columns the skyline is row 0.
+  const protectReg = st.windowsPx instanceof Set ? new Set(st.windowsPx) : new Set();
+  if (st.buildings) for (let p2 = 0; p2 < st.buildings.length; p2 += 1) if (st.buildings[p2]) protectReg.add(p2);
+  liftRegister(st.idx, {
+    protect: protectReg,
+    horizon: st.horizon || st.skyline || null, w: st.skyline ? st.skyline.length : 0,
+  });
   return {
     idx: st.idx,
     palette: st.palette,
@@ -111,7 +118,14 @@ export function styliseVector(rgba, w, h, opts = {}) {
   // THE STYLE'S REGISTER, APPLIED LAST. The conversion copies the photograph's own darkness; the style (measured
   // from the accepted frame: dominant grey rgb(89,85,95), lightness 0.35) uses the palette's MIDDLE register and
   // reserves the darkest tones for outlines. This is the last write to the frame, so nothing can undo it.
-  liftRegister(st.idx, { protect: st.windowsPx instanceof Set ? st.windowsPx : new Set() });
+  // THE BUILDINGS ARE PROTECTED FROM THE GROUND'S LIFT. Without this the tower's own dark plane was lifted away
+  // (match-check: "dark plane dominates" 46% -> 3%) because in a tower's columns the skyline is row 0.
+  const protectReg = st.windowsPx instanceof Set ? new Set(st.windowsPx) : new Set();
+  if (st.buildings) for (let p2 = 0; p2 < st.buildings.length; p2 += 1) if (st.buildings[p2]) protectReg.add(p2);
+  liftRegister(st.idx, {
+    protect: protectReg,
+    horizon: st.horizon || st.skyline || null, w: st.skyline ? st.skyline.length : 0,
+  });
   return {
     idx: st.idx, palette: st.palette, smooth: rgba,
     surfaces: { what, horizon: 0, skyShare: st.skyShare },

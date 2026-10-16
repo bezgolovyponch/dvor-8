@@ -2080,6 +2080,9 @@ export function trace(rgba, w, h, opts = {}) {
       sky: Math.floor(entryFor(palette, 88, 154, 226) / STEPS),
       wall: Math.floor(entryFor(palette, 200, 186, 168) / STEPS),
     },
+    // the building class, so the register can leave the buildings' darks alone (in a tower's columns the skyline is
+    // row 0, so without this the whole tower counted as "ground" and its dark plane was lifted away)
+    buildings: PARSE && PARSE.building ? PARSE.building : null,
     idx, palette, skyline, skyN, clouds: placed, traced, removed, merged, linePixels, windows: windowsFound,
     planes: facadePlanes.length, objects: objectCount,
     // THE BUILDINGS THEMSELVES, as structures the game can destroy: the pixels of each facade plane. The window

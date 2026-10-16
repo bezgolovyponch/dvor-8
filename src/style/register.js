@@ -16,7 +16,7 @@ const NEUTRAL = new Set(['stone', 'metal', 'dusk']);
 // maxTone = 1: ONLY the darkest tone is lifted. With 2 (the first attempt) the whole neutral scale moved up and one
 // tone came to own more than a third of the frame, which the style forbids ("no wash: many tones, none dominant").
 // One step is enough to put the frame's register where the accepted frame has it, and it keeps the spread.
-export function liftRegister(idx, { protect = new Set(), maxTone = 1 } = {}) {
+export function liftRegister(idx, { protect = new Set(), maxTone = 1, horizon = null, w = 0, h = 0, groundMaxTone = 3 } = {}) {
   const palette = paletteOf();
   const outline = palette.length - 2, voidIdx = palette.length - 1;
   // which entries may be lifted: tone 0 and 1 of the neutral ramps, but never the structural entries
@@ -25,13 +25,31 @@ export function liftRegister(idx, { protect = new Set(), maxTone = 1 } = {}) {
     if (!NEUTRAL.has(RAMPS[r].name)) continue;
     for (let t = 0; t < maxTone; t += 1) lift[r * STEPS + t] = r * STEPS + t + 1;
   }
-  let lifted = 0, kept = 0;
+  // the ground's own lift ladder: tones 0..2 climb one step, so the asphalt lands in the mid register the accepted
+  // frame uses, while the buildings above the horizon keep their darks (that is what protects the tone spread).
+  const liftGround = new Int16Array(palette.length).fill(-1);
+  if (horizon && horizon.length) {
+    for (let r2 = 0; r2 < RAMPS.length; r2 += 1) {
+      if (!NEUTRAL.has(RAMPS[r2].name)) continue;
+      for (let t = 0; t < groundMaxTone; t += 1) liftGround[r2 * STEPS + t] = r2 * STEPS + t + 1;
+    }
+  }
+  let lifted = 0, kept = 0, liftedGround = 0;
+  const rows = w ? Math.floor(idx.length / w) : 0;
+  void rows;
   for (let p = 0; p < idx.length; p += 1) {
     const v = idx[p];
+    if (horizon && horizon.length && w) {
+      const x = p % w, y = (p / w) | 0;
+      if (y > (horizon[x] || 0) && !protect.has(p)) {
+        const to = liftGround[v];
+        if (to >= 0) { idx[p] = to; liftedGround += 1; continue; }
+      }
+    }
     if (v === outline || v === voidIdx || v < 0 || v >= palette.length) { kept += 1; continue; }
     if (protect.has(p)) { kept += 1; continue; }
     const to = lift[v];
     if (to >= 0) { idx[p] = to; lifted += 1; }
   }
-  return { lifted, protected: kept };
+  return { lifted, protected: kept, liftedGround };
 }
