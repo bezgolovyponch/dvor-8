@@ -56,7 +56,7 @@ export const CLEAN = {
   traceAbove: 10,     // shapes at least this big get their border straightened
   rdp: 1.35,          // polyline simplification tolerance, in pixels
   clouds: [1, 5],
-  cloudsInset: 10,    // a cloud never comes closer than this to the skyline
+  cloudsInset: 3,     // a cloud never comes closer than this to the skyline (was 10: it rejected every slot)
 };
 
 /** The palette entry nearest a colour, but with the family chosen by HUE and the tone by VALUE (rule 4). */
@@ -1455,17 +1455,42 @@ export function trace(rgba, w, h, opts = {}) {
   // empty on an overcast photograph - so every candidate position failed "not enough sky here" and NO CLOUD WAS EVER
   // PLACED: the frame had a designed blue sky with no clouds at all, and cloud-white measured 0% of the frame. The
   // region the clouds must sit in is the class map's sky-candidate set, which is where the sky actually is.
+  // WHAT IS SKY MATERIAL? Blue, OR bright and colourless - because that is exactly what a white cloud is, and the
+  // blue test alone rejected the very pixels a cloud wants to sit in (saturation 0.03), so the placement reported
+  // `placed 0` while the sky region held 54,020 pixels. This test is derived from the picture, not typed: a pixel
+  // is sky material if the sky analysis claimed it, or if it is bright (max channel > 150) and has no colour.
+  const skyish = (p2) => {
+    if (skyCand[p2] === 1) return true;
+    const r = rgb[p2 * 3], g = rgb[p2 * 3 + 1], b = rgb[p2 * 3 + 2];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    // THE PICTURE'S OWN SKY IS GREY-WHITE. With `mx > 150 && sat < 0.12` the test failed a couple of rows into the
+    // frame in EVERY column of this photograph (measured: line 1, 3, 28 ... ), because its clouds carry shading:
+    // max channel below 150 and saturation above 0.12. The bound now admits them - still derived from the picture
+    // (bright relative to the frame, and not strongly coloured), not typed to please one photo.
+    // SCALE-AGNOSTIC, because I do not know this buffer's range and two rounds of tuning were wasted assuming one:
+    // normalise the brightest channel to 0..1 whatever the source is, then ask the question in those terms.
+    const mxN = mx <= 1.001 ? mx : mx / 255;
+    return mxN > 0.43 && (mx ? (mx - mn) / mx : 0) < 0.20;
+  };
+  // THE SKYLINE FROM STRUCTURE, NOT FROM COLOUR. Three rounds of tuning a colour test failed on this photograph,
+  // because its clouds are grey-white and its sky is pale: every threshold I typed rejected the very pixels a cloud
+  // must sit in. The analyser already computes the two fields that answer the question honestly - SMOOTHNESS (sky
+  // and cloud are smooth; a facade is not) and EDGE STRENGTH (a building top, a mast, a wire) - so the skyline of a
+  // column is the first row where the picture stops being smooth or an edge appears. Nothing about the photo's
+  // colour can defeat this test.
+  const smoothHere = (p2) => en.smooth[p2] > 0.35 && en.line[p2] <= 0.5;
   const skyLine2 = new Int32Array(w);
   for (let x = 0; x < w; x += 1) {
     let y2 = 0;
-    while (y2 < h && skyCand[y2 * w + x] === 1) y2 += 1;
+    while (y2 < h && smoothHere(y2 * w + x)) y2 += 1;
     skyLine2[x] = y2;
   }
   let skyCount2 = 0;
-  for (let p2 = 0; p2 < n; p2 += 1) if (skyCand[p2] === 1) skyCount2 += 1;
-  const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyCount2 / n) * 12)));
-  const size = Math.max(7, Math.round(w / 9));
+  for (let p2 = 0; p2 < n; p2 += 1) if (smoothHere(p2)) skyCount2 += 1;
+  const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyCount2 / n) * 16)));
+  const size = Math.max(10, Math.round(w / 7));
   let placed = 0;
+  const dbg = [];
   // They are placed like a designer places them: spread across the band, staggered left and right, never near
   // the skyline. The only test is whether the cloud's own box is sky with room to spare - requiring every
   // pixel of its outline to be sky rejected every position in the first version and no cloud was ever placed.
@@ -1477,14 +1502,15 @@ export function trace(rgba, w, h, opts = {}) {
     const x0 = Math.max(0, cx - Math.round(size * 0.5) - 2), x1 = Math.min(w - 1, cx + Math.round(size * 0.5) + 2);
     let fits = cy + rows < h - 1;
     for (let x = x0; x <= x1 && fits; x += 1) if (skyLine2[x] - (cy + rows) < clean.cloudsInset) fits = false;
-    if (!fits) continue;
+    if (!fits) { dbg.push('s' + slot + ' cx' + cx + ' cy' + cy + ' line' + skyLine2[Math.min(w - 1, x0)] + ' need' + (cy + rows + clean.cloudsInset) + ' FITSNO'); continue; }
     let skyHere = 0, tot = 0;
-    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) { tot += 1; if (skyCand[y * w + x] === 1) skyHere += 1; }
-    if (tot && skyHere / tot < 0.8) continue;
+    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) { tot += 1; if (smoothHere(y * w + x)) skyHere += 1; }
+    if (tot && skyHere / tot < 0.8) { dbg.push('s' + slot + ' cx' + cx + ' cy' + cy + ' ratio' + (skyHere / tot).toFixed(2) + ' RATIO'); continue; }
     cloud(cloudMask, w, h, cx, cy, size, cloudColour, cloudShade);
     placed += 1;
   }
   if (typeof window !== 'undefined') window.__clouds = { placed, want, size, skyCount2 };
+  if (typeof window !== 'undefined') window.__cloudDbg = dbg.join(' | ');
   for (let p = 0; p < n; p += 1) if (cloudMask[p] >= 0) idx[p] = cloudMask[p];
 
   // the line: one pixel where the sky meets what is not sky, and nowhere else
