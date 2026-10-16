@@ -74,3 +74,29 @@ Sampled from the art area of the creator's frame — this is the palette the acc
 5. **Road**: the photograph's asphalt, markings, cycle symbol, kerbs — kept.
 6. **HUD**: `РАЗБИТО 0` with a red badge (left) · `ОПАСНОСТЬ` with a five-segment meter (right) · bottom bar:
    ⓘ (cyan ring) · current weapon panel with ▴ · `СТИХИЯ` panel with a swirl · **big round yellow throw button**.
+
+---
+
+# THE PAIRING GATE'S FIRST RUN — it found a real regression (2 of 6 pairs pass)
+
+`tools/pairing-check.mjs <photo> <canvas.json>` reduces the photograph by the same 5x5 area mean the game uses, then
+measures whether the sky we DRAW occupies the pixels that are sky in the picture.
+
+| photograph | sky in photo | sky in frame | IoU | verdict |
+|---|---|---|---|---|
+| `5` (Prague) | 49% | 49% | **0.69** | PAIRED |
+| `yard2` (balcony) | 65% | 62% | **0.71** | PAIRED |
+| `web2` (courtyard) | 49% | 60% | 0.51 | **NOT PAIRED** — 11 points too much sky |
+| `b` | 35% | 42% | 0.35 | **NOT PAIRED** — 7 points too much |
+| `web1` (Sanok) | 34% | 52% | 0.37 | **NOT PAIRED** — 18 points too much |
+| `a` | 29% | 53% | 0.28 | **NOT PAIRED** — 24 points too much: the sky is painting over the buildings |
+
+**The fault is a greedy sky.** It appeared when the sky's region was widened this session (the class-map candidates,
+the flood threshold, and painting the sky last) — each change was made to make the sky *appear*, and the last of them
+made it *overflow*. On a photograph whose sky is a third of the frame the sky now owns half of it.
+
+**THE RULE THE ACCEPTED PAIR IMPOSES:** the designed sky is painted *in place of the photograph's sky*, at the same
+positions, so **the sky region may never exceed the sky in the picture**. The photograph decides WHERE the sky is; the
+palette decides what colour it is. Concretely: a pixel may be painted as sky only if it is sky-ish in the reduced
+photograph (blue, or bright and near-neutral) and connected to the top edge — the same test the gate applies, so
+"paired" becomes true by construction rather than by luck.
