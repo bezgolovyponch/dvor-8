@@ -30,13 +30,12 @@ creator's photograph), turned into regions.
 
 ## The next action, exactly
 
-**The sky.** It is painted blue into `idx` — measured: the right palette entry (`rgb(86,118,185)`) over 37,435 px,
-read from the page as `window.__skyPainted` — and the canvas's top band still measures
-`34% pale grey · 31% mid grey · 24% dark grey · 4% blue`. One of three things is true, and the test that decides
-between them is written in `docs/PREAMBLE.md` §7: read the canvas's own top band and `__skyPainted` in the SAME run.
-
-- **band blue there** → the product is right and my capture is wrong (the fourth instrument lie to fix);
-- **band grey there** → the overwrite is real: bisect the passes after the sky paint, one dump per stage.
+**The clouds do not reach the frame: cloud-white measures 0% of pixels.** Measured progress on the sky this round:
+blue **3% → 34%** of the frame, by making the sky region the class map's own sky candidates and painting it, then its
+clouds, LAST. What remains is one cause, identified: **`cls[]` is REUSED** — the wall pass writes `cls[p] = 1` for
+walls, so by the time the cloud block asks `cls[p] === 1` to mean "sky", the map no longer says sky. The fix is to
+**snapshot the sky-candidate set into its own array at the moment the sky analysis computes it** (`skyCand = cls.slice()`
+there), and use that snapshot for the sky region, the skyline and the cloud placement. One line of snapshot, three uses.
 
 **After that: the frame is neutral where the accepted frame is blue** — the facades carry the photograph's grey-blue
 in three tones instead of drawn planes under a designed sky (`docs/V10A.md` is the target, element by element).

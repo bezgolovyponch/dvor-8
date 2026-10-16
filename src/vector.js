@@ -404,6 +404,7 @@ export function trace(rgba, w, h, opts = {}) {
   for (let x = 0; x < w; x += 1) for (let y = 0; y < h; y += 1) if (!sky[y * w + x]) { skyline[x] = y; break; }
   let skys = null;
   let wallParts = [];
+  let wallPx = new Uint8Array(0);      // the structural walls, by pixel: the sky must not paint over them
   let skyMaskFinal = null;      // the sky's region, kept so the LAST write before the return can be the sky itself
   let skyN = 0;
   for (let i = 0; i < n; i += 1) if (sky[i]) skyN += 1;
@@ -1378,6 +1379,8 @@ export function trace(rgba, w, h, opts = {}) {
       }
     }
     sky.__wall = planes;
+    wallPx = new Uint8Array(n);
+    for (const part of fac.parts) for (const p2 of part.px) wallPx[p2] = 1;
     // the buildings, as masks, ready to become regions in the game
     const wallParts = [];
     for (const part of fac.parts) {
@@ -1423,13 +1426,31 @@ export function trace(rgba, w, h, opts = {}) {
   }
 
   // ---- 6. designed clouds, and one line along the skyline ------------------------------------------------
-  paintingSky = true;
-  const cloudColour = skys ? skys.cloudA : entryFor(palette, 250, 250, 252);
-  const cloudShade = skys ? skys.cloudC : entryFor(palette, 198, 214, 232);
-  paintingSky = false;
+  // WHITE CLOUDS, FROM THE SKY RAMP ITSELF. The target frame's clouds are white puffs with one shaded row; ours came
+  // out pale grey because the cloud tones were resolved through the neutral ramp. They are now the SKY ramp's own two
+  // palest tones - which is what "designed clouds in white with two shades" means, and there is no arithmetic left to
+  // go wrong: the entries are named, not computed.
+  const SKY_RAMP = RAMPS.findIndex((R) => R.name === 'sky');
+  const cloudColour = SKY_RAMP * STEPS + 5;      // the palest tone of the sky's own ramp
+  const cloudShade = SKY_RAMP * STEPS + 4;       // one step down: the shaded row of the puff
+  void skys;
+  let cloudMaskFinal = null;
   const cloudMask = new Int32Array(n).fill(-1);
-  const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyN / n) * 9)));
-  const size = Math.max(7, Math.round(w / 11));
+  cloudMaskFinal = cloudMask;
+  // THE PLACEMENT TESTS WERE ASKING AN EMPTY MASK. Both `skyline[x]` and `sky[]` come from the sky mask, which is
+  // empty on an overcast photograph - so every candidate position failed "not enough sky here" and NO CLOUD WAS EVER
+  // PLACED: the frame had a designed blue sky with no clouds at all, and cloud-white measured 0% of the frame. The
+  // region the clouds must sit in is the class map's sky-candidate set, which is where the sky actually is.
+  const skyLine2 = new Int32Array(w);
+  for (let x = 0; x < w; x += 1) {
+    let y2 = 0;
+    while (y2 < h && cls[y2 * w + x] === 1) y2 += 1;
+    skyLine2[x] = y2;
+  }
+  let skyCand = 0;
+  for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1) skyCand += 1;
+  const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyCand / n) * 12)));
+  const size = Math.max(7, Math.round(w / 9));
   let placed = 0;
   // They are placed like a designer places them: spread across the band, staggered left and right, never near
   // the skyline. The only test is whether the cloud's own box is sky with room to spare - requiring every
@@ -1441,10 +1462,10 @@ export function trace(rgba, w, h, opts = {}) {
     const rows = Math.max(3, Math.round(size * 0.55));
     const x0 = Math.max(0, cx - Math.round(size * 0.5) - 2), x1 = Math.min(w - 1, cx + Math.round(size * 0.5) + 2);
     let fits = cy + rows < h - 1;
-    for (let x = x0; x <= x1 && fits; x += 1) if (skyline[x] - (cy + rows) < clean.cloudsInset) fits = false;
+    for (let x = x0; x <= x1 && fits; x += 1) if (skyLine2[x] - (cy + rows) < clean.cloudsInset) fits = false;
     if (!fits) continue;
     let skyHere = 0, tot = 0;
-    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) { tot += 1; if (sky[y * w + x]) skyHere += 1; }
+    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) { tot += 1; if (cls[y * w + x] === 1) skyHere += 1; }
     if (tot && skyHere / tot < 0.8) continue;
     cloud(cloudMask, w, h, cx, cy, size, cloudColour, cloudShade);
     placed += 1;
@@ -1680,11 +1701,29 @@ export function trace(rgba, w, h, opts = {}) {
   // round of instrumentation for a fault that is trivially avoided. Whatever wrote over the sky, the sky is now
   // written again here, once, immediately before the frame leaves this function.
   if (skyMaskFinal) {
+    // THE SKY OWNS EVERYTHING ABOVE THE HORIZON THAT IS NOT A THING. The mask built earlier stopped at the
+    // STRUCTURAL skyline, so the photograph's own cloud dapple survived in the gaps above it and the frame read as
+    // "grey clouds under blue". The sky is now closed over the whole upper region: a pixel above the horizon goes to
+    // the sky unless it belongs to a wall, a window, foliage or an outline. Buildings keep their silhouette, the
+    // designed blue and its white puffs own the rest - which is the target frame's sky.
+    // THE CLASS MAP ALREADY KNOWS WHERE THE SKY IS. `cls[p] === 1` is the sky-candidate set the analysis marked from
+    // the picture itself (bright and blue, connected to the top). That is the honest source of truth for "this pixel
+    // is sky", and it needs no horizon, no wall mask and no threshold: every candidate joins the sky's region, so the
+    // photograph's own cloud dapple is painted over with the designed blue and its white puffs.
+    for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1 && !windowsPx.has(p2)) skyMaskFinal[p2] = 1;
     paintingSky = true;
     const skyEntry = entryFor(palette, 88, 154, 226);
     paintingSky = false;
     let repainted = 0;
     for (let p2 = 0; p2 < n; p2 += 1) if (skyMaskFinal[p2]) { idx[p2] = skyEntry; repainted += 1; }
+    // AND THEN ITS CLOUDS. The designed puffs were drawn BEFORE this repaint, so the flat blue wiped them - the
+    // same "painted last wipes the earlier work" pattern that hid the sky itself. The sky goes down first, the
+    // clouds on top of it, and the frame is finished in that order.
+    if (cloudMaskFinal) {
+      let clouds = 0;
+      for (let p2 = 0; p2 < n; p2 += 1) if (cloudMaskFinal[p2] >= 0) { idx[p2] = cloudMaskFinal[p2]; clouds += 1; }
+      if (typeof window !== 'undefined') window.__cloudFinal = clouds;
+    }
     if (typeof window !== 'undefined') window.__skyFinal = repainted;
   }
 
