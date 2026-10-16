@@ -317,6 +317,14 @@ export function trace(rgba, w, h, opts = {}) {
       if (!grew) break;
     }
   }
+  // THE SKY-CANDIDATE SET IS SNAPSHOTTED HERE, AND THAT IS THE WHOLE POINT.
+  //
+  // `cls[]` is REUSED: the wall pass later writes `cls[p] = 1` for walls, so every later question of the form
+  // "is this pixel sky?" was being answered by a map that describes something else - which is why the cloud
+  // placement found no sky to sit in and cloud-white measured 0% of the frame while the blue itself was fine.
+  // One copy, taken before any other pass touches the map, is used by the sky region, the skyline and the clouds.
+  const skyCand = cls.slice();
+
   // AN OVERCAST SKY IS STILL A SKY. The blue test above finds a blue sky; on a grey day - the creator's Prague
   // photograph is overcast - it finds nothing, and the top of the frame was painted as noisy shapes instead of a
   // plane: the gate measured 52% flat with 0.39 colour changes per pixel in the sky band. So if the blue core is
@@ -325,7 +333,13 @@ export function trace(rgba, w, h, opts = {}) {
   {
     let core = 0;
     for (let i = 0; i < n; i += 1) if (coreSky[i]) core += 1;
-    if (core / n < 0.08) {
+    // THE FLOOD IS NOT ONLY FOR A GREY DAY. It ran when the blue core was small, so on this photograph - where
+    // 37% of the frame passes the blue test - it never ran, and the sky region was the BLUE part alone. The white
+    // clouds over it are bright and almost colourless (saturation 0.03), so they failed the blue test and were not
+    // sky: the placement then rejected every cloud position for "not enough sky here" and placed NOTHING
+    // (measured: placed 0, want 4, skyPixels 54 020). The flood fills the smooth, edge-free, connected-to-the-top
+    // region, clouds included, and it is bounded by the same blue line and edge tests as before.
+    if (core / n < 0.45) {
       const stack = [];
       // AND IT IS BOUNDED. The first version flooded from the top edge through everything smooth, which on a
       // photograph with a soft mid-ground swallows the middle of the frame - and on the fidelity fixture it
@@ -1444,12 +1458,12 @@ export function trace(rgba, w, h, opts = {}) {
   const skyLine2 = new Int32Array(w);
   for (let x = 0; x < w; x += 1) {
     let y2 = 0;
-    while (y2 < h && cls[y2 * w + x] === 1) y2 += 1;
+    while (y2 < h && skyCand[y2 * w + x] === 1) y2 += 1;
     skyLine2[x] = y2;
   }
-  let skyCand = 0;
-  for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1) skyCand += 1;
-  const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyCand / n) * 12)));
+  let skyCount2 = 0;
+  for (let p2 = 0; p2 < n; p2 += 1) if (skyCand[p2] === 1) skyCount2 += 1;
+  const want = Math.max(clean.clouds[0], Math.min(clean.clouds[1], Math.round((skyCount2 / n) * 12)));
   const size = Math.max(7, Math.round(w / 9));
   let placed = 0;
   // They are placed like a designer places them: spread across the band, staggered left and right, never near
@@ -1465,11 +1479,12 @@ export function trace(rgba, w, h, opts = {}) {
     for (let x = x0; x <= x1 && fits; x += 1) if (skyLine2[x] - (cy + rows) < clean.cloudsInset) fits = false;
     if (!fits) continue;
     let skyHere = 0, tot = 0;
-    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) { tot += 1; if (cls[y * w + x] === 1) skyHere += 1; }
+    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) { tot += 1; if (skyCand[y * w + x] === 1) skyHere += 1; }
     if (tot && skyHere / tot < 0.8) continue;
     cloud(cloudMask, w, h, cx, cy, size, cloudColour, cloudShade);
     placed += 1;
   }
+  if (typeof window !== 'undefined') window.__clouds = { placed, want, size, skyCount2 };
   for (let p = 0; p < n; p += 1) if (cloudMask[p] >= 0) idx[p] = cloudMask[p];
 
   // the line: one pixel where the sky meets what is not sky, and nowhere else
@@ -1710,7 +1725,7 @@ export function trace(rgba, w, h, opts = {}) {
     // the picture itself (bright and blue, connected to the top). That is the honest source of truth for "this pixel
     // is sky", and it needs no horizon, no wall mask and no threshold: every candidate joins the sky's region, so the
     // photograph's own cloud dapple is painted over with the designed blue and its white puffs.
-    for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1 && !windowsPx.has(p2)) skyMaskFinal[p2] = 1;
+    for (let p2 = 0; p2 < n; p2 += 1) if (skyCand[p2] === 1 && !windowsPx.has(p2)) skyMaskFinal[p2] = 1;
     paintingSky = true;
     const skyEntry = entryFor(palette, 88, 154, 226);
     paintingSky = false;
