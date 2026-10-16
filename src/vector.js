@@ -938,9 +938,17 @@ export function trace(rgba, w, h, opts = {}) {
     // blue glass, so on a grey facade every window read as a black or blue BLOCK - the creator's "objects clustering
     // is wrong". v6's sprite is the other way round: the frame is the light tone of the wall and the glass is a mid
     // blue-grey that reads as reflecting sky, with a paler sill under it. Three tones, none of them near-black.
+    // THE GLASS IS BLUE, AND IT MUST NAME THE SKY RAMP TO GET THERE.
+    //
+    // Measured against the example frame (tools/match-check.mjs): its tower carries blue glass, rgb(77,100,180) lit
+    // and rgb(49,62,122) shaded, while ours measured 4% blue against a required 10%. The cause is structural, not a
+    // wrong number: outside sky painting the family rule excludes the sky ramp (a blue-grey pixel must not become
+    // sky), so `entryFor(92,116,152)` could only reach a NEUTRAL ramp - grey glass. A window is the one place a
+    // building is allowed to reflect the sky, so the sprite names the sky ramp's own tones directly.
+    const SKY_I = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
     const frameEntry = entryFor(palette, 196, 198, 202);   // the frame: light, like the wall it sits in
-    const winEntry = entryFor(palette, 150, 158, 172);     // the inner lip: one step down from the frame
-    const glassEntry = entryFor(palette, 92, 116, 152);    // the glass: a mid blue-grey, sky reflected
+    const winEntry = SKY_I + 1;                            // the inner lip: the sky's shade, rgb(9,34,113)
+    const glassEntry = SKY_I + 2;                          // the glass: the sky's own blue, rgb(20,75,174)
     const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
     // ---- THE WINDOWS SIT ON THE FACADE'S OWN GRID (docs/CRITERIA.md: "rebuilt on the photo's column and floor
     // grid"). The finder returns boxes wherever it saw a dark opening, so they landed at the photograph's own
@@ -956,6 +964,7 @@ export function trace(rgba, w, h, opts = {}) {
       for (let i = 1; i < sx.length; i += 1) { const g = sx[i] - sx[i - 1]; if (g > 3 && g < w * 0.5) gapsX.push(g); }
       for (let i = 1; i < sy.length; i += 1) { const g = sy[i] - sy[i - 1]; if (g > 3 && g < h * 0.5) gapsY.push(g); }
       const px2 = Math.max(6, Math.round(med(gapsX) || 0)), py2 = Math.max(6, Math.round(med(gapsY) || 0));
+      if (typeof window !== 'undefined') window.__winPitch = { px: px2, py: py2, n: all.length };
       if (px2 > 6 && py2 > 6) {
         const x0 = sx[0] || 0, y0 = sy[0] || 0;
         for (const q of all) {
@@ -965,6 +974,19 @@ export function trace(rgba, w, h, opts = {}) {
           if (!dx && !dy) continue;
           q.x += dx; q.y += dy; q.cx += dx; q.cy += dy;
           for (let i2 = 0; i2 < q.px.length; i2 += 1) q.px[i2] += dy * w + dx;
+        }
+        // RESIZE EACH SPRITE TO ITS BAY, after snapping: the opening the finder saw is a few pixels; the bay it sits
+        // in is what a window occupies on a facade. Measured against the example frame, the tower's glass must cover
+        // ≥10% of the region and the finder's own boxes gave 4%.
+        const nw = Math.max(3, Math.round(px2 * 0.7)), nh = Math.max(2, Math.round(py2 * 0.6));
+        for (const q of all) {
+          q.w = nw; q.h = nh;
+          q.x = Math.round(q.cx - nw / 2); q.y = Math.round(q.cy - nh / 2);
+          q.px = [];
+          for (let yy = q.y; yy < q.y + nh; yy += 1) for (let xx = q.x; xx < q.x + nw; xx += 1) {
+            if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+            q.px.push(yy * w + xx);
+          }
         }
         if (typeof window !== 'undefined') window.__winGrid = { px: px2, py: py2, n: all.length };
       }
@@ -1158,7 +1180,8 @@ export function trace(rgba, w, h, opts = {}) {
         if (L > 168) { idx[p2] = marking; continue; }         // the paint the photograph has, where it has it
         // the asphalt's own tone: the road's ramp, its tone chosen by the pixel's own value in eight steps - a
         // faithful gradation, no dithering, and the layout untouched
-        const step = Math.max(0, Math.min(STEPS - 1, Math.round(((L - 30) / 120) * (STEPS - 1))));
+        const step = Math.max(2, Math.min(STEPS - 1, Math.round(((L - 30) / 120) * (STEPS - 1))));   // the register: mid tones carry the frame
+        if (typeof window !== 'undefined') window.__roadTone = (window.__roadTone || 0) + 1;
         idx[p2] = entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) === 0
           ? step * 1
           : Math.floor(body0 / STEPS) * STEPS + step;
@@ -1486,8 +1509,12 @@ export function trace(rgba, w, h, opts = {}) {
       const px2 = pitchOf(cols), py2 = pitchOf(rows);
       // THE SPRITE: frame, lip, glass, sill - the four entries this block has always used, unchanged.
       const frameEntry = entryFor(palette, 196, 198, 202);   // the frame: light, like the wall it sits in
-      const lipEntry = entryFor(palette, 150, 158, 172);     // the inner lip: one step down from the frame
-      const glassEntry = entryFor(palette, 92, 116, 152);    // the glass: a mid blue-grey, sky reflected
+      // THE GRID SPRITES ARE THE ONES THAT PAINT THE FACADE (3 073 of them on the Prague photograph), and they were
+      // still carrying the grey glass: the blue never reached the tower. They name the sky ramp's own blue too, and
+      // the pane fills more of its bay - the example's windows are mostly glass inside a one-pixel light frame.
+      const SKY_I2 = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
+      const lipEntry = SKY_I2 + 1;                           // the inner lip: the sky's shade, rgb(9,34,113)
+      const glassEntry = SKY_I2 + 2;                         // the glass: the sky's own blue, rgb(20,75,174)
       const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
       let drawn = 0;
       if (px2 >= MIN_PITCH && py2 >= MIN_PITCH) {
@@ -1496,7 +1523,7 @@ export function trace(rgba, w, h, opts = {}) {
         // disappeared, the lip became the largest single colour on the facade (measured 41%) and the building read
         // as stripes rather than as windows in a plane. A window is a THIRD of its bay, the way it is in the
         // accepted frame, and the plane is what is left between them.
-        const gw = Math.max(2, Math.round(px2 * 0.34)), gh = Math.max(2, Math.round(py2 * 0.34));
+        const gw = Math.max(2, Math.round(px2 * 0.46)), gh = Math.max(2, Math.round(py2 * 0.46));
         // the origin: the bay and the floor the photograph's own openings agree on, snapped to the grid they imply
         const x0 = Math.round(med(cols) / px2) * px2;
         const y0 = Math.round(med(rows) / py2) * py2;
