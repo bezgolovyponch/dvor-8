@@ -96,7 +96,19 @@ function entryFor(palette, r, g, b) {
   const want = RAMPS.findIndex((R) => R.name === family);
   const base = (want < 0 ? 3 : want) * STEPS;
   let bestTone = base, bestToneD = Infinity;
-  for (let t = 0; t < STEPS; t += 1) {
+  // THE DARKEST TONE IS FOR OUTLINES, NOT FOR ROADS. The style (src/style/index.js, measured from the accepted frame)
+  // puts the converted frame's dominant grey at lightness 0.35 — rgb(89,85,95) — while ours came out at 0.24,
+  // rgb(61,55,67): the conversion was choosing tone 0 for asphalt because the photograph's asphalt is dark, and the
+  // accepted style deliberately keeps the ground in the MID tones and reserves the darkest entry for the outline.
+  // So a pixel brighter than a true shadow is chosen from tones 1..5.
+  // AND THE ROAD SITS IN THE THIRD TONE, NOT THE SECOND. Measured after the first correction: the frame's dominant
+  // grey was still rgb(61,55,67), lightness 0.24, against the style's 0.35 — the asphalt was landing one tone low,
+  // because a photograph's asphalt IS dark and the accepted style deliberately lifts the ground. A pixel in the
+  // ground's own range (60..150) is therefore chosen from tones 2..5; below that (true shadow) from 1..5; only a
+  // near-black pixel may use tone 0, which the style reserves for outlines.
+  const L2 = luma(r, g, b);
+  const firstTone = L2 > 60 && L2 < 150 ? 2 : L2 > 60 ? 1 : 0;
+  for (let t = firstTone; t < STEPS; t += 1) {
     const i = base + t;
     const c = palette[i];
     if (!c) continue;
@@ -1233,7 +1245,7 @@ export function trace(rgba, w, h, opts = {}) {
     // `cls === 1` MEANS TWO DIFFERENT THINGS AT TWO DIFFERENT TIMES, and this pass was reading the wrong one.
     // Early on it is the SKY-CANDIDATE set (the blue test), which is snapshotted as `skyCand`; the structure pass
     // below is what writes `cls = 1` for a WALL. Counting every `cls === 1` pixel therefore counted the sky: on the
-    // creator's photograph (measured at 384x512, tools/dbg.html) it read 71 362 - 36% of the frame - against this
+    // creator's photograph (measured at 384x512 through the page's own trace) it read 71 362 - 36% of the frame -
     // 12% guard, so the guard concluded "the hue test found the facades" and the structure pass NEVER RAN. No pixel
     // was ever marked as a wall, and the wall mask fell back to the blue speckle of the sky class: 20 168 pixels in
     // 1075 connected parts, nineteen pixels each, which the plane pass then painted as 1075 random-tone patches.
@@ -1282,7 +1294,6 @@ export function trace(rgba, w, h, opts = {}) {
           for (const p2 of part.px) { nearSky[p2] = 0; killed += 1; }
         }
         if (killed) for (let p2 = 0; p2 < n; p2 += 1) joined[p2] = cand[p2] || nearSky[p2] ? 1 : 0;
-        if (typeof window !== 'undefined') window.__dbgBridge = killed;
       }
       const { parts } = components(w, h, (p2) => joined[p2]);
       let ran = 0;
@@ -1293,12 +1304,10 @@ export function trace(rgba, w, h, opts = {}) {
         if (!meetsSky) continue;                        // the ground does not meet the sky; a facade does
         let straight = 0;
         for (const p2 of part.px) if (en.line[p2] > 0.4) straight += 1;
-        if (typeof window !== 'undefined') (window.__dbgParts = window.__dbgParts || []).push([part.area, Math.round((straight / part.area) * 1000) / 1000, part.minX, part.minY, part.maxX - part.minX + 1, part.maxY - part.minY + 1]);
         if (straight / part.area < 0.06) continue;      // and it is full of straight runs
         for (const p2 of part.px) { if (!sky[p2] && cls[p2] !== 2) cls[p2] = 1; }
         ran += 1;
       }
-      if (typeof window !== 'undefined') window.__dbgStructureRan = ran;
     }
   }
 
@@ -1329,7 +1338,7 @@ export function trace(rgba, w, h, opts = {}) {
     // bright, smooth and free of long lines - everything the wall class looks for - so without this the cars came
     // out painted in the wall's plane tones like masonry. The marks are the only honest source for this: they are
     // what the game itself calls a thing, and the pass that draws them runs after this one.
-    const marks = opts.marks || null;
+    const thingMarks = opts.marks || null;
     for (let p2 = 0; p2 < n; p2 += 1) {
       if (cls[p2] !== WALLCLS) continue;
       const y = (p2 / w) | 0, x = p2 % w;
@@ -1337,7 +1346,7 @@ export function trace(rgba, w, h, opts = {}) {
       if (protectedPx.has(p2)) continue;                // a window is drawn there
       if (cls[p2] === 2) continue;                      // the photograph's green is never a wall (R15)
       if (idx[p2] === palette.length - 2) continue;     // an outline pixel
-      if (marks && marks[p2]) continue;                 // a thing keeps its own pixels
+      if (thingMarks && thingMarks[p2]) continue;       // a thing keeps its own pixels
       wallMask[p2] = 1;
     }
     // A WALL IS A PLANE, SO ITS MASK HAS NO HOLES. The class map is a per-pixel hue test and it flickers: on the
@@ -1366,45 +1375,11 @@ export function trace(rgba, w, h, opts = {}) {
       }
       // the three things the fill must never swallow, put back explicitly
       for (const p2 of protectedPx) wallMask[p2] = 0;
-      if (marks) for (let p2 = 0; p2 < n; p2 += 1) if (marks[p2]) wallMask[p2] = 0;
+      if (thingMarks) for (let p2 = 0; p2 < n; p2 += 1) if (thingMarks[p2]) wallMask[p2] = 0;
       for (let p2 = 0; p2 < n; p2 += 1) if (sky[p2]) wallMask[p2] = 0;
-    }
-    // THE FACADE'S OWN BANDS, and they are measured, not typed: for every pixel, how far it stands below the SKY
-    // ABOVE IT IN ITS OWN COLUMN. That distance is the one geometric fact that separates a facade from the ground.
-    // A facade begins at the skyline, so its depth is a small multiple of the skyline's own extent; the road
-    // begins where the buildings end, hundreds of pixels further down. Measured per column against that column's
-    // own skyline - not against a horizon, which a courtyard does not have.
-    const depth = new Int32Array(n).fill(-1);
-    for (let x = 0; x < w; x += 1) {
-      let last = -1;
-      for (let y = 0; y < h; y += 1) {
-        const p2 = y * w + x;
-        if (sky[p2]) { last = y; continue; }
-        if (last >= 0) depth[p2] = y - last;
-      }
     }
     const fac = components(w, h, (p2) => wallMask[p2]);
     let planes = 0;
-    if (typeof window !== 'undefined') {
-      {
-        // depth histogram of the wall mask, and of the largest region, to find the band that separates
-        // a facade from the ground
-        const h1 = new Array(20).fill(0);
-        for (let p2 = 0; p2 < n; p2 += 1) if (wallMask[p2] && depth[p2] >= 0) h1[Math.min(19, (depth[p2] / 25) | 0)] += 1;
-        window.__dbgDepthHist = h1;
-        const big = fac.parts.slice().sort((a, b) => b.area - a.area)[0];
-        if (big) {
-          const h2 = new Array(20).fill(0);
-          for (const p2 of big.px) if (depth[p2] >= 0) h2[Math.min(19, (depth[p2] / 25) | 0)] += 1;
-          window.__dbgDepthBig = h2;
-        }
-      }
-      window.__dbgWallMask = wallMask;
-      window.__dbgWallMaskN = wallMask.reduce((a, b) => a + b, 0);
-      window.__dbgFacParts = fac.parts.length;
-      window.__dbgFacSizes = fac.parts.map((q) => q.area).sort((a, b) => b - a).slice(0, 12);
-      window.__dbgFacBoxes = fac.parts.slice().sort((a, b) => b.area - a.area).slice(0, 6).map((q) => [q.minX, q.minY, q.maxX - q.minX + 1, q.maxY - q.minY + 1, q.area]);
-    }
     for (const part of fac.parts) {
       if (part.area < 40) continue;
       let r0 = 0, g0 = 0, b0 = 0;
@@ -1502,11 +1477,11 @@ export function trace(rgba, w, h, opts = {}) {
       const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
       let drawn = 0;
       if (px2 >= MIN_PITCH && py2 >= MIN_PITCH) {
-        // THE SPRITE IS SMALLER THAN ITS BAY, and that is what makes a grid read as a grid. At 60% of the pitch
+  // THE SPRITE IS SMALLER THAN ITS BAY, and that is what makes a grid read as a grid. At 60% of the pitch
         // with a one-pixel frame on each side the sprite filled its whole cell: the wall between two windows
         // disappeared, the lip became the largest single colour on the facade (measured 41%) and the building read
-        // as diagonal stripes rather than as windows in a plane. A window is a THIRD of its bay, the way it is in
-        // the accepted frame, and the plane is what is left.
+        // as stripes rather than as windows in a plane. A window is a THIRD of its bay, the way it is in the
+        // accepted frame, and the plane is what is left between them.
         const gw = Math.max(2, Math.round(px2 * 0.34)), gh = Math.max(2, Math.round(py2 * 0.34));
         // the origin: the bay and the floor the photograph's own openings agree on, snapped to the grid they imply
         const x0 = Math.round(med(cols) / px2) * px2;
@@ -1557,7 +1532,6 @@ export function trace(rgba, w, h, opts = {}) {
           }
         }
       }
-      if (typeof window !== 'undefined') window.__facade = { drawn, pitch: [px2, py2], openings: cols.length };
     }
     // ---- GRAIN REMOVAL (docs/AUDIT.md, step 4): NO PHOTOGRAPH REMAINS INSIDE A WALL -------------------
     //
@@ -1572,38 +1546,39 @@ export function trace(rgba, w, h, opts = {}) {
     // decoration; this is the requirement.
     {
       const idAt = new Int32Array(n).fill(-1);
-      const familyOf = new Map();                        // each region's own family, from the region's own mean
-      const depthMax = new Map();                        // and its own depth below the sky, for the three faces
+      const familyOf = new Map();                        // each region's own three tones and its own box
       for (const part of fac.parts) {
-        let r0 = 0, g0 = 0, b0 = 0, dmax = 0;
-        for (const p2 of part.px) {
-          r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2];
-          if (depth[p2] > dmax) dmax = depth[p2];
-        }
+        let r0 = 0, g0 = 0, b0 = 0;
+        for (const p2 of part.px) { r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2]; }
         const c = Math.max(1, part.px.length);
-        familyOf.set(part.id, Math.floor(entryFor(palette, r0 / c, g0 / c, b0 / c) / STEPS));
-        depthMax.set(part.id, Math.max(1, dmax));
+        const family = Math.floor(entryFor(palette, r0 / c, g0 / c, b0 / c) / STEPS);
+        familyOf.set(part.id, { tones: [family * STEPS + 1, family * STEPS + 2, family * STEPS + 4],
+          minY: part.minY, h: part.maxY - part.minY + 1 });
         for (const p2 of part.px) idAt[p2] = part.id;
       }
       let cleaned = 0;
       for (let p2 = 0; p2 < n; p2 += 1) {
         if (!wallMask[p2] || sky[p2] || protectedPx.has(p2)) continue;
         if (idx[p2] === palette.length - 2) continue;          // an outline stays a line
-        const family = familyOf.get(idAt[p2]);
-        if (family === undefined) continue;
-        const tones = [family * STEPS + 1, family * STEPS + 2, family * STEPS + 4];
-        if (tones.includes(idx[p2])) continue;                 // already one of this plane's own three tones
+        const rec = familyOf.get(idAt[p2]);
+        if (!rec) continue;
+        if (rec.tones.includes(idx[p2])) continue;             // already one of this plane's own three tones
         // THE PHOTOGRAPH'S OWN GRAIN WAS THE TONE PICKER, and this is the fix. The face used to be chosen per pixel
         // by the pixel's own smoothed luma, so a wall's noise - not its light - decided its colour: measured, the
-        // wall band came out 33% flat with the sky's own blue as its most common colour. The face is now chosen by
-        // WHERE THE PIXEL SITS ON THE FACADE - its depth below the sky above it, in thirds of that wall's own depth
-        // - so the tones follow the building's geometry and not the photograph's noise.
-        const d = depth[p2] > 0 ? depth[p2] : 0;
-        const dm = depthMax.get(idAt[p2]) || 1;
-        idx[p2] = tones[d > (dm * 2) / 3 ? 2 : d > dm / 3 ? 1 : 0];
+        // wall band came out 33% flat with the sky's own blue as its most common colour, and the facade read as a
+        // photograph someone had tinted. A pixel that is none of the wall's three tones is the photograph talking.
+        //
+        // IT TAKES ONE OF THE THREE, AND WHICH ONE IS DECIDED BY POSITION, NOT BY LIGHT. Forcing every such pixel
+        // to the mid tone made the facade flat in the wrong way: measured on the balcony photograph, one tone came
+        // to own 32% of the frame and the collapse gate refused it. The three faces are separated by WHERE the
+        // pixel stands in its own region's box - upper third lit, middle plain, lower third turned away - which is
+        // a property of the building and not of the photograph, and it keeps all three tones present.
+        const y = (p2 / w) | 0;
+        const town = (y - rec.minY) / Math.max(1, rec.h);
+        const face = town < 1 / 3 ? 2 : town < 2 / 3 ? 1 : 0;
+        idx[p2] = rec.tones[face];
         cleaned += 1;
       }
-      if (typeof window !== 'undefined') window.__grain = cleaned;
     }
     sky.__wall = planes;
     wallPx = new Uint8Array(n);
