@@ -45,3 +45,32 @@ Everything the palette draws on top of that (sky, façades, windows) must sit at
 - **not numerically from the screenshot** — attempted twice, and it measured my crop (HUD rows and all) rather than the
   art: `best candidate 11–28% flat`, then a skyline profile of 0.00 with one spike. A photograph of a screen is a third
   kind of artefact; it proves nothing about a canvas.
+
+---
+
+# THE ACCEPTED OUTPUT, MEASURED (high-resolution screenshot, `reference/v10a-target-hi.webp`)
+
+Sampled from the art area of the creator's frame — this is the palette the accepted design actually uses:
+
+| role | accepted value | our frame today | verdict |
+|---|---|---|---|
+| **sky** | `rgb(77,156,232)` — hue 209, sat 0.67 | `rgb(86,118,185)` — hue 218, sat 0.54 | **too dark, too grey** |
+| **clouds** | `rgb(255,255,255)` — pure white | `rgb(207,221,232)` — pale blue-grey | **wrong: clouds must be WHITE** |
+| road / asphalt | `rgb(98,94,105)` — warm grey, slight magenta | `rgb(87,90,107)` | too cold |
+| dark structures | `rgb(74,70,80)` · `rgb(27,18,32)` | `rgb(54,55,68)` | too cold and too light |
+| outline / void | `rgb(11,0,22)` | `rgb(11,0,24)` | **the same entry** — the palettes are of one family |
+
+## The construction, read from the accepted frame
+
+1. **Sky**: one flat blue plane, no dither, no speckle; **large white clouds with flat bottoms**, roughly six to nine of
+   them, of two or three sizes, all in the upper half, never touching the skyline.
+2. **The tower (left)**: a **drawn facade** — a smooth dark plane carrying a dense **regular grid of windows** (about
+   fourteen columns across its visible width, rows every few pixels); each window is a small rectangle with a lighter
+   top edge. **No photographed mullions, no texture inside the plane.**
+3. **The mid-rise (centre)**: a **checkerboard** of white and dark-blue tiles on the building's own silhouette, with its
+   pitched roof line — the alternation is the photograph's, drawn flat.
+4. **Cars**: kept from the photograph, posterised — the white BMW stays white and keeps its shape, the dark cars stay
+   dark; **one thin dark outline**, no coloured hatching.
+5. **Road**: the photograph's asphalt, markings, cycle symbol, kerbs — kept.
+6. **HUD**: `РАЗБИТО 0` with a red badge (left) · `ОПАСНОСТЬ` with a five-segment meter (right) · bottom bar:
+   ⓘ (cyan ring) · current weapon panel with ▴ · `СТИХИЯ` panel with a swirl · **big round yellow throw button**.

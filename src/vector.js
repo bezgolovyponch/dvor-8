@@ -1232,6 +1232,7 @@ export function trace(rgba, w, h, opts = {}) {
   {
     let wallN = 0;
     for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1) wallN += 1;
+    if (typeof window !== 'undefined') window.__dbgWallCls = wallN;
     if (wallN / n < 0.12) {                             // the hue test did not find the facades on this photograph
       const cand = new Uint8Array(n);
       for (let p2 = 0; p2 < n; p2 += 1) {
