@@ -76,8 +76,8 @@ export const RAMPS = [
   // and a third darker, which is what made every frame read grey-blue. My first correction went to hue 30, which is
   // ORANGE — the wrong side entirely (warmth +26). The neutral ramps belong on the violet-neutral axis, just past
   // magenta: that is the hue the accepted greys actually sit on.
-  { name: 'stone', hue: 268, sat: 0.10 },
-  { name: 'metal', hue: 252, sat: 0.09 },
+  { name: 'stone', hue: 262, sat: 0.055 },
+  { name: 'metal', hue: 262, sat: 0.055 },
   { name: 'warm', hue: 8, sat: 0.44 },
   // THE VIOLET RAMP, and it is the last colour the palette can hold: seven ramps of four tones plus the two
   // structural entries is thirty, which is exactly the block a street reserves for one photograph

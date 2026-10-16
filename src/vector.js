@@ -1696,17 +1696,35 @@ export function trace(rgba, w, h, opts = {}) {
   // They are placed like a designer places them: spread across the band, staggered left and right, never near
   // the skyline. The only test is whether the cloud's own box is sky with room to spare - requiring every
   // pixel of its outline to be sky rejected every position in the first version and no cloud was ever placed.
-  for (let slot = 0; slot < 9 && placed < want; slot += 1) {
-    const bandY = 0.05 + 0.085 * Math.floor(slot / 3);
-    const cx = Math.round(w * (0.20 + 0.30 * (slot % 3)) + (slot % 2 ? -size * 0.35 : size * 0.25));
+  // CLOUDS ACROSS THE WHOLE SKY, not down the left edge. Measured against the example frame: 2 848 pure-white pixels
+  // existed but all of them sat in the left half, while the example's sky carries clouds on the right too - the
+  // check's sky window (the right 45% of the frame) measured 0% white. Six columns by two rows, spread over the
+  // sky's own width, so every part of the designed sky gets its puffs.
+  for (let slot = 0; slot < 12 && placed < want; slot += 1) {
+    const col = slot % 6, row = Math.floor(slot / 6);
+    const bandY = 0.05 + 0.14 * row;
+    const cx = Math.round(w * (0.12 + 0.152 * col) + (slot % 2 ? -size * 0.3 : size * 0.2));
     const cy = Math.round(h * bandY);
     const rows = Math.max(3, Math.round(size * 0.55));
     const x0 = Math.max(0, cx - Math.round(size * 0.5) - 2), x1 = Math.min(w - 1, cx + Math.round(size * 0.5) + 2);
     let fits = cy + rows < h - 1;
-    for (let x = x0; x <= x1 && fits; x += 1) if (skyLine2[x] - (cy + rows) < clean.cloudsInset) fits = false;
+    // THE PLACEMENT ASKS THE PARSE, when it is present: the sky class and the horizon it produced. My own
+    // smoothness skyline rejected every slot on the right of the frame, where the example's sky carries clouds.
+    if (PARSE && PARSE.sky) {
+      for (let x = x0; x <= x1 && fits; x += 1) {
+        const hz = (opts.parse.horizon && opts.parse.horizon[x] >= 0) ? opts.parse.horizon[x] : h;
+        if (hz - (cy + rows) < clean.cloudsInset) fits = false;
+      }
+    } else {
+      for (let x = x0; x <= x1 && fits; x += 1) if (skyLine2[x] - (cy + rows) < clean.cloudsInset) fits = false;
+    }
     if (!fits) { dbg.push('s' + slot + ' cx' + cx + ' cy' + cy + ' line' + skyLine2[Math.min(w - 1, x0)] + ' need' + (cy + rows + clean.cloudsInset) + ' FITSNO'); continue; }
     let skyHere = 0, tot = 0;
-    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) { tot += 1; if (smoothHere(y * w + x)) skyHere += 1; }
+    for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) {
+      tot += 1;
+      if (PARSE && PARSE.sky) { if (PARSE.sky[y * w + x]) skyHere += 1; }
+      else if (smoothHere(y * w + x)) skyHere += 1;
+    }
     if (tot && skyHere / tot < 0.8) { dbg.push('s' + slot + ' cx' + cx + ' cy' + cy + ' ratio' + (skyHere / tot).toFixed(2) + ' RATIO'); continue; }
     cloud(cloudMask, w, h, cx, cy, size, cloudColour, cloudShade);
     placed += 1;
