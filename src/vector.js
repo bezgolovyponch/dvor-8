@@ -281,6 +281,9 @@ export function trace(rgba, w, h, opts = {}) {
 
   // the sky is the sky-candidate area CONNECTED TO THE TOP: a blue car below the horizon is not sky
   const sky = new Uint8Array(n);
+  // THE SCENE PARSE DECIDES, when it is available. Stage 1+2 of docs/METHODS.md: the `sky` class from the on-device
+  // model (SegFormer-B0 Cityscapes), which is a fact about the picture rather than a threshold of mine.
+  const PARSE = opts.parse && opts.parse.masks ? opts.parse.masks : null;
   const coreSky = new Uint8Array(n);
   {
     const stack = [];
@@ -329,6 +332,13 @@ export function trace(rgba, w, h, opts = {}) {
       if (!grew) break;
     }
   }
+  // THE PARSE'S SKY CLASS REPLACES THE COLOUR TEST'S ANSWER.
+  if (PARSE && PARSE.sky) {
+    let n2 = 0;
+    for (let p2 = 0; p2 < n; p2 += 1) if (PARSE.sky[p2]) { sky[p2] = 1; n2 += 1; }
+    if (typeof window !== 'undefined') window.__parseSky = n2;
+  }
+
   // THE SKY-CANDIDATE SET IS SNAPSHOTTED HERE, AND THAT IS THE WHOLE POINT.
   //
   // `cls[]` is REUSED: the wall pass later writes `cls[p] = 1` for walls, so every later question of the form
@@ -1333,6 +1343,10 @@ export function trace(rgba, w, h, opts = {}) {
     const protectedPx = new Set();
     for (const q of [...windowsFound, ...gridWindows]) for (const p2 of q.px) protectedPx.add(p2);
     const wallMask = new Uint8Array(n);
+    // THE `building` CLASS, when the parse is present: a wall is what the model calls a building, not what my hue
+    // test and straight-run finder guessed at (they produced 1075 fragments of ~19 px).
+    if (PARSE && PARSE.building) { for (let p2 = 0; p2 < n; p2 += 1) if (PARSE.building[p2]) wallMask[p2] = 1; }
+
     // A THING IS NOT A WALL. The detector's own marks say where the cars, the bins and the people are, and those
     // keep their photographic pixels (the render policy: vehicles are FAITHFUL + one outline). A car body is
     // bright, smooth and free of long lines - everything the wall class looks for - so without this the cars came

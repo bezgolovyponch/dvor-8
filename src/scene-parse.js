@@ -23,13 +23,36 @@ export async function loadSceneParse() {
   pipelinePromise = (async () => {
     const mod = await import(/* @vite-ignore */ TJS_URL);
     const { pipeline, env } = mod;
+    // PATHS ARE ABSOLUTE, because transformers.js resolves the local model path against the PAGE, not the module:
+    // a relative '../vendor/' resolved to /vendor/ and the model was never found. The game is served under /game.
     env.allowRemoteModels = false;              // the model is ours, on disk, and nothing is fetched from the net
     env.allowLocalModels = true;
-    env.localModelPath = '../vendor/';
-    env.backends.onnx.wasm.wasmPaths = '../vendor/tjs/';
+    env.localModelPath = '/game/vendor/';
+    // THE EXACT FILE, NAMED. Left to itself the runtime guesses among several builds (threaded / simd / plain) and a
+    // wrong guess is a silent hang, not a 404. The threaded build is named explicitly; single-threaded variants are
+    // vendored beside it as fallbacks.
+    // THE PLAIN THREADED BUILD, not the jsep one: jsep means the JavaScript Execution Provider (WebGPU/WebNN), which
+    // this browser does not offer, and pairing its wasm with the bundle's glue threw "ie[e] is not a function".
+    // THE BUILD THAT MATCHES THE GLUE, version for version. transformers.js 3.0.2 bundles
+    // onnxruntime-web@1.21.0-dev.20241024-d9ca84ef96, read from its own package metadata; feeding it a 1.20.1 wasm
+    // threw "no available backend found ... e is not a function". Both variants of THAT version are vendored, and the
+    // plain (non-jsep) one is named, because jsep means WebGPU/WebNN which this browser does not offer.
+    // THE DIRECTORY, BOTH HALVES. This ort-web version loads its wasm through an .mjs glue it fetches from
+    // wasmPaths, so the path must be the FOLDER containing ort-wasm-simd-threaded.mjs and ort-wasm-simd-threaded.wasm
+    // - naming only the .wasm left the glue unfound and the backend reported "no available backend found".
+    env.backends.onnx.wasm.wasmPaths = '/game/vendor/tjs/';
+    // SINGLE-THREADED, ALWAYS. The threaded WASM backend needs SharedArrayBuffer, which a browser only grants to a
+    // cross-origin-isolated page (COOP/COEP). Without it the runtime neither runs nor errors - it HANGS, which is
+    // exactly what the probe did for a minute. One thread is slower and always works.
+    env.backends.onnx.wasm.numThreads = 1;
     const seg = await pipeline('image-segmentation', 'seg', { quantized: true });
     return seg;
-  })().catch((error) => { console.warn('scene parse unavailable:', error && error.message); return null; });
+  })().catch((error) => {
+    // THE ERROR IS KEPT, NOT SWALLOWED: a parse that fails silently is worse than no parse at all.
+    if (typeof window !== 'undefined') window.__parseError = String((error && error.stack) || error);
+    console.warn('scene parse unavailable:', error && error.message);
+    return null;
+  });
   return pipelinePromise;
 }
 
@@ -52,7 +75,9 @@ export async function sceneParse(source, w, h, sw, sh) {
   const seg = await loadSceneParse();
   if (!seg) return null;
   const input = toInput(source, sw, sh);
-  const out = await seg(input);
+  // THE PIPELINE TAKES AN IMAGE SOURCE, NOT A CANVAS ELEMENT: handing it a canvas throws "Unsupported input type:
+  // object". A data URL is unambiguous and needs no network round trip.
+  const out = await seg(input.toDataURL('image/png'));
   if (!out || !out.length) return null;
   const iw = input.width, ih = input.height;
   const masks = Object.create(null);
@@ -60,18 +85,21 @@ export async function sceneParse(source, w, h, sw, sh) {
   for (const part of out) {
     const label = String(part.label || '').toLowerCase();
     if (!label) continue;
-    const mc = part.mask;
-    const g = mc.getContext ? mc.getContext('2d') : null;
-    const data = g ? g.getImageData(0, 0, mc.width, mc.height).data : null;
+    // THE MASK IS A RawImage WITH ITS OWN BUFFER (transformers.js), not a canvas: `part.mask.data` is RGBA and
+    // `part.mask.width/height` are its own size - asking a RawImage for getContext() silently yielded zero classes.
+    const mimg = part.mask;
+    const data = mimg && mimg.data ? mimg.data : null;
+    const mw = (mimg && mimg.width) || iw, mh = (mimg && mimg.height) || ih;
     if (!data) continue;
+    const stride = (mimg && mimg.channels) || 4;
     const m = new Uint8Array(w * h);
     for (let y = 0; y < h; y += 1) {
-      const sy = Math.min(mc.height - 1, Math.floor((y / h) * mc.height));
+      const sy = Math.min(mh - 1, Math.floor((y / h) * mh));
       for (let x = 0; x < w; x += 1) {
-        const sx = Math.min(mc.width - 1, Math.floor((x / w) * mc.width));
-        const p = (sy * mc.width + sx) * 4;
-        // the mask canvas is white where the class is present
-        if (data[p] > 127) m[y * w + x] = 1;
+        const sx = Math.min(mw - 1, Math.floor((x / w) * mw));
+        const p = (sy * mw + sx) * stride;
+        // one channel or RGBA: present means a non-zero first channel
+        if (data[p] > 0) m[y * w + x] = 1;
       }
     }
     masks[label] = m;

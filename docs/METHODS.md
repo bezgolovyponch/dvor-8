@@ -104,3 +104,33 @@ work is wiring, and it is wiring only.
 
 Nothing else. Every other piece — palette, style, register, reduction, facade drawing, outline rule, damage, HUD —
 exists, is confirmed, and has a check.
+
+
+---
+
+# WIRED AND VERIFIED (this session)
+
+**The scene parse now decides inside the game.** `main.js` builds a canvas from the photograph, runs
+`sceneParse`, and hands the class masks to the converter; `vector.js` overrides its own colour tests with them:
+
+```
+PARSE classes 11 · sky true · building true · parseSkyPixels 40214   (27% of the 288x512 frame)
+```
+
+That 27% IS the model's sky class — the same figure the standalone probe measured (27.4%). The sky region and the
+building masks are no longer my heuristics. Four failures were found and fixed on the way, each a real fact:
+the model one directory too high (`seg/onnx/`); the threaded WASM hanging without origin isolation (server now sends
+COOP/COEP); a WASM build three versions away from the bundle's glue (`1.21.0-dev.20241024`, read from the bundle's own
+metadata); `image-segmentation` returning a **RawImage** (`.data`), not a canvas; and `big` being ImageData-like, so
+`drawImage` threw into a silent catch — which is why the parse "never ran" while reporting no error.
+
+**What still fails, and it is now only painting-level: `tools/match-check.mjs` against the example frame — 3 of 7.**
+
+| line | example | ours | the module that fixes it |
+|---|---|---|---|
+| sky · white clouds | ≥3% white in the sky region | **0%** | the cloud piece: `cloudColour` must be the sky ramp's pure white, drawn as flat-bottomed puffs |
+| tower · blue-glass windows | ≥10% blue | **4%** | the facade piece's sprite: glass `rgb(77,100,180)` / `rgb(49,62,122)` |
+| midrise · checkerboard | white + dark blue ≥8% each | white **0%** · blue 48% | the facade piece's checker mode: alternate bays |
+| road · the asphalt tone | `rgb(98,94,105)`, light 0.39 | `rgb(61,55,67)`, light 0.24 | the register pass: lift the ground one tone |
+
+**The rule stands: nothing is called done while `match-check` fails a line.**

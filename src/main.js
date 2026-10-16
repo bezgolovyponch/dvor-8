@@ -7,6 +7,7 @@
 // day's news from news.js. frame.js finds the windows in the walls, glass.js says how one breaks, decal.js
 // keeps the colour thrown at the yard, parts.js throws the pieces. This file wires them to the page and the finger.
 
+import { sceneParse } from './scene-parse.js';   // stage 1+2: what is on the screen, and where the sky is
 import { downscaleContrast, expandContrast } from './pieces/downscale.js';   // the published reduction logic (PixelOE), confirmed by its own check
 import { styliseVector } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
@@ -292,7 +293,22 @@ function withWindows(seg, st, w, h, big, photo) {
   return seg;
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;
-function build(rgba, w, h, dets, big = null) {
+/** The photograph as a canvas the scene parse can draw: `big` is ImageData-like ({data,w,h}), not a canvas, and
+ *  drawImage on it throws - which a silent catch turned into "the parse never ran". */
+function photoCanvas(big) {
+  if (!big) return null;
+  if (big.getContext) return big;
+  if (!big.data) return null;
+  const c = document.createElement('canvas');
+  c.width = big.w; c.height = big.h;
+  const g = c.getContext('2d');
+  const img = g.createImageData(big.w, big.h);
+  img.data.set(big.data.subarray ? big.data.subarray(0, img.data.length) : big.data);
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+async function build(rgba, w, h, dets, big = null) {
   // THE THINGS THE DETECTOR FOUND ARE HANDED TO THE PAINTER, and this is the only thing the painter is told
   // about the player's world. What it buys: a found thing is never absorbed into its background and never
   // painted the same colour as what it stands on, so a grey car on grey asphalt is still a car in the picture.
@@ -304,7 +320,14 @@ function build(rgba, w, h, dets, big = null) {
   // ONE RENDERER, AND IT IS THE CONSTRUCTIVE ONE - see the note where the route was chosen. The photographic
   // pipeline is not reachable from the product: it painted per pixel what should be a surface (R3), measured at
   // 10-18% flat against the constructive route's 56-81%. src/flat.js stays for the palette and the tone table.
-  const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true });
+  // THE PARSE RUNS BEFORE THE CONVERSION. Its class masks decide the sky and the facades; without it the conversion
+  // falls back to the old colour tests. A failure here is not fatal - it is reported, never guessed.
+  const shot = photoCanvas(big);
+  const parse = shot
+    ? await sceneParse(shot, w, h, shot.width, shot.height).catch((e) => { if (typeof window !== 'undefined') window.__parseError = String(e && e.message || e); return null; })
+    : null;
+  if (typeof window !== 'undefined') window.__parse = parse ? { classes: parse.classes, sky: !!parse.masks.sky, building: !!parse.masks.building } : null;
+  const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse });
   // THE THINGS ARE CUT OUT OF THE REDUCED PICTURE, NOT OUT OF THE PHOTOGRAPH.
   //
   // The reduction (areas first, in vector.js) turns the frame into flat fields; cutting the objects out of the RAW
@@ -625,7 +648,8 @@ async function fromFile(file) {
   $('banner').style.display = 'none';   // the tile counter is not a status line for the session
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   const names = found.kept.map((d) => TARGETS[d.label].ru);
-  if (build(rgba, w, h, found.kept, big)) {
+  // build() awaits the scene parse, so the note is written when the yard actually exists
+  if (await build(rgba, w, h, found.kept, big)) {
     const panes = windowsIn(yard.regions);
     note(`нашёл за ${secs} с: ${[...names, panes ? `окон ${panes} (на глаз, по тёмным проёмам в стене)` : ''].filter(Boolean).join(', ')}`);
   } else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
@@ -644,7 +668,8 @@ async function addPhoto(file) {
   // describes had finished. The note is cleared the moment the search returns.
   note('');
   note('');   // THE SEARCH LINE IS CLEARED WHEN THE SEARCH ENDS. It sat over the yard for ever
-  const st = styliseVector(shot.rgba, w, h, { marks: found.kept, fundamentals: true }), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
+  const parse = await sceneParse(shot.big || shot.rgba, w, h, w * 5, h * 5).catch(() => null);
+  const st = styliseVector(shot.rgba, w, h, { marks: found.kept, fundamentals: true, parse }), next = yardFrom({ w, h, idx: st.idx, palette: st.palette, ...withWindows(toRegions(found.kept, shot.rgba, w, h), st, w, h, shot.big, shot.rgba) });
   yard.more.push(next);
   if (world) queue.push(next);
   const names = next.regions.map((r) => r.label);
