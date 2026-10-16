@@ -1588,6 +1588,58 @@ export function trace(rgba, w, h, opts = {}) {
     for (let p2 = 0; p2 < n; p2 += 1) {
       field[p2] = sky[p2] ? designedSky : entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
     }
+
+    // ---- A THING KEEPS ITS OWN COLOUR ---------------------------------------------------------------------
+    //
+    // THE FAULT, measured on the second real photograph: the cut-out kept each thing's pixels but not its colour.
+    // A red car, a white van and a dark estate all came out the same neutral grey, because the reduction maps every
+    // PIXEL on its own and the majority filter then smooths a whole car into the tones of the wall behind it. The
+    // rule that fixes it is about AREAS, not pixels: A REGION OF THE PICTURE THAT IS STRONGLY COLOURED IS PAINTED IN
+    // ITS OWN FAMILY. So the frame is cut into coloured areas here - a flood over pixels whose saturation is 0.30 or
+    // more, which are the pixels that HAVE a colour - and each area paints its own pixels with the tones of the
+    // family nearest its mean, chosen per pixel by its own value. Greys and concrete are untouched: they have no
+    // saturation to defend, and the wall pass owns them.
+    {
+      const seenC = new Uint8Array(n);
+      const stackC = new Int32Array(n);
+      for (let start = 0; start < n; start += 1) {
+        if (seenC[start]) continue;
+        const sr = rgb[start * 3], sg = rgb[start * 3 + 1], sb = rgb[start * 3 + 2];
+        const mx0 = Math.max(sr, sg, sb), mn0 = Math.min(sr, sg, sb);
+        const sat0 = mx0 ? (mx0 - mn0) / mx0 : 0;
+        if (sat0 < 0.30) { seenC[start] = 1; continue; }
+        // flood over saturated neighbours
+        let top = 0, count = 0, sumR = 0, sumG = 0, sumB = 0;
+        stackC[top] = start; top += 1; seenC[start] = 1;
+        const px = [];
+        while (top > 0) {
+          top -= 1;
+          const p2 = stackC[top];
+          px.push(p2);
+          count += 1;
+          sumR += rgb[p2 * 3]; sumG += rgb[p2 * 3 + 1]; sumB += rgb[p2 * 3 + 2];
+          const x = p2 % w, y = (p2 / w) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const q = ny * w + nx;
+            if (seenC[q] || sky[q]) continue;
+            const r2 = rgb[q * 3], g2 = rgb[q * 3 + 1], b2 = rgb[q * 3 + 2];
+            const mx2 = Math.max(r2, g2, b2), mn2 = Math.min(r2, g2, b2);
+            if ((mx2 ? (mx2 - mn2) / mx2 : 0) < 0.30) continue;
+            seenC[q] = 1; stackC[top] = q; top += 1;
+          }
+        }
+        if (count < 24) continue;                       // a speck of colour is the photograph's grain, not a thing
+        const mr = sumR / count, mg = sumG / count, mb = sumB / count;
+        const base = entryFor(palette, mr, mg, mb) - (entryFor(palette, mr, mg, mb) % STEPS);
+        for (const p2 of px) {
+          const v = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+          const t = v < 70 ? 1 : v < 110 ? 2 : v < 150 ? 3 : v < 190 ? 4 : 5;
+          field[p2] = base + Math.min(STEPS - 1, t);
+        }
+      }
+    }
     const PASSES = 3;
     for (let pass = 0; pass < PASSES; pass += 1) {
       const was = Int16Array.from(field);
