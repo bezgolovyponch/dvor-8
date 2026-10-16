@@ -73,12 +73,20 @@ function entryFor(palette, r, g, b) {
   const { h, s, v } = rgb2hsv(r, g, b);
   let family = null;
   let bestD = Infinity;
+  // SATURATION IS NOT A TIE-BREAKER, IT IS HALF THE DECISION.
+  //
+  // The first version weighted hue at 1.0 and saturation at 0.35, so a pixel with saturation 0.5 - green foliage,
+  // a yellow kerb, a red brick - could still land in the NEUTRAL ramps (stone sat 0.15, metal 0.10, dusk 0.12) and
+  // the whole frame came out grey. That is the creator's "colors are completely wrong": the photograph's colour was
+  // being thrown away by an arithmetic choice. Saturation now carries comparable weight, and a pixel that HAS colour
+  // is not allowed into a family that has none.
+  const NEUTRAL = new Set(['stone', 'metal', 'dusk']);
   for (const R of RAMPS) {
     if (R.name === 'sky' && !paintingSky) continue;          // the sky belongs to the sky mask alone
+    if (s >= 0.30 && NEUTRAL.has(R.name) && !paintingSky) continue;   // colour does not become concrete
     let dh = Math.abs(R.hue - h);
     if (dh > 180) dh = 360 - dh;
-    // hue dominates, saturation and value break ties: a desaturated pixel is claimed by the nearest hue it HAS
-    const d = (dh / 180) * 1.0 + Math.abs((R.sat || 0) - s) * 0.35;
+    const d = (dh / 180) * 1.0 + Math.abs((R.sat || 0) - s) * 1.1;
     if (d < bestD) { bestD = d; family = R.name; }
   }
   if (!family) family = 'stone';
@@ -897,6 +905,34 @@ export function trace(rgba, w, h, opts = {}) {
     const winEntry = entryFor(palette, 150, 158, 172);     // the inner lip: one step down from the frame
     const glassEntry = entryFor(palette, 92, 116, 152);    // the glass: a mid blue-grey, sky reflected
     const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
+    // ---- THE WINDOWS SIT ON THE FACADE'S OWN GRID (docs/CRITERIA.md: "rebuilt on the photo's column and floor
+    // grid"). The finder returns boxes wherever it saw a dark opening, so they landed at the photograph's own
+    // jitter and read as RECTANGLES THAT CORRESPOND TO NOTHING. The known technique - and v6's own - is to take the
+    // openings that WERE found, measure their pitch (the median gap between neighbouring columns and rows), and snap
+    // every sprite onto that grid: rows line up, floors line up, and the facade reads as architecture.
+    {
+      const all = [...windowsFound, ...gridWindows];
+      const med = (arr) => { const a2 = arr.slice().sort((x, y) => x - y); return a2[a2.length >> 1] || 0; };
+      const cx = all.map((q) => q.cx), cy = all.map((q) => q.cy);
+      const gapsX = [], gapsY = [];
+      const sx = cx.slice().sort((x, y) => x - y), sy = cy.slice().sort((x, y) => x - y);
+      for (let i = 1; i < sx.length; i += 1) { const g = sx[i] - sx[i - 1]; if (g > 3 && g < w * 0.5) gapsX.push(g); }
+      for (let i = 1; i < sy.length; i += 1) { const g = sy[i] - sy[i - 1]; if (g > 3 && g < h * 0.5) gapsY.push(g); }
+      const px2 = Math.max(6, Math.round(med(gapsX) || 0)), py2 = Math.max(6, Math.round(med(gapsY) || 0));
+      if (px2 > 6 && py2 > 6) {
+        const x0 = sx[0] || 0, y0 = sy[0] || 0;
+        for (const q of all) {
+          const nx = Math.round((q.cx - x0) / px2) * px2 + x0;
+          const ny = Math.round((q.cy - y0) / py2) * py2 + y0;
+          const dx = Math.round(nx - q.cx), dy = Math.round(ny - q.cy);
+          if (!dx && !dy) continue;
+          q.x += dx; q.y += dy; q.cx += dx; q.cy += dy;
+          for (let i2 = 0; i2 < q.px.length; i2 += 1) q.px[i2] += dy * w + dx;
+        }
+        if (typeof window !== 'undefined') window.__winGrid = { px: px2, py: py2, n: all.length };
+      }
+    }
+
     for (const q of [...windowsFound, ...gridWindows]) {
       // glass inside, frame round it: the outer ring of the opening is the frame, the rest is glass
       for (const p2 of q.px) {
