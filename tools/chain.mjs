@@ -61,6 +61,21 @@ const steps = [
     process.exit(1);
   }
 }
+// STEP 6c - THE PAIRING GATE. The check this project never had: does what we DREW sit where the PHOTOGRAPH says it
+// should? It compares the frame against the photograph itself (both art, both 288x512, the photograph reduced by the
+// same 5x5 area mean the game uses), so no phone screenshot is involved and no opinion is required. Its first run
+// found the greedy sky that paints over buildings on four of six real photographs.
+{
+  const dump = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
+  const photo = process.env.PHOTO || 'photos-test/v10a.jpg';
+  const r = run('node', ['tools/pairing-check.mjs', photo, dump], {});
+  const line = r.out.trim().split('\n').filter((l) => /IoU|PAIRED|PREMISES/.test(l)).slice(-2).join(' · ');
+  console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  6c PAIRING    ${line.slice(0, 140)}`);
+  if (r.code !== 0 && !process.env.KEEP_GOING) {
+    console.log('\nTHE CHAIN STOPPED AT 6c PAIRING: the frame is not built on the photograph\'s own layout.');
+    process.exit(1);
+  }
+}
 if (process.env.REFERENCE) steps.push(['5 REFERENCE', 'node', ['tools/reference-check.mjs', (process.env.OUT || '/tmp/chain') + '/canvas.json', process.env.REFERENCE], {}]);
 
 console.log('THE CHAIN — each step must pass before the next is read\n');
