@@ -1517,13 +1517,18 @@ export function trace(rgba, w, h, opts = {}) {
       const glassEntry = SKY_I2 + 2;                         // the glass: the sky's own blue, rgb(20,75,174)
       const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
       let drawn = 0;
+      let bays = 0, baysInTower = 0, drawnInTower = 0, blockedInTower = 0;
       if (px2 >= MIN_PITCH && py2 >= MIN_PITCH) {
   // THE SPRITE IS SMALLER THAN ITS BAY, and that is what makes a grid read as a grid. At 60% of the pitch
         // with a one-pixel frame on each side the sprite filled its whole cell: the wall between two windows
         // disappeared, the lip became the largest single colour on the facade (measured 41%) and the building read
         // as stripes rather than as windows in a plane. A window is a THIRD of its bay, the way it is in the
         // accepted frame, and the plane is what is left between them.
-        const gw = Math.max(2, Math.round(px2 * 0.46)), gh = Math.max(2, Math.round(py2 * 0.46));
+        // THE PANE FILLS ITS BAY. At pitch 7 a 46% sprite is 3x3 px, and after the one-pixel frame the GLASS was a
+        // single pixel - measured: the tower's window region held 2 014 blue pixels against the example's ≥10%.
+        // The example's windows are mostly glass inside a thin light frame, so the sprite is the bay less one pixel
+        // on each side and the glass is everything inside the frame.
+        const gw = Math.max(3, Math.round(px2) - 2), gh = Math.max(3, Math.round(py2) - 2);
         // the origin: the bay and the floor the photograph's own openings agree on, snapped to the grid they imply
         const x0 = Math.round(med(cols) / px2) * px2;
         const y0 = Math.round(med(rows) / py2) * py2;
@@ -1541,7 +1546,15 @@ export function trace(rgba, w, h, opts = {}) {
                 if (wallMask[p2]) on += 1;
               }
             }
-            if (blocked || !tot || on / tot < 0.85) continue;
+            // 85% OF THE BAY MUST BE WALL - which a FRAGMENTED mask punishes: measured, the model calls the tower
+            // 92% building, yet the sprite pass drew almost nothing there (the tower's window region held 4% blue
+            // against the example's ≥10%) while the mid-rise, whose mask is compact, filled with sprites. Half the
+            // bay is enough for a window to belong to a wall; the frame drawn around it keeps it honest.
+            bays += 1;
+            const inTower = gx >= w * 0.20 && gx <= w * 0.48 && gy <= h * 0.60;
+            if (inTower) baysInTower += 1;
+            if (blocked || !tot || on / tot < 0.5) { if (inTower) blockedInTower += 1; continue; }
+            if (inTower) drawnInTower += 1;
             const xa = gx + 1, xb = gx + gw - 2, ya = gy + 1, yb = gy + gh - 2;   // the glass, inside the lip
             for (let y = gy; y < gy + gh; y += 1) {
               for (let x = gx; x < gx + gw; x += 1) {
@@ -2083,6 +2096,7 @@ export function trace(rgba, w, h, opts = {}) {
     // the building class, so the register can leave the buildings' darks alone (in a tower's columns the skyline is
     // row 0, so without this the whole tower counted as "ground" and its dark plane was lifted away)
     buildings: PARSE && PARSE.building ? PARSE.building : null,
+    spriteBays: typeof bays !== 'undefined' ? { bays, baysInTower, drawnInTower, drawn } : null,
     idx, palette, skyline, skyN, clouds: placed, traced, removed, merged, linePixels, windows: windowsFound,
     planes: facadePlanes.length, objects: objectCount,
     // THE BUILDINGS THEMSELVES, as structures the game can destroy: the pixels of each facade plane. The window
