@@ -486,12 +486,13 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
             || own[p - 1] !== r.id || own[p + 1] !== r.id || own[p - world.w] !== r.id || own[p + world.w] !== r.id) list.push(p);
         }
       }
-      edges = own ? list : edgesOf(world, r);
-      world.edgesCache.set(r.id, { ver: r.ver || 0, edges });
+      list = own ? list : edgesOf(world, r);
+      world.edgesCache.set(r.id, { ver: r.ver || 0, edges: list });
+      return list;
     }
-    // A CACHE HIT MUST UNWRAP. The entry is { ver, edges }; the first version returned the wrapper itself, so
-    // the draw loop iterated an object — "TypeError: edges is not iterable" — which is the frame the creator
-    // saw as a blue mush with one green patch: the pass threw and nothing after it was drawn.
+    // A CACHE HIT MUST UNWRAP. The entry is { ver, edges }, and the first version of this cache returned the
+    // wrapper itself, so the draw loop iterated an object — "TypeError: edges is not iterable" — which is the
+    // frame the creator saw as a blue mush with one green patch: the pass threw and nothing after it was drawn.
     return edges.edges;
   };
   // ONE PIXEL OF THE THING'S OWN OUTLINE, WITH ONE PIXEL OF DARK UNDER IT, so it reads on anything it is

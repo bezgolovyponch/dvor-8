@@ -82,11 +82,25 @@ SEGMENT → HORIZON → FACADE GEOMETRY → CONTRAST-AWARE REDUCTION → OBJECT 
 2. **"The facades are found by hue and straight runs."** It produced 1075 fragments of ~19 px. **Replaced by the
    `building` class mask + Stage 3.**
 
+## THE MODULES, FETCHED AND IN THE REPOSITORY
+
+| module | what it is | licence | where | fetched |
+|---|---|---|---|---|
+| `vendor/seg/model_quantized.onnx` | SegFormer-B0 · Cityscapes · **19 classes incl. sky, building, road, car, vegetation, person** | nvidia SegFormer weights: *other* (research; personal use) · ONNX export by Xenova | 4.38 MB | ✔ |
+| `vendor/seg/config.json` | the class list (verified: 19 labels) | — | 1.8 KB | ✔ |
+| `vendor/seg/preprocessor_config.json` | the model's own normalisation | — | 374 B | ✔ |
+| `vendor/tjs/transformers.min.js` | transformers.js v3 (pipeline + ONNX runtime loader), Apache-2.0 | Apache-2.0 | 748 KB | ✔ |
+| `vendor/tjs/ort-wasm-simd-threaded.jsep.wasm` | ONNX Runtime Web's WASM backend, so inference runs from OUR server with no network | MIT | 21.7 MB | ✔ |
+| `src/scene-parse.js` | stage 1 + 2: the parse, the class masks, and the horizon from the sky class | — | — | ✔ written |
+
+**Everything the pipeline needs is now on disk** — runtime, model, class list and the horizon rule. The remaining
+work is wiring, and it is wiring only.
+
 ## WHAT IS MISSING FROM THE BUILD, EXACTLY
 
-- the segmentation model itself (a ~10 MB on-device model; the runtime is already vendored — MediaPipe's WASM bundle
-  and 27 MB of models are in `vendor/`), and
-- the wiring of Stages 1–3 into the conversion, in the order above.
+- the wiring of Stages 1–3 into the conversion, in the order above: the parse must run BEFORE the sky is decided,
+  the sky must come from the `sky` class (plus occlusion fill), and the facades must come from the `building` class.
+- nothing else. The model, the runtime and the horizon rule are in the repository (table above).
 
 Nothing else. Every other piece — palette, style, register, reduction, facade drawing, outline rule, damage, HUD —
 exists, is confirmed, and has a check.
