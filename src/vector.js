@@ -23,7 +23,7 @@
 // MEASURED AGAINST THE PREVIOUS ROUTE, on the three photographs (see tools/style-metrics.mjs):
 //   stray single pixels, specks under 4 px, same-colour blobs per 1000 px, and jagged border share.
 
-import { facadeWindows } from './criteria/FacadeRule.js';
+import { MIN_PITCH } from './criteria/FacadeRule.js';
 import { RAMPS, STEPS, paletteOf } from './flat.js';
 import { makeScene, render as renderScene, census } from './scene.js';
 import { enhance, straightness } from './enhance.js';
@@ -1230,9 +1230,17 @@ export function trace(rgba, w, h, opts = {}) {
   // sky, full of STRAIGHT RUNS (mullions, window heads, floor lines) - which is what a facade is and what asphalt,
   // foliage and sky are not.
   {
+    // `cls === 1` MEANS TWO DIFFERENT THINGS AT TWO DIFFERENT TIMES, and this pass was reading the wrong one.
+    // Early on it is the SKY-CANDIDATE set (the blue test), which is snapshotted as `skyCand`; the structure pass
+    // below is what writes `cls = 1` for a WALL. Counting every `cls === 1` pixel therefore counted the sky: on the
+    // creator's photograph (measured at 384x512, tools/dbg.html) it read 71 362 - 36% of the frame - against this
+    // 12% guard, so the guard concluded "the hue test found the facades" and the structure pass NEVER RAN. No pixel
+    // was ever marked as a wall, and the wall mask fell back to the blue speckle of the sky class: 20 168 pixels in
+    // 1075 connected parts, nineteen pixels each, which the plane pass then painted as 1075 random-tone patches.
+    // A wall is a pixel of class 1 that the sky analysis did NOT claim - that is the only reading of the class map
+    // at this point in the frame, and it is what the guard must ask.
     let wallN = 0;
-    for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1) wallN += 1;
-    if (typeof window !== 'undefined') window.__dbgWallCls = wallN;
+    for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === 1 && !sky[p2]) wallN += 1;
     if (wallN / n < 0.12) {                             // the hue test did not find the facades on this photograph
       const cand = new Uint8Array(n);
       for (let p2 = 0; p2 < n; p2 += 1) {
@@ -1241,14 +1249,56 @@ export function trace(rgba, w, h, opts = {}) {
         if (y < h * 0.06) continue;                     // never the top edge: that is sky
         cand[p2] = 1;
       }
-      const { parts } = components(w, h, (p2) => cand[p2]);
+      // A WALL IS JOINED TO THE SKY. Without this the candidate mask is ONE connected mass from the skyline down
+      // to the bottom of the frame - the road, the pavement and the ground are bright, line-free surfaces too -
+      // and the structure pass marked all of it as wall. Measured on the creator's photograph: a single region of
+      // 127 888 pixels in a box 384 x 502, the whole lower half of the picture repainted as masonry, cars and all.
+      // What separates a facade from the ground is that a facade MEETS THE SKY: its top edge IS the skyline. So a
+      // component counts only when it touches a sky pixel, and the candidate mask is joined to the sky for the
+      // component pass to see that. The ground touches the sky nowhere and cannot be joined.
+      const nearSky = new Uint8Array(n);
+      for (let p2 = 0; p2 < n; p2 += 1) {
+        if (!sky[p2]) continue;
+        nearSky[p2] = 1;
+        if (p2 >= w) nearSky[p2 - w] = 1;
+        if (p2 + w < n) nearSky[p2 + w] = 1;
+        if (p2 % w) nearSky[p2 - 1] = 1;
+        if (p2 % w < w - 1) nearSky[p2 + 1] = 1;
+      }
+      const joined = new Uint8Array(n);
+      for (let p2 = 0; p2 < n; p2 += 1) joined[p2] = cand[p2] || nearSky[p2] ? 1 : 0;
+      // A SPECKLE OF SKY IS A BRIDGE, AND THE FLOOD CROSSES IT. Everything that is not sky is joined, so the
+      // buildings, the road, the cars and the ground form ONE region the moment a single sky-ish pixel slips
+      // between them: measured on the creator's photograph, 187 587 of 196 608 pixels in one component - 96% of
+      // the frame, which is why the wall pass repainted the road and the cars as masonry. The sky class is a
+      // per-pixel hue test and it flickers, so those bridges always exist. A speck of sky far too small to be an
+      // opening in a building is noise in the mask, not a hole in it, and removing it is what lets a building be
+      // separated from the street it stands on.
+      {
+        const { parts: sk } = components(w, h, (p2) => (sky[p2] ? 1 : 0));
+        let killed = 0;
+        for (const part of sk) {
+          if (part.area >= 40) continue;
+          for (const p2 of part.px) { nearSky[p2] = 0; killed += 1; }
+        }
+        if (killed) for (let p2 = 0; p2 < n; p2 += 1) joined[p2] = cand[p2] || nearSky[p2] ? 1 : 0;
+        if (typeof window !== 'undefined') window.__dbgBridge = killed;
+      }
+      const { parts } = components(w, h, (p2) => joined[p2]);
+      let ran = 0;
       for (const part of parts) {
         if (part.area / n < 0.05) continue;             // a wall is a large surface
+        let meetsSky = false;
+        for (const p2 of part.px) if (cand[p2] && nearSky[p2]) { meetsSky = true; break; }
+        if (!meetsSky) continue;                        // the ground does not meet the sky; a facade does
         let straight = 0;
         for (const p2 of part.px) if (en.line[p2] > 0.4) straight += 1;
+        if (typeof window !== 'undefined') (window.__dbgParts = window.__dbgParts || []).push([part.area, Math.round((straight / part.area) * 1000) / 1000, part.minX, part.minY, part.maxX - part.minX + 1, part.maxY - part.minY + 1]);
         if (straight / part.area < 0.06) continue;      // and it is full of straight runs
         for (const p2 of part.px) { if (!sky[p2] && cls[p2] !== 2) cls[p2] = 1; }
+        ran += 1;
       }
+      if (typeof window !== 'undefined') window.__dbgStructureRan = ran;
     }
   }
 
@@ -1274,6 +1324,12 @@ export function trace(rgba, w, h, opts = {}) {
     const protectedPx = new Set();
     for (const q of [...windowsFound, ...gridWindows]) for (const p2 of q.px) protectedPx.add(p2);
     const wallMask = new Uint8Array(n);
+    // A THING IS NOT A WALL. The detector's own marks say where the cars, the bins and the people are, and those
+    // keep their photographic pixels (the render policy: vehicles are FAITHFUL + one outline). A car body is
+    // bright, smooth and free of long lines - everything the wall class looks for - so without this the cars came
+    // out painted in the wall's plane tones like masonry. The marks are the only honest source for this: they are
+    // what the game itself calls a thing, and the pass that draws them runs after this one.
+    const marks = opts.marks || null;
     for (let p2 = 0; p2 < n; p2 += 1) {
       if (cls[p2] !== WALLCLS) continue;
       const y = (p2 / w) | 0, x = p2 % w;
@@ -1281,10 +1337,74 @@ export function trace(rgba, w, h, opts = {}) {
       if (protectedPx.has(p2)) continue;                // a window is drawn there
       if (cls[p2] === 2) continue;                      // the photograph's green is never a wall (R15)
       if (idx[p2] === palette.length - 2) continue;     // an outline pixel
+      if (marks && marks[p2]) continue;                 // a thing keeps its own pixels
       wallMask[p2] = 1;
+    }
+    // A WALL IS A PLANE, SO ITS MASK HAS NO HOLES. The class map is a per-pixel hue test and it flickers: on the
+    // creator's photograph it left 20 168 wall pixels in 1075 connected parts of nineteen pixels each, and a
+    // "plane" painted out of nineteen-pixel patches IS the grain the whole pass exists to remove - measured, the
+    // wall band came out 33% flat with the sky's own blue as its most common colour. A hole inside a wall is wall:
+    // whatever the class test missed between two wall pixels is masonry seen at the same angle, not a different
+    // surface.
+    //
+    // ...EXCEPT WHERE IT IS NOT, and this is the line the first version of the fill crossed. Filling every hole the
+    // border cannot reach also fills the SKY THE FRAME CANNOT SEE - the courtyard's own opening above a roofline,
+    // which is sky and not masonry. So a hole is a wall only when it is SMALL: a missed mullion, a window head, a
+    // patch of shadow, tens of pixels. A hole larger than a fraction of the frame is a gap between buildings, and a
+    // gap is sky. The bound is a share of the wall region's own bounding box, so it follows the building's size.
+    {
+      const fac0 = components(w, h, (p2) => (wallMask[p2] ? 1 : 0));
+      const outside = fac0.parts.find((q) => q.px.includes(0));
+      if (outside) {
+        const outer = new Uint8Array(n);
+        for (const p2 of outside.px) outer[p2] = 1;
+        for (const hole of fac0.parts) {
+          if (hole === outside) continue;
+          if (hole.area > n * 0.01) continue;           // a courtyard opening is sky, not masonry
+          for (const p2 of hole.px) if (!outer[p2]) wallMask[p2] = 1;
+        }
+      }
+      // the three things the fill must never swallow, put back explicitly
+      for (const p2 of protectedPx) wallMask[p2] = 0;
+      if (marks) for (let p2 = 0; p2 < n; p2 += 1) if (marks[p2]) wallMask[p2] = 0;
+      for (let p2 = 0; p2 < n; p2 += 1) if (sky[p2]) wallMask[p2] = 0;
+    }
+    // THE FACADE'S OWN BANDS, and they are measured, not typed: for every pixel, how far it stands below the SKY
+    // ABOVE IT IN ITS OWN COLUMN. That distance is the one geometric fact that separates a facade from the ground.
+    // A facade begins at the skyline, so its depth is a small multiple of the skyline's own extent; the road
+    // begins where the buildings end, hundreds of pixels further down. Measured per column against that column's
+    // own skyline - not against a horizon, which a courtyard does not have.
+    const depth = new Int32Array(n).fill(-1);
+    for (let x = 0; x < w; x += 1) {
+      let last = -1;
+      for (let y = 0; y < h; y += 1) {
+        const p2 = y * w + x;
+        if (sky[p2]) { last = y; continue; }
+        if (last >= 0) depth[p2] = y - last;
+      }
     }
     const fac = components(w, h, (p2) => wallMask[p2]);
     let planes = 0;
+    if (typeof window !== 'undefined') {
+      {
+        // depth histogram of the wall mask, and of the largest region, to find the band that separates
+        // a facade from the ground
+        const h1 = new Array(20).fill(0);
+        for (let p2 = 0; p2 < n; p2 += 1) if (wallMask[p2] && depth[p2] >= 0) h1[Math.min(19, (depth[p2] / 25) | 0)] += 1;
+        window.__dbgDepthHist = h1;
+        const big = fac.parts.slice().sort((a, b) => b.area - a.area)[0];
+        if (big) {
+          const h2 = new Array(20).fill(0);
+          for (const p2 of big.px) if (depth[p2] >= 0) h2[Math.min(19, (depth[p2] / 25) | 0)] += 1;
+          window.__dbgDepthBig = h2;
+        }
+      }
+      window.__dbgWallMask = wallMask;
+      window.__dbgWallMaskN = wallMask.reduce((a, b) => a + b, 0);
+      window.__dbgFacParts = fac.parts.length;
+      window.__dbgFacSizes = fac.parts.map((q) => q.area).sort((a, b) => b - a).slice(0, 12);
+      window.__dbgFacBoxes = fac.parts.slice().sort((a, b) => b.area - a.area).slice(0, 6).map((q) => [q.minX, q.minY, q.maxX - q.minX + 1, q.maxY - q.minY + 1, q.area]);
+    }
     for (const part of fac.parts) {
       if (part.area < 40) continue;
       let r0 = 0, g0 = 0, b0 = 0;
@@ -1322,76 +1442,144 @@ export function trace(rgba, w, h, opts = {}) {
     }
     // ---- LAYER 3: THE FACADE CARRIES A REGULAR WINDOW GRID (src/criteria/FacadeRule.js) ---------------
     //
-    // The accept frame's towers are a PLANE with a regular grid of window rows - every bay, every floor - which is
-    // why they read as architecture while a sampled wall reads as blur. Each facade region gets its own pitch from
-    // the windows the photograph actually shows on it, and the grid is drawn across the whole plane inside its mask.
-    // OFF, AND WHY. This drew a REGULAR grid of window sprites across the BOUNDING BOX of each wall region with a
-    // near-black frame. The boxes did not correspond to the building's own windows - they were a guess laid over a
-    // rectangle - and the frame colour was the darkest entry, so the creator's phone showed BLACK RECTANGLES pasted
-    // on the facades ("objects clustering is wrong"). The windows that DO follow the photograph are the sprites the
-    // rhythm pass found (windowsFound + gridWindows); those stay. A grid is only legitimate when its pitch and its
-    // origin come from the facade itself, which is the next piece of work, not this block.
-    const FACADE_GRID = false;
-    if (FACADE_GRID) {
-      const PITCH_X = 9, PITCH_Y = 11;                 // a facade's own bay and floor, in game pixels
-      const winFrame = entryFor(palette, 34, 38, 54);
-      const winGlassA = entryFor(palette, 96, 128, 176);
-      const winGlassB = entryFor(palette, 58, 76, 110);
+    // The accepted frame's towers are a PLANE with a REGULAR grid of windows - every bay, every floor - which is
+    // why they read as architecture while a sampled wall reads as blur. The first version of this block drew that
+    // grid on a FIXED pitch (9 x 11) across the wall's BOUNDING BOX: the boxes corresponded to nothing - a guess
+    // laid over a rectangle - and the frame colour was the darkest entry, so the creator's phone showed black
+    // rectangles pasted on the facades. It was switched off, and the fix is NOT to switch it back on.
+    //
+    // THE PITCH IS MEASURED FROM THE PHOTOGRAPH. The analysis has already found the building's openings - the
+    // local-contrast pass and the rhythm pass (`windowsFound`) plus the ones the grid completed (`gridWindows`) -
+    // and it has already clustered their centres into rows and columns. What is taken from them here is the ONE
+    // number the drawing needs and the photograph owns: the MEDIAN HORIZONTAL AND VERTICAL SPACING between the
+    // openings actually found. The origin is the openings' own median column and floor, so the grid lands on the
+    // windows the photograph shows and repeats them at the building's own rhythm. Nothing is invented: a wall whose
+    // photograph shows no openings gets no grid at all.
+    //
+    // And the grid is drawn INSIDE THE WALL MASK ONLY. Outside it a sprite would be a rectangle lying on the sky,
+    // on a car or on the road.
+    {
+      const cols = [];                                  // the openings the photograph shows, on this wall
+      const rows = [];
+      for (const q of [...windowsFound, ...gridWindows]) {
+        const qx = Math.round(q.cx === undefined ? q.x + q.w / 2 : q.cx);
+        const qy = Math.round(q.cy === undefined ? q.y + q.h / 2 : q.cy);
+        if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
+        if (!wallMask[qy * w + qx]) continue;           // this opening is on this wall
+        cols.push(qx); rows.push(qy);
+      }
+      const med = (a) => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0; };
+      const pitchOf = (list) => {
+        const s = [...new Set(list)].sort((x, y) => x - y);
+        const gaps = [];
+        for (let i = 1; i < s.length; i += 1) if (s[i] - s[i - 1] >= MIN_PITCH) gaps.push(s[i] - s[i - 1]);
+        return gaps.length ? Math.round(med(gaps)) : 0;
+      };
+      const px2 = pitchOf(cols), py2 = pitchOf(rows);
+      // THE SPRITE: frame, lip, glass, sill - the four entries this block has always used, unchanged.
+      const frameEntry = entryFor(palette, 196, 198, 202);   // the frame: light, like the wall it sits in
+      const lipEntry = entryFor(palette, 150, 158, 172);     // the inner lip: one step down from the frame
+      const glassEntry = entryFor(palette, 92, 116, 152);    // the glass: a mid blue-grey, sky reflected
+      const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
       let drawn = 0;
-      for (const part of fac.parts) {
-        if (part.area < 400) continue;
-        let x0 = w, x1 = 0, y0 = h, y1 = 0;
-        for (const p2 of part.px) {
-          const x = p2 % w, y = (p2 / w) | 0;
-          if (x < x0) x0 = x; if (x > x1) x1 = x;
-          if (y < y0) y0 = y; if (y > y1) y1 = y;
-        }
-        const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
-        if (bw < PITCH_X * 2 || bh < PITCH_Y * 2) continue;
-        const boxes = facadeWindows(bw, bh, PITCH_X, PITCH_Y);
-        for (const b of boxes) {
-          const gx = x0 + b.x, gy = y0 + b.y;
-          const glass = ((b.x / PITCH_X | 0) + (b.y / PITCH_Y | 0)) % 2 ? winGlassA : winGlassB;
-          for (let y = gy; y < gy + b.h + 2; y += 1) {
-            for (let x = gx; x < gx + b.w + 2; x += 1) {
-              if (x < 1 || y < 1 || x >= w - 1 || y >= h - 1) continue;
-              const p2 = y * w + x;
-              if (!wallMask[p2] || windowsPx.has(p2)) continue;
-              const onFrame = y === gy || y === gy + b.h + 1 || x === gx || x === gx + b.w + 1;
-              idx[p2] = onFrame ? winFrame : glass;
+      if (px2 >= MIN_PITCH && py2 >= MIN_PITCH) {
+        const gw = Math.max(2, Math.round(px2 * 0.6)), gh = Math.max(2, Math.round(py2 * 0.55));
+        // the origin: the bay and the floor the photograph's own openings agree on, snapped to the grid they imply
+        const x0 = Math.round(med(cols) / px2) * px2;
+        const y0 = Math.round(med(rows) / py2) * py2;
+        const kx = Math.ceil((0 - x0) / px2), ky = Math.ceil((0 - y0) / py2);
+        for (let gy = y0 + ky * py2; gy + gh <= h; gy += py2) {
+          for (let gx = x0 + kx * px2; gx + gw <= w; gx += px2) {
+            if (gx < 1 || gy < 1) continue;
+            // ON THE WALL ONLY: the whole sprite must be wall, and never a pixel a window or the outline owns
+            let on = 0, tot = 0, blocked = false;
+            for (let y = gy; y < gy + gh && !blocked; y += 1) {
+              for (let x = gx; x < gx + gw; x += 1) {
+                const p2 = y * w + x;
+                tot += 1;
+                if (protectedPx.has(p2) || idx[p2] === palette.length - 2) { blocked = true; break; }
+                if (wallMask[p2]) on += 1;
+              }
             }
+            if (blocked || !tot || on / tot < 0.85) continue;
+            const xa = gx + 1, xb = gx + gw - 2, ya = gy + 1, yb = gy + gh - 2;   // the glass, inside the lip
+            for (let y = gy; y < gy + gh; y += 1) {
+              for (let x = gx; x < gx + gw; x += 1) {
+                const p2 = y * w + x;
+                if (!wallMask[p2]) continue;
+                idx[p2] = x >= xa && x <= xb && y >= ya && y <= yb ? glassEntry : lipEntry;
+              }
+            }
+            for (let x = gx - 1; x <= gx + gw; x += 1) {
+              for (const y of [gy - 1, gy + gh]) {
+                if (y < 0 || y >= h || x < 0 || x >= w) continue;
+                const p2 = y * w + x;
+                if (wallMask[p2]) idx[p2] = frameEntry;
+              }
+            }
+            for (let y = gy; y < gy + gh; y += 1) {
+              for (const x of [gx - 1, gx + gw]) {
+                if (x < 0 || x >= w) continue;
+                const p2 = y * w + x;
+                if (wallMask[p2]) idx[p2] = frameEntry;
+              }
+            }
+            const sillY = gy + gh + 1;
+            if (sillY < h) for (let x = gx; x < gx + gw; x += 1) {
+              const p2 = sillY * w + x;
+              if (wallMask[p2] && idx[p2] !== lipEntry) idx[p2] = sillEntry;
+            }
+            drawn += 1;
           }
-          drawn += 1;
         }
       }
-      if (drawn) sky.__facadeWindows = drawn;
-
-      // ---- GRAIN REMOVAL (docs/AUDIT.md, step 4): NO PHOTOGRAPH REMAINS INSIDE A WALL -----------------
-      //
-      // The audit found the wall still carried the photograph's grain underneath the grid, because the facade loop
-      // only reached pixels inside its own connected parts and left the rest as sampled colour. A wall is a PLANE:
-      // every wall-class pixel that is not a window, a sky pixel or an outline now takes the wall's own mid tone of
-      // its own family. After this, the only things inside a facade are plane tones and window sprites.
-      {
-        let r0 = 0, g0 = 0, b0 = 0, k0 = 0;
-        for (let p2 = 0; p2 < n; p2 += 1) {
-          if (cls[p2] !== WALLCLS || sky[p2] || windowsPx.has(p2)) continue;
-          r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2]; k0 += 1;
+      if (typeof window !== 'undefined') window.__facade = { drawn, pitch: [px2, py2], openings: cols.length };
+    }
+    // ---- GRAIN REMOVAL (docs/AUDIT.md, step 4): NO PHOTOGRAPH REMAINS INSIDE A WALL -------------------
+    //
+    // The audit found the wall still carrying the photograph's grain underneath the grid, because the facade loop
+    // only reached pixels inside its own connected parts and left the rest as sampled colour. A wall is a PLANE:
+    // every wall pixel that is not a window, a sky pixel or an outline takes one of the wall's OWN THREE PLANE
+    // TONES, chosen from the region's own family. After this the only things inside a facade are plane tones and
+    // window sprites, which is what the creator's accepted frame shows.
+    //
+    // THIS BLOCK USED TO LIVE INSIDE `if (FACADE_GRID)`, so switching the fixed-pitch grid off switched the grain
+    // removal off with it, and the frame kept the photograph's own texture inside every facade. The grid is the
+    // decoration; this is the requirement.
+    {
+      const idAt = new Int32Array(n).fill(-1);
+      const familyOf = new Map();                        // each region's own family, from the region's own mean
+      const depthMax = new Map();                        // and its own depth below the sky, for the three faces
+      for (const part of fac.parts) {
+        let r0 = 0, g0 = 0, b0 = 0, dmax = 0;
+        for (const p2 of part.px) {
+          r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2];
+          if (depth[p2] > dmax) dmax = depth[p2];
         }
-        if (k0) {
-          const family = Math.floor(entryFor(palette, r0 / k0, g0 / k0, b0 / k0) / STEPS);
-          const midTone = family * STEPS + 2;
-          let cleaned = 0;
-          for (let p2 = 0; p2 < n; p2 += 1) {
-            if (cls[p2] !== WALLCLS || sky[p2] || windowsPx.has(p2)) continue;
-            if (idx[p2] === palette.length - 2) continue;          // an outline stays a line
-            if (Math.floor(idx[p2] / STEPS) === family) continue;  // already this plane's family
-            idx[p2] = midTone;
-            cleaned += 1;
-          }
-          sky.__grainRemoved = cleaned;
-        }
+        const c = Math.max(1, part.px.length);
+        familyOf.set(part.id, Math.floor(entryFor(palette, r0 / c, g0 / c, b0 / c) / STEPS));
+        depthMax.set(part.id, Math.max(1, dmax));
+        for (const p2 of part.px) idAt[p2] = part.id;
       }
+      let cleaned = 0;
+      for (let p2 = 0; p2 < n; p2 += 1) {
+        if (!wallMask[p2] || sky[p2] || protectedPx.has(p2)) continue;
+        if (idx[p2] === palette.length - 2) continue;          // an outline stays a line
+        const family = familyOf.get(idAt[p2]);
+        if (family === undefined) continue;
+        const tones = [family * STEPS + 1, family * STEPS + 2, family * STEPS + 4];
+        if (tones.includes(idx[p2])) continue;                 // already one of this plane's own three tones
+        // THE PHOTOGRAPH'S OWN GRAIN WAS THE TONE PICKER, and this is the fix. The face used to be chosen per pixel
+        // by the pixel's own smoothed luma, so a wall's noise - not its light - decided its colour: measured, the
+        // wall band came out 33% flat with the sky's own blue as its most common colour. The face is now chosen by
+        // WHERE THE PIXEL SITS ON THE FACADE - its depth below the sky above it, in thirds of that wall's own depth
+        // - so the tones follow the building's geometry and not the photograph's noise.
+        const d = depth[p2] > 0 ? depth[p2] : 0;
+        const dm = depthMax.get(idAt[p2]) || 1;
+        idx[p2] = tones[d > (dm * 2) / 3 ? 2 : d > dm / 3 ? 1 : 0];
+        cleaned += 1;
+      }
+      if (typeof window !== 'undefined') window.__grain = cleaned;
     }
     sky.__wall = planes;
     wallPx = new Uint8Array(n);

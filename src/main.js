@@ -1174,6 +1174,15 @@ function throwAt(at) {
   sfx.throw();
 }
 
+// THE THROW BUTTON on the bar (the accepted frame's big yellow circle) throws at what the FRAME is showing,
+// because a button has no finger position to read: the middle of the view, a little below centre, where the
+// road and the cars are. It is the same throwAt the finger uses — same hand, same cooldown, same aim — so the
+// button is a second way to reach one action, not a second action.
+function throwHere() {
+  if (stage !== 'play' || !world || world.done) return;
+  throwAt({ x: cam.x + cam.w / 2, y: cam.y + cam.h * 0.62 });
+}
+
 // Where the narrow view is dark, a finger first LOOKS (drag) and then throws (tap): the throw happens on
 // lifting, and only if the finger did not travel. Everywhere else a throw is on touch, with no wait.
 tiltEl.addEventListener('pointermove', (e) => {
@@ -1296,7 +1305,7 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
       if (typeof window !== 'undefined') window.__fate = { kind, beast: DISASTERS[kind] ? DISASTERS[kind].beast || null : null, stage };
       if (kind) { note(DISASTERS[kind].line); pop(DISASTERS[kind].ru, world ? world.w / 2 : 0, world ? world.h * 0.3 : 0, 'warn'); }
       const box2 = $('fateBox');
-      if (box2) box2.open = false;                        // the choice is made: close the dropdown
+      if (box2) foldBox(box2, false);                     // the choice is made: close the dropdown
     };
     for (const [label, kind] of [['ЯСНО', null], ...DISASTER_ORDER.map((k) => [DISASTERS[k].ru, k])]) {
       const b = document.createElement('button');
@@ -1352,9 +1361,29 @@ tiltEl.addEventListener('pointerdown', (e) => {
     e.stopPropagation();
   }, true);
 }
-// THE ARROW HIDES THE PANEL. It is the first control on the bar: collapsed, the toolbar is two round buttons and
-// nothing else, which is what a player wants once they have chosen; expanded, it shows the name in the hand and
-// the weather, each with its own dropdown.
+// A PANEL OPENS TWO WAYS. The weapon panel and the sky panel are drawers that cost no height; a <details>
+// keeps its own `open` property and a <div> cannot, so the class is what the stylesheet reads, and the divs get
+// an `open` property backed by that same class — the tools and the console set `.open` on these boxes, and it
+// has to keep meaning what it meant.
+function foldBox(el, open) {
+  if (!el) return;
+  el.classList.toggle('open', open);
+  if (el.tagName === 'DETAILS') el.open = open;         // the extra panels keep their native attribute
+  const head = el.querySelector('[role="button"]');     // the panel's own header says whether it is open
+  if (head) head.setAttribute('aria-expanded', String(open));
+}
+for (const id of ['paletteBox', 'fateBox']) {
+  const el = $(id);
+  if (el && !('open' in el)) {
+    Object.defineProperty(el, 'open', {
+      get: () => el.classList.contains('open'),
+      set: (v) => el.classList.toggle('open', Boolean(v)),
+      configurable: true,
+    });
+  }
+}
+// THE ARROW HIDES THE PANEL. It is not one of the four controls: folded away it appears between the two round
+// buttons, and it is then the only way back — which is what a player wants once they have chosen.
 $('barMore')?.addEventListener('click', (e) => {
   const bar = $('bar');
   if (!bar) return;
@@ -1362,6 +1391,56 @@ $('barMore')?.addEventListener('click', (e) => {
   e.currentTarget.textContent = hidden ? '▴' : '▾';
   e.currentTarget.setAttribute('aria-expanded', String(!hidden));
 });
+// THE WEAPON PANEL (the accepted frame's second control). A tap takes the next of the nine, which is what its
+// small ▴ means; a hold — or the arrow inside it — opens the drawer with all nine, because four controls cannot
+// hold nine chips and every weapon has to stay reachable. Nothing here chooses a weapon itself: it presses the
+// chip, so the chip's own handler stays the only place that knows what choosing means.
+{
+  const pill = $('palettePill'), box = $('paletteBox'), arrow = $('paletteMore');
+  let timer = 0, held = false;
+  const openList = () => {
+    foldBox($('fateBox'), false);                       // one drawer at a time: they share the bar's width
+    foldBox(box, true);
+  };
+  const nextWeapon = (step) => {
+    const order = THROW_ORDER;
+    CHIPS.get(order[(order.indexOf(hand) + step + order.length) % order.length])?.click();
+  };
+  pill?.addEventListener('pointerdown', () => {
+    held = false;
+    clearTimeout(timer);
+    timer = setTimeout(() => { held = true; openList(); }, 420);
+  });
+  for (const kind of ['pointerup', 'pointercancel', 'pointerleave']) pill?.addEventListener(kind, () => clearTimeout(timer));
+  pill?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (arrow && arrow.contains(e.target)) { openList(); return; }           // the arrow is the whole list
+    if (held) { held = false; return; }                                     // the hold already opened it
+    nextWeapon(1);
+  });
+  pill?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    nextWeapon(1);
+  });
+}
+// THE СТИХИЯ PANEL (the accepted frame's third control): a tap opens the sky's drawer — the same nine-choices
+// problem as the weapons and the same answer. Choosing one closes it (see `set` below).
+{
+  const pill = $('fatePill'), box = $('fateBox');
+  const toggle = () => {
+    foldBox($('paletteBox'), false);
+    foldBox(box, !box.classList.contains('open'));
+  };
+  pill?.addEventListener('click', toggle);
+  pill?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    toggle();
+  });
+}
+// THE THROW BUTTON: the same throw as a tap on the yard, aimed at the middle of the frame (see throwHere).
+$('throwBtn')?.addEventListener('click', throwHere);
 $('shareBtn').addEventListener('click', () => share(false));
 $('cardBtn').addEventListener('click', () => share(true));
 $('albumBtn').addEventListener('click', () => { paintAlbum(); cards('album'); });
@@ -1431,9 +1510,10 @@ for (const [id, m] of Object.entries(MODES)) {
   $('filters').append(button);
 }
 
-// WHAT YOU THROW. Six things, each with its own flight, and each one says why it is in the palette rather
-// than being a second stone of a different colour. The panel is a <details>, so it folds away and the player
-// can keep the whole of the yard on a phone screen.
+// WHAT YOU THROW. Nine things, each with its own flight, and each one says why it is in the palette rather
+// than being a second stone of a different colour. The nine chips live in a drawer the weapon panel opens,
+// because the bar itself has room for four controls and not for nine (the accepted frame, element 8).
+const CHIPS = new Map();                     // the chip of each throwable: the bar's panel presses these
 for (const id of THROW_ORDER) {
   const t = THROWABLES[id];
   const button = document.createElement('button');
@@ -1445,13 +1525,17 @@ for (const id of THROW_ORDER) {
     for (const other of $('palette').children) other.classList.toggle('on', other === button);
     for (const other of $('palette').children) other.classList.toggle('alt', other !== button);
     $('paletteNow').textContent = t.label.toUpperCase();
+    $('paletteIcon').dataset.w = id;         // the panel's icon is the thing in the hand, not always a stone
     $('paletteWhy').textContent = t.why;
+    foldBox($('paletteBox'), false);         // the choice is made: the drawer closes itself
     paintHand();
     if (world && stage === 'play') banner(t.label.toUpperCase());
   });
+  CHIPS.set(id, button);
   $('palette').append(button);
 }
 $('paletteNow').textContent = item.label.toUpperCase();
+$('paletteIcon').dataset.w = hand;
 $('paletteWhy').textContent = item.why;
 $('lookNow').textContent = mode.label.toUpperCase();
 $('lookWhy').textContent = mode.why;
@@ -1462,15 +1546,15 @@ $('lookWhy').textContent = mode.why;
 const PALETTE_SEEN = 'dvor8.paletteSeen';
 try {
   if (!localStorage.getItem(PALETTE_SEEN)) {
-    $('paletteBox').open = true;
+    foldBox($('paletteBox'), true);
     localStorage.setItem(PALETTE_SEEN, '1');
   }
-} catch { $('paletteBox').open = true; }
+} catch { foldBox($('paletteBox'), true); }
 
 // While a yard is being played the extra panels fold themselves away, so the screen holds the yard, the
 // thing in the hand and the danger meter — and nothing else the player did not ask for.
 function foldForPlay(playing) {
-  for (const id of ['paletteBox', 'lookBox', 'moreBox']) $(id).open = !playing;
+  for (const id of ['paletteBox', 'lookBox', 'moreBox']) foldBox($(id), !playing);
 }
 
 paintHand();

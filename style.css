@@ -144,25 +144,83 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 #paletteWhy { margin-top: 6px; }
 
 /* ---- THE TOOLBAR (the bar at the bottom) ---------------------------------------------------------------
-   Appended here because THIS is the stylesheet. The first attempt at these rules was written into index.html,
-   where there is no <style> element at all: they did nothing, and the toolbar came out as a cramped centred
-   column. That is the whole reason it "would not take the styles", and it is exactly the kind of fault only a
-   look at the screen finds. */
-#bar { display: flex; flex-direction: row; align-items: flex-start; justify-content: flex-start;
-  gap: 8px; width: 100%; box-sizing: border-box; padding: 6px 10px 10px; text-align: left; }
-#bar .barDrop { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; text-align: left; }
-#bar details.fold { flex: 1 1 auto; min-width: 0; margin: 0; text-align: left; }
-#bar .pill { display: flex; align-items: center; justify-content: space-between; width: 100%;
-  box-sizing: border-box; padding: 9px 11px; background: #1d0745; border: 2px solid var(--purple, #5b2ea6);
-  color: #fff; list-style: none; font: 900 15px "Arial Black", Impact, sans-serif; }
-#bar details[open] > .pill { border-color: var(--pink, #f0286e); }
-#bar .round { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--pink, #f0286e);
-  background: #1d0745; color: #fff; font: 900 18px "Arial Black", Impact, sans-serif; display: flex;
-  align-items: center; justify-content: center; padding: 0; }
-#bar .round[aria-pressed="true"] { background: var(--pink, #f0286e); color: #12052e; }
+   REBUILT TO THE ACCEPTED FRAME (reference/v10a-target.webp, element 8 of docs/V10A.md). One row, left to
+   right: the round info button, the CURRENT WEAPON with a small up-arrow, the СТИХИЯ panel, and the big round
+   YELLOW throw button. The colours are the accepted frame's own, sampled off it (reference/PAIRING.md): cyan
+   rgb(48,225,185), pink rgb(240,79,120), yellow rgb(249,194,43), dark UI navy rgb(27,18,32). The two panels
+   are a pair the other way round — the weapon side is cyan-bordered with a pink shadow, the СТИХИЯ side is
+   pink-bordered with a cyan shadow; that is what the sampling of the reference found (a cyan top border on the
+   weapon panel, rgb(66,220,184), and a pink one on the disaster panel, rgb(240,81,121), each with the other
+   colour offset off its bottom-right corner).
+
+   The bar lives INSIDE the frame and stands on its bottom edge, the way the accepted frame has it: the road
+   shows through between the four controls instead of the page's drifting gradient, and the bar is exactly as
+   wide as the frame whatever the photograph's aspect makes of it. It is the frame's own z-index 1, under the
+   cards, so the title card and the end card still cover it.
+
+   The first attempt at these rules was written into index.html, where there is no <style> element at all: they
+   did nothing, and the toolbar came out as a cramped centred column. */
+#bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; display: flex; flex-direction: row;
+  align-items: center; justify-content: space-between;
+  gap: 1.5%; padding: 0 3.5%; box-sizing: border-box; }
+
+/* THE TWO ROUND BUTTONS: info on the left, throw on the right. 13.5% of the bar's content box is the accepted
+   frame's 13.2% of its own width — the difference is the padding the percentages resolve against. */
+#bar .round { flex: 0 0 auto; width: 13.5%; min-width: 40px; aspect-ratio: 1 / 1; padding: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; }
+#bar .round:active { transform: translate(3px, 3px); box-shadow: none; }
+#bar .round.info { background: #1b1220; border: 3px solid #30e1b9; color: #30e1b9; box-shadow: 3px 3px 0 #f04f78;
+  font: italic 900 19px/1 var(--display); }
+#bar .round.info[aria-pressed="true"] { background: #30e1b9; color: #1b1220; }
+#bar .round.throw { background: #f9c22b; border: 3px solid var(--ink); box-shadow: 3px 3px 0 #f04f78; }
+#bar .round.throw i { width: 0; height: 0; border-left: 16px solid var(--ink); border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent; margin-left: 4px; }
+/* The arrow that folds the bar away is not one of the four: it appears only once the bar IS folded, and it is
+   then the only way back. */
+#bar .round.more { display: none; background: #1b1220; border: 3px solid #f04f78; box-shadow: 3px 3px 0 #30e1b9;
+  color: #fff; font: 900 14px/1 var(--display); }
+#bar .barDrop { display: flex; flex-direction: row; align-items: center; gap: 2%; flex: 1 1 0; min-width: 0; text-align: left; }
+#bar .fold { flex: 1 1 0; width: auto; min-width: 0; margin: 0; text-align: left; }
 #bar.hidden .barDrop { display: none; }
+#bar.hidden .round.more { display: flex; }
+
+/* THE PANELS. The icon, the name centred in what is left, and the small arrow, in the accepted frame's order. */
+#bar .pill { display: flex; align-items: center; gap: 5px; width: 100%; box-sizing: border-box; min-height: 40px;
+  padding: 4px 6px; background: #1b1220; color: #fff; list-style: none; cursor: pointer;
+  user-select: none; -webkit-user-select: none; font: italic 900 min(11px, .95vh)/1 var(--display); letter-spacing: .01em; }
+#bar .pill::after { content: none; }                    /* the caret is in the markup, not the global fold arrow */
+#bar .pill.weapon { border: 3px solid #30e1b9; box-shadow: 3px 3px 0 #f04f78; }
+#bar .pill.fate { border: 3px solid #f04f78; box-shadow: 3px 3px 0 #30e1b9; }
+#bar .pill b { flex: 1 1 auto; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; }
+#bar .pill .caret { font-style: normal; font-size: 9px; }
+#bar .pill.weapon .caret { color: #30e1b9; }
+#bar .pill.fate .caret { color: #f04f78; }
+#bar .pill:active { transform: translate(3px, 3px); box-shadow: none; }
+/* the thing in the hand: the accepted frame's faceted stone, tinted per throwable so the icon is not a lie */
+#bar .wicon { flex: 0 0 auto; width: 17px; height: 17px; clip-path: polygon(31% 3%, 73% 9%, 97% 41%, 88% 79%, 51% 99%, 13% 83%, 2% 45%, 11% 15%);
+  background: linear-gradient(135deg, #dfe3e6 0 42%, #7d818a 42% 100%); }
+#bar .wicon[data-w="brick"] { background: linear-gradient(135deg, #d98b5f 0 42%, #8c4a2f 42% 100%); }
+#bar .wicon[data-w="slipper"] { background: linear-gradient(135deg, #6f7bd8 0 42%, #2f3580 42% 100%); }
+#bar .wicon[data-w="bottle"] { background: linear-gradient(135deg, #8fe08a 0 42%, #2f7a3a 42% 100%); }
+#bar .wicon[data-w="water"] { background: linear-gradient(135deg, #a8e4ff 0 42%, #2f7ec0 42% 100%); }
+#bar .wicon[data-w="paint"] { background: linear-gradient(135deg, #ff8ec4 0 42%, #b81f6b 42% 100%); }
+#bar .wicon[data-w="flowers"] { background: linear-gradient(135deg, #ffd0e4 0 42%, #d0348a 42% 100%); }
+#bar .wicon[data-w="sponge"] { background: linear-gradient(135deg, #ffe9a0 0 42%, #d9a521 42% 100%); }
+#bar .wicon[data-w="whimsy"] { background: linear-gradient(135deg, #d8c2ff 0 42%, #6b3fd0 42% 100%); }
+#bar .swirl { flex: 0 0 auto; width: 21px; height: 21px; }
+#bar .swirl path { fill: none; stroke: #fff; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+
+/* THE DRAWERS. Nine weapons and six skies cannot be four controls: each panel opens a drawer above the bar,
+   which costs no height and hides itself again the moment the choice is made. */
+#bar .drawer { display: none; }
+#bar .fold.open > .drawer { display: block; position: absolute; left: 3.5%; right: 3.5%;
+  bottom: calc(100% + 8px); z-index: 6; padding: 7px; background: #12052e; border: 3px solid #30e1b9;
+  box-shadow: 5px 5px 0 #f04f78; }
+#bar #fateBox.open > .drawer { border-color: #f04f78; box-shadow: 5px 5px 0 #30e1b9; }
 #bar .palette { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; text-align: left; }
 #bar .row { display: flex; flex-wrap: wrap; gap: 4px; text-align: left; }
+#bar .drawer .fine { margin-top: 5px; }
+#bar .drawer .fine b { color: var(--gold); font-style: italic; }
 
 /* THE SELF-TEST PANEL (docs/CRITERIA.md I3): the checks shown in the picture, with a re-run button. */
 .selfTest { margin: 6px 10px 12px; padding: 8px 10px; border-radius: 10px; background: #1b0b33ee; border: 2px solid #30e1b9; }

@@ -2,7 +2,7 @@
 <html lang="ru"><head><meta charset="utf-8"><title>DBG</title></head>
 <body>
 <canvas id="c"></canvas>
-<pre id="out" style="white-space:pre-wrap;font:11px monospace;max-width:380px">loading</pre>
+<img id="png" alt=""><pre id="out" style="white-space:pre-wrap;font:11px monospace;max-width:380px">loading</pre>
 <script type="module">
 import { trace } from '../src/vector.js';
 const q = new URLSearchParams(location.search);
@@ -19,8 +19,18 @@ const s = Math.max(W / img.width, H / img.height);
 cx.imageSmoothingQuality = 'high';
 cx.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
 const rgba = cx.getImageData(0, 0, W, H).data;
-const t0 = performance.now();
-const st = trace(rgba, W, H, {});
+let st; const t0 = performance.now();
+try {
+const qm = q.get('marks');
+let marks = null;
+if (qm) {
+  const r = await fetch('/game/' + qm);
+  const j = await r.json();
+  marks = Uint8Array.from(j.marks);
+  if (j.w !== W || j.h !== H) { document.getElementById('out').textContent = 'mark size mismatch ' + j.w + 'x' + j.h; }
+}
+st = trace(rgba, W, H, marks ? { marks } : {});
+} catch (e) { document.getElementById('out').textContent = 'THROW ' + (e && e.stack || e); document.title = 'DBG-ERR'; throw e; }
 const ms = Math.round(performance.now() - t0);
 const out = document.getElementById('c');
 out.width = W; out.height = H;
@@ -34,18 +44,43 @@ g.putImageData(im, 0, 0);
 const info = {
   ms,
   planes: st.planes,
+  wallCls: window.__dbgWallCls,
+  wallPlanes: window.__dbgFacadePlanes,
+  structureRan: window.__dbgStructureRan,
+  bridge: window.__dbgBridge,
+  partStraight: (window.__dbgParts || []).sort((a, b) => b[0] - a[0]).slice(0, 10),
+  depthHist: window.__dbgDepthHist,
+  depthBig: window.__dbgDepthBig,
+  wallMaskN: window.__dbgWallMaskN,
+  facParts: window.__dbgFacParts,
+  facSizes: window.__dbgFacSizes,
+  facBoxes: window.__dbgFacBoxes,
+  clsHist: window.__dbgClsHist,
   windows: st.windows.length,
+  statKeys: Object.keys(st).filter((k) => k !== 'idx' && k !== 'palette').map((k) => k + '=' + JSON.stringify(st[k]).slice(0, 40)),
   wallParts: st.wallParts.length,
   parts: st.wallParts.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h, n: p.pixels.length, cx: Math.round(p.x + p.w / 2), cy: Math.round(p.y + p.h / 2) })),
   winGrid: window.__winGrid || null,
-  wall: window.__wall,
+  wall: st.planes,
+  grainRemoved: st.grainRemoved,
   grainRemoved: window.__grainRemoved,
   facadeWindows: window.__facadeWindows,
+  facade: window.__facade,
+  grain: window.__grain,
+  sub1: window.__winGrid,
   cleaned: window.__cleaned,
   skyFinal: window.__skyFinal,
   clouds: window.__cloudFinal,
 };
 document.getElementById('out').textContent = JSON.stringify(info, null, 1);
+{
+  const mm = window.__dbgWallMask;
+  const g2 = out.getContext('2d');
+  const d2 = g2.getImageData(0, 0, W, H);
+  for (let p2 = 0; p2 < W * H; p2 += 1) if (mm[p2]) { d2.data[p2 * 4] = 255; d2.data[p2 * 4 + 1] = 0; d2.data[p2 * 4 + 2] = 128; }
+  g2.putImageData(d2, 0, 0);
+}
+document.getElementById('png').src = out.toDataURL('image/png');
 document.title = 'DBG-DONE';
 </script>
 </body></html>

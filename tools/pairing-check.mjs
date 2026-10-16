@@ -14,26 +14,20 @@ const [photoPath, dumpPath] = process.argv.slice(2);
 if (!photoPath || !dumpPath) { console.log('usage: node tools/pairing-check.mjs <photo.jpg> <canvas.json>'); process.exit(2); }
 
 // the photograph, reduced exactly as the game reduces it: 5x5 area mean
-const tmp = '/tmp/pairing-reduced.png';
-execFileSync('python3', ['-c', `
+const tmp = '/tmp/pairing-reduced.bin';
+const meta = execFileSync('python3', ['-c', `
+import sys
 from PIL import Image
 im = Image.open(${JSON.stringify(photoPath)}).convert('RGB')
-W,H = im.size
-print(W, H)
-im.resize((288,512), Image.BOX).save(${JSON.stringify(tmp)})
-`], { stdio: ['ignore', 'inherit', 'inherit'] });
-
-const png = execFileSync('python3', ['-c', `
-from PIL import Image
-im = Image.open(${JSON.stringify(tmp)}).convert('RGB')
-px = im.load()
-out = []
-for y in range(512):
-    for x in range(288):
-        r,g,b = px[x,y]
-        out.append(f'{r},{g},{b}')
-print(';'.join(out))
-`], { encoding: 'utf8' }).trim().split(';').map((s) => s.split(',').map(Number));
+W, H = im.size
+small = im.resize((288, 512), Image.BOX)
+with open(${JSON.stringify(tmp)}, 'wb') as f:
+    f.write(small.tobytes())
+sys.stderr.write(f'{W} {H}')
+`], { encoding: 'utf8', stdio: ['ignore', 'inherit', 'inherit'] });
+const raw = readFileSync(tmp);
+const png = [];
+for (let i = 0; i < 288 * 512; i += 1) png.push([raw[i * 3], raw[i * 3 + 1], raw[i * 3 + 2]]);
 
 const d = JSON.parse(readFileSync(dumpPath, 'utf8'));
 const px = (d.px || (d.frame && d.frame.px) || '');
