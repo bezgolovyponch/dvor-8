@@ -84,3 +84,23 @@ screenshot                    # and LOOK at the frame
 Two documented test hooks make this possible, both inert unless the parameter is present:
 `?photo=<url>` loads a photograph through the **same handler as the picker** (a test runner cannot set a file input,
 and a synthetic File hung the decoder); `?test=1` reveals the inputs for a runner that needs them.
+
+## THE PIECE KIT — the fix for the conceptual error (docs/CONCEPT.md)
+
+The game is NOT a photograph-to-pixel-art converter with a game attached. It is a **draft assembled from ready-made,
+individually confirmed pieces**, where the photograph supplies only the facts. Build a piece, confirm it alone, then
+assemble. Never edit the pipeline and hope.
+
+```
+src/pieces/facade.js            PIECE CONFIRMED  (tools/piece-facade-check.mjs: 5 assertions, 0 failures)
+                                flat plane in one family's tones + a regular window grid at the pitch
+                                MEASURED FROM THE PHOTOGRAPH's own openings; no pixel inside a wall may carry
+                                anything but a wall tone or a sprite entry
+src/pieces/{sky,window,ground,thing,outline,damage,hud}.js   to build the same way
+```
+
+Assembly order, and no pass may write a pixel another piece owns:
+**ground -> sky -> facade -> window -> thing -> outline -> damage -> hud**
+
+The game in one sentence: **you photograph your own yard and then you break it.** What is broken stays broken; people
+are never targets. The photograph must stay recognisable — that is the identity, not the drawing.

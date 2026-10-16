@@ -1469,11 +1469,30 @@ export function trace(rgba, w, h, opts = {}) {
         cols.push(qx); rows.push(qy);
       }
       const med = (a) => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0; };
+      // THE PITCH IS THE SPACING THE OPENINGS REPEAT AT, and the raw gaps between neighbouring centres do not give
+      // it. Some openings are missed and some are merged, so the gaps are 2, 3 or 4 times the bay: taking their
+      // median of a wall whose bays are seven pixels apart came out at seven while its real rhythm was fourteen,
+      // and the grid then marched twice as densely as the building. So the gaps are treated as what they are -
+      // MULTIPLES of one interval - and the interval fitted to them: every candidate pitch is scored by how
+      // exactly it divides the gaps it claims (a gap may be any whole number of bays, never a fraction), and the
+      // pitch that leaves the smallest residue on the most openings wins. It is the openings that vote, and the
+      // photograph that decides.
       const pitchOf = (list) => {
-        const s = [...new Set(list)].sort((x, y) => x - y);
+        const s2 = [...new Set(list)].sort((x, y) => x - y);
         const gaps = [];
-        for (let i = 1; i < s.length; i += 1) if (s[i] - s[i - 1] >= MIN_PITCH) gaps.push(s[i] - s[i - 1]);
-        return gaps.length ? Math.round(med(gaps)) : 0;
+        for (let i = 1; i < s2.length; i += 1) if (s2[i] - s2[i - 1] >= MIN_PITCH) gaps.push(s2[i] - s2[i - 1]);
+        if (!gaps.length) return 0;
+        const base = med(gaps);
+        let best = 0, bestScore = 0;
+        for (let cand = MIN_PITCH; cand <= Math.max(MIN_PITCH, Math.round(base)); cand += 1) {
+          let score = 0, hits = 0;
+          for (const g of gaps) {
+            const k = Math.max(1, Math.round(g / cand));
+            if (Math.abs(g - k * cand) <= Math.max(1, cand * 0.25)) { score += 1 / k; hits += 1; }
+          }
+          if (hits >= 2 && score > bestScore) { bestScore = score; best = cand; }
+        }
+        return best || Math.round(base);
       };
       const px2 = pitchOf(cols), py2 = pitchOf(rows);
       // THE SPRITE: frame, lip, glass, sill - the four entries this block has always used, unchanged.
@@ -1483,7 +1502,12 @@ export function trace(rgba, w, h, opts = {}) {
       const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
       let drawn = 0;
       if (px2 >= MIN_PITCH && py2 >= MIN_PITCH) {
-        const gw = Math.max(2, Math.round(px2 * 0.6)), gh = Math.max(2, Math.round(py2 * 0.55));
+        // THE SPRITE IS SMALLER THAN ITS BAY, and that is what makes a grid read as a grid. At 60% of the pitch
+        // with a one-pixel frame on each side the sprite filled its whole cell: the wall between two windows
+        // disappeared, the lip became the largest single colour on the facade (measured 41%) and the building read
+        // as diagonal stripes rather than as windows in a plane. A window is a THIRD of its bay, the way it is in
+        // the accepted frame, and the plane is what is left.
+        const gw = Math.max(2, Math.round(px2 * 0.34)), gh = Math.max(2, Math.round(py2 * 0.34));
         // the origin: the bay and the floor the photograph's own openings agree on, snapped to the grid they imply
         const x0 = Math.round(med(cols) / px2) * px2;
         const y0 = Math.round(med(rows) / py2) * py2;
