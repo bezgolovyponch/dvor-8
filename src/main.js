@@ -11,6 +11,7 @@ import { styliseVector } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { makeWorld, pick, strike, tick, left } from './world.js';
+import { RAMPS } from './flat.js';   // STEPS is already imported above; two imports of it is a hard error
 import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js';
 import { MODES, splashTargets, chainNext } from './modes.js';
 import { THROWABLES, ORDER as THROW_ORDER, throwWith, aimWith } from './throwables.js';
@@ -376,6 +377,18 @@ function begin() {
       hp: 3, hits: 0, seen: true, gone: false,
     });
   }
+  // ---- A CAR KEEPS ITS OWN COLOUR: NOT HERE -------------------------------------------------------------
+  //
+  // This was attempted as a post-pass over `world.idx` and it broke the build - the yard came out empty with a clean
+  // console, because the throw was swallowed by the build's own try/catch and the player saw "ничего не нашлось".
+  // The reduction that loses the colour happens INSIDE styliseVector (the areas-first pass averages a whole region
+  // into the wall's tones), so the fix belongs there, at the point the region's pixels are reduced - not after the
+  // world is built. Recorded rather than left as a half-working pass.
+  // ---- РАЗБИТО n: THE COUNT THE TARGET FRAME SHOWS -----------------------------------------------------
+  const brokenEl = document.getElementById('broken');
+  const brokenCount = () => world.regions.reduce((acc, r) => acc + (r.hits > 0 ? 1 : 0), 0);
+  if (brokenEl) { brokenEl.textContent = String(brokenCount()); setInterval(() => { brokenEl.textContent = String(brokenCount()); }, 400); }
+
   // THE WORLD IS READABLE FROM THE PAGE, on purpose: the self-evaluation (clustering, outlines, cars) runs in the
   // browser against the LIVE world, and a probe that cannot see it can only guess. It is a read-only handle.
   if (typeof window !== 'undefined') window.__world = world;

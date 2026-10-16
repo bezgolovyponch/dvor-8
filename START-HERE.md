@@ -28,6 +28,27 @@ page: 65 targets · console clean · 116 tones, largest 31% (no collapse)
 Buildings exist as things because **COCO has no building class**: they are the world's own `structures` (6 on the
 creator's photograph), turned into regions.
 
+## Where the product stands (two unseen photographs, both measured)
+
+```
+photo 1  Prague street      64 targets · sky 31% · 85 tones · largest non-sky entry 27% · console clean
+photo 2  balcony car park   93 targets · sky 38% · 22 tones · largest non-sky entry 28% · console clean
+gates    preflight OK · imports clean · tones no collapse (sky exempt) · page builds
+proven   each gate REFUSES a mutation: a deleted import, a synthetic wash, an altered load-bearing statement
+```
+
+## The next action, exactly
+
+**The cut-out's colour, and it must be done inside `styliseVector`.** A car keeps its pixels but not its colour: the
+areas-first reduction averages a whole region into the wall's tones, so a red car, a white van and a dark estate all
+come out neutral. It was attempted as a post-pass over `world.idx` in `main.js` and it BROKE the build (an empty yard
+with a clean console, because the throw was swallowed by the build's own try/catch) - the reason is recorded in the
+source where the attempt was. The fix belongs at the point the region's pixels are REDUCED: give each region its own
+family (saturation >= 0.30 never resolves to concrete) and choose tones inside it.
+
+Then: the checkered facade (every second bay one tone up, only where the photograph shows it), and the last typed
+constants (cloud inset, pitch floors, the smoothness bound) derived from the picture.
+
 ## The next action, exactly
 
 **The clouds do not reach the frame: cloud-white measures 0% of pixels.** Measured progress on the sky this round:

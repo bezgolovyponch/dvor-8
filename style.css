@@ -171,3 +171,8 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 .selfRow { font: 11px/1.35 ui-monospace, monospace; color: #cfe9ff; }
 .selfRow b { color: #30e1b9; margin-right: 6px; }
 .selfRow i { color: #8fa9c9; font-style: normal; margin-left: 6px; }
+
+/* РАЗБИТО n: the target frame shows a count of what the player has broken. It sits beside the score, in the same
+   style, so the two numbers are read the same way. */
+.left.broken { margin-left: 10px; }
+.left.broken b { color: #ffd23f; }
