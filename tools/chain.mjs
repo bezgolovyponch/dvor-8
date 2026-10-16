@@ -76,6 +76,20 @@ const steps = [
     process.exit(1);
   }
 }
+// STEP 6d - THE REFERENCE-PALETTE GATE. "Why aren't you comparing it to the requested frame?" - because nothing
+// mechanical did. This step measures OUR frame's defining roles (sky, clouds, darks) against the roles extracted from
+// the creator's accepted frame, and it fails on a hue or saturation gap. Its first run: sky hue off 11 degrees and
+// saturation off 0.36 (rgb(86,118,185) against the accepted rgb(77,156,232)); clouds and darks already match.
+{
+  const dump = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
+  const r = run('node', ['tools/reference-palette-check.mjs', dump], {});
+  const line = r.out.trim().split('\n').filter((l) => /^(sky|cloud|dark) |MATCH|DOES NOT/.test(l)).slice(-1)[0];
+  console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  6d REFERENCE  ${(line || '').slice(0, 140)}`);
+  if (r.code !== 0 && !process.env.KEEP_GOING) {
+    console.log('\nTHE CHAIN STOPPED AT 6d REFERENCE: the frame does not use the accepted frame\'s colours.');
+    process.exit(1);
+  }
+}
 if (process.env.REFERENCE) steps.push(['5 REFERENCE', 'node', ['tools/reference-check.mjs', (process.env.OUT || '/tmp/chain') + '/canvas.json', process.env.REFERENCE], {}]);
 
 console.log('THE CHAIN — each step must pass before the next is read\n');
