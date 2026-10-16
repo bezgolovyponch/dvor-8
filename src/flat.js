@@ -64,11 +64,20 @@
 // leaves the eye nowhere to rest — so the ramps were pulled toward the middle: a green that is a field and not
 // a highlighter, and a sky that is grey in an overcast photograph.
 export const RAMPS = [
-  { name: 'sky', hue: 218, sat: 0.42 },
+  // MEASURED AGAINST THE CREATOR'S ACCEPTED FRAME (tools/reference-palette-check.mjs): its sky is rgb(77,156,232) —
+  // hue 209, saturation 0.77 — while ours was rgb(86,118,185), hue 218 at 0.42. Eleven degrees and a third of the
+  // saturation: that is why every frame read as grey-blue instead of blue. The hue and the saturation are the
+  // accepted frame's own numbers, not a preference.
+  { name: 'sky', hue: 209, sat: 0.75 },
   { name: 'foliage', hue: 100, sat: 0.30 },
   { name: 'earth', hue: 28, sat: 0.34 },
-  { name: 'stone', hue: 40, sat: 0.15 },
-  { name: 'metal', hue: 220, sat: 0.10 },
+  // THE ACCEPTED GREY IS NEARLY NEUTRAL, BARELY VIOLET. Measured from the creator's frame: rgb(89,85,95) — red and
+  // blue within 6 of each other, blue just ahead, lightness 0.35. Ours was rgb(54,55,68): warmth -14 (clearly blue)
+  // and a third darker, which is what made every frame read grey-blue. My first correction went to hue 30, which is
+  // ORANGE — the wrong side entirely (warmth +26). The neutral ramps belong on the violet-neutral axis, just past
+  // magenta: that is the hue the accepted greys actually sit on.
+  { name: 'stone', hue: 268, sat: 0.10 },
+  { name: 'metal', hue: 252, sat: 0.09 },
   { name: 'warm', hue: 8, sat: 0.44 },
   // THE VIOLET RAMP, and it is the last colour the palette can hold: seven ramps of four tones plus the two
   // structural entries is thirty, which is exactly the block a street reserves for one photograph
@@ -145,6 +154,10 @@ export function tones() {
       // because a fully washed top tone cannot hold orange. 1.15 - t*0.28 keeps the ramp rising in lightness
       // while the colour survives it.
       const sat = r.sat * (1.20 - t * 0.36);
+      // THE SKY'S TOP TONE IS PURE WHITE, because the accepted frame's clouds are rgb(255,255,255) — measured, not
+      // assumed — and a ramp that tops out at rgb(197,222,242) can never paint one. Only the sky ramp's last tone is
+      // touched, so every other ramp keeps its ladder and the structural entries (outline, void) keep their indices.
+      if (r.name === 'sky' && i === STEPS - 1) { out.push([255, 255, 255]); continue; }
       out.push(hsl2rgb(hue, sat, l));
     }
     return out;
