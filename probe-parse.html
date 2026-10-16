@@ -51,4 +51,6 @@ else {
   document.title = 'PARSE OK ' + ms + 'ms';
 }
 window.__parse = parse;
+// THE CHANNEL COUNT, measured rather than assumed: the whole structures fault turns on it.
+window.__maskShape = (() => { const m = parse && parse.raw && parse.raw[0] && parse.raw[0].mask; return m ? { channels: m.channels, width: m.width, height: m.height, dataLength: m.data.length, firstValues: Array.from(m.data.slice(0, 8)) } : null; })();
 </script>

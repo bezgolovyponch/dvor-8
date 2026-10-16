@@ -114,5 +114,5 @@ export async function sceneParse(source, w, h, sw, sh) {
   let last = -1;
   for (let x = 0; x < w; x += 1) { if (horizon[x] >= 0) { last = horizon[x]; } else if (last >= 0) horizon[x] = last; }
   for (let x = w - 1; x >= 0; x -= 1) { if (horizon[x] < 0 && x + 1 < w) horizon[x] = horizon[x + 1]; }
-  return { masks, horizon, w, h, classes: Object.keys(masks).length, input: [iw, ih] };
+  return { masks, horizon, w, h, classes: Object.keys(masks).length, input: [iw, ih], raw: out };
 }

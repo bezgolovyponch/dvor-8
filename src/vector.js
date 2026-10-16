@@ -2040,7 +2040,16 @@ export function trace(rgba, w, h, opts = {}) {
     // THE BUILDINGS THEMSELVES, as structures the game can destroy: the pixels of each facade plane. The window
     // pass already reads these planes, so a wall and its openings agree about where the wall is; now the storm
     // can tear the wall as well as pop the windows, and what is left of it is ruins (D8).
-    structures: facadePlanes.slice(0, 24).map((part) => ({ pixels: part.px, x: part.minX, y: part.minY, w: part.maxX - part.minX + 1, h: part.maxY - part.minY + 1 })),
+    // THE BUILDINGS: THE PARSE'S `building` CLASS WAS TRIED HERE AND REVERTED, and the reason is measured.
+    //
+    // The idea is right (docs/PROTOCOL.md pipeline stage 3: a building is what the model calls a building), but the
+    // mask that arrives in the converter is NOT the mask the probe measured: the probe's building class covers 32.4%
+    // of the frame, while the structures built from the converter's copy covered **100% of the frame in 2
+    // components** (100 194 + 46 832 px). So the mask is over-covering somewhere between the model and this line -
+    // the candidate is the resampling/stride handling in src/scene-parse.js (a RawImage's channel count read as 4
+    // when it is 1 would smear the class over the frame). Until that is fixed and re-measured, the facade planes
+    // remain the structures, because a wrong mask is worse than a coarse one.
+    structures: facadePlanes.slice(0, 24).map((part) => ({ pixels: part.px, x: part.minX, y: part.minY, w: part.maxX - part.minX + 1, h: part.maxY - part.minY + 1, area: part.area })),
     ms: Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0),
     skyShare: skyN / n,
   };
