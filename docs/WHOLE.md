@@ -18,9 +18,9 @@ road, the ground, the people and the cars keep their own layout, while the sky, 
 | damage | a **6-step ladder** (scrape → tear → void) with per-material profiles (glass, brick, concrete, metal, wood) | `src/criteria/DestructionRule.js` |
 | structures | cell grids with **support cascade**: a cell with nothing under it falls | `src/world.js` |
 | things | **one connected mass** per thing; outlines from the owner map, so the line follows the shape after damage | `src/objects.js`, `src/render.js` |
-| targets | **9 detector labels** + windows; **buildings are structural** (COCO has no building class) | `src/objects.js`, `src/main.js` |
-| weapons | **0 throwables**, one baseline and the rest departures | `src/throwables.js` |
-| modes | **0 view modes** (трезвый, трава, алкоголь, депрессия) | `src/modes.js` |
+| targets | **26 detector labels** + windows; **buildings are structural** (COCO has no building class) | `src/objects.js`, `src/main.js` |
+| weapons | **9 throwables**, one baseline and the rest departures | `src/throwables.js` |
+| modes | **4 view modes** (трезвый, трава, алкоголь, депрессия) | `src/modes.js` |
 | the outline rule | outlined: **buildings and cars**. Never: windows, people | `src/criteria/OutlineRule.js` |
 
 ## The numbers, measured on six real photographs
@@ -49,7 +49,7 @@ that leaves remains.
 ## The gates, and the proof they bite
 
 ```
-0  PREFLIGHT   0 criteria rows · 10 composition elements · 19 parts · 10 statements
+0  PREFLIGHT   19 criteria rows · 10 composition elements · 19 parts · 10 statements
 0b IMPORTS     every used name imported; every import real          mutation: deleted import -> exit 1
 1  CRITERIA    every criterion has a predicate (a criterion without one counts as NOT MET)
 2  COMPOSITION element -> requirement -> class -> baseline -> predicate
