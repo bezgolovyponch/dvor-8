@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>DBG</title></head>
+<body>
+<canvas id="c"></canvas>
+<pre id="out">loading</pre>
+<script type="module">
+import { trace } from '../src/vector.js';
+const q = new URLSearchParams(location.search);
+const src = q.get('p') || 'photos-test/v10a.jpg';
+const img = new Image();
+img.src = '/game/' + src;
+await img.decode();
+const GAME = 5;
+const W = 384, H = 512;
+const cv = document.createElement('canvas');
+cv.width = W; cv.height = H;
+const cx = cv.getContext('2d');
+const s = Math.max(W / img.width, H / img.height);
+cx.imageSmoothingQuality = 'high';
+cx.drawImage(img, (W - img.width * s) / 2, (H - img.height * s) / 2, img.width * s, img.height * s);
+const rgba = cx.getImageData(0, 0, W, H).data;
+const t0 = performance.now();
+const st = trace(rgba, W, H, {});
+const ms = Math.round(performance.now() - t0);
+const out = document.getElementById('c');
+out.width = W; out.height = H;
+const g = out.getContext('2d');
+const im = g.createImageData(W, H);
+for (let i = 0; i < W * H; i += 1) {
+  const c = st.palette[st.idx[i]] || [0, 0, 0];
+  im.data[i * 4] = c[0]; im.data[i * 4 + 1] = c[1]; im.data[i * 4 + 2] = c[2]; im.data[i * 4 + 3] = 255;
+}
+g.putImageData(im, 0, 0);
+const info = {
+  ms,
+  planes: st.planes,
+  windows: st.windows.length,
+  wallParts: st.wallParts.length,
+  parts: st.wallParts.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h, n: p.pixels.length, cx: Math.round(p.x + p.w / 2), cy: Math.round(p.y + p.h / 2) })),
+  winGrid: window.__winGrid || null,
+  wall: window.__wall,
+  grainRemoved: window.__grainRemoved,
+  facadeWindows: window.__facadeWindows,
+  cleaned: window.__cleaned,
+  skyFinal: window.__skyFinal,
+  clouds: window.__cloudFinal,
+};
+document.getElementById('out').textContent = JSON.stringify(info, null, 1);
+document.title = 'DBG-DONE';
+</script>
+</body></html>
