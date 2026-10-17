@@ -4,7 +4,11 @@
 # usage: sh gates/external.sh <canvas.json> [reference.png]
 set -e
 DUMP="${1:?usage: sh gates/external.sh <canvas.json> [reference.png]}"
-REF="${2:-reference/v10a-art.png}"
+REF="${2:-reference/v10a-art-canvas.png}"   # MEASURED, 2026-10-16: v10a-art.png is 288x512 but 56,573 distinct colours,
+# entropy 12.859 bpp - a resampled screenshot, so pixelmatch can never reach 0 against it and every share is diluted.
+# v10a-art-canvas.png: 48 colours, entropy 5.349. Compare like with like (the registry names this file as the input).
+# STILL A PREMISE: even its 48 values are ~1-LSB noise around ~35 real colours, so a "palette-exact" claim must be
+# proven on OUR side (index buffer + table); the reference is only usable after snapping to its own dominant colours.
 python3 -c "
 from PIL import Image; import json, sys
 d=json.load(open('$DUMP'))
