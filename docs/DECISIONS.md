@@ -134,6 +134,17 @@ curtain wall has. So the per-bay identity works, and what is left is the RATIO I
 recessed shadow rows, solved together with the plane's own tone. Reverted to the green commit; the numbers are here so
 the next attempt starts from them.
 
+**Third attempt, measured (the real defect found):** gating the grid per bay by the plan exposed that THREE DIFFERENT
+PLANS are computed from three different inputs — `window.__plan` in main (buildingsFrom + splitByTone), the checker's
+late pass (`wallParts`), and the bay loop's early plan (`fac.parts`, unfiltered). On the judged photograph the bay
+loop's plan produced one whole-frame instance whose box covered the tower, so the per-bay gate was the global grid in
+disguise; guarding huge instances ("an instance over 60% of the frame is not a facade") then removed that box and the
+tower lost its grid (R1 0.049 -> 0.112). On the operator's second yard the same over-reach instance (0,0-288,512) is
+the only instance at all. **The plan must be computed ONCE, from one input, and passed down.** That is the sprint this
+row is waiting for: unify the plan's input (the built wall parts), have the bay loop, the checker pass and main read
+THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
+for the judged photograph and wrong for the second one.
+
 **Attempted and reverted:** making the ring form the default and leaving the glass to the late plan-box pass broke
 the judged photograph (pairing IoU 0.58 just under 0.60, the mid-rise's white 4% because the checker's cells no
 longer fire). Reverted to the green commit: the shipped 0.5.0 is the judged photograph's build, and this row is the
