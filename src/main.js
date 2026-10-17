@@ -372,8 +372,23 @@ async function build(rgba, w, h, dets, big = null) {
   // SAME call can be made a second time and the two masks differenced. Diagnostics only: nothing in the build or
   // the render ever reads these, and they are attached to `window`, never to the frame. `?parse=1` arms the probe.
   if (typeof window !== 'undefined' && params.get('parse') === '1') window.__sceneIn = { source: shot, w, h, sw: big && big.w, sh: big && big.h };
-  const parse = shot
-    ? await sceneParse(shot, w, h, shot.width, shot.height).catch((e) => { if (typeof window !== 'undefined') window.__parseError = String(e && e.message || e); return null; })
+  // THE SEGMENTATION DOES NOT NEED THREE PICTURE-PIXELS PER GAME PIXEL - that 3x rule belongs to the WINDOW finder
+  // (it wants detail to see an opening), and it was gating the parse: `big` is null for a photograph narrower than
+  // 3x the grid (the operator's second yard is 720 wide against a 288 grid), so the parse was called with NO INPUT and
+  // returned null - no building, no sky, no wall class, and the renderer fell back to luminance (D19's seventh
+  // finding). The model downsizes to its own 512 input anyway, so the game-sized canvas is a perfectly good input:
+  // the parse runs on the best available image, which is `big` when it exists and the small canvas otherwise.
+  // the game-sized canvas, built from the pixels the renderer already has, when `big` is absent
+  const parseInput = shot || (() => {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    const img = g.createImageData(w, h);
+    img.data.set(rgba.subarray ? rgba.subarray(0, img.data.length) : rgba);
+    g.putImageData(img, 0, 0);
+    return c;
+  })();
+  const parse = parseInput
+    ? await sceneParse(parseInput, w, h, parseInput.width, parseInput.height).catch((e) => { if (typeof window !== 'undefined') window.__parseError = String(e && e.message || e); return null; })
     : null;
   if (typeof window !== 'undefined') window.__parse = parse ? { classes: parse.classes, sky: !!parse.masks.sky, building: !!parse.masks.building } : null;
   // THE PLAN NEEDS THE BUILDING MASK ITSELF, and the parse lives inside build(); it is handed over here.
