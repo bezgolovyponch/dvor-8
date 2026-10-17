@@ -289,3 +289,25 @@ not measurable on that yard, because its facade carries no blue at all, and the 
 rather than the photograph's. The loop's position: (a) is the documentable rule, and the observation is recorded here so
 that a future change to it is a DECISION, not a drift.
 
+## D22 — THE QUALITY STANDARDS, MEASURED (2026-10-18)
+
+The project's own gates were all written in this repo. `tools/quality-check.mjs` measures the picture against
+standards that predate it, with the **accepted frame as the practical bar** (it is what the creator accepted, so it
+defines "faithful enough" here):
+
+| standard | source | ours | the accepted frame's own | verdict |
+|---|---|---|---|---|
+| colour fidelity, mean dE (Lab/CIE76) | CIE colour-difference practice | **28.83** | 29.15 | ours is *closer* to the photograph |
+| colour fidelity, max dE | same | 97.44 | 99.09 | ours is closer |
+| structural similarity, SSIM | Wang, Bovik, Sheikh, Simoncelli, IEEE TIP 13(4):600-612, 2004 | **0.498** | 0.429 | ours is more similar to the source |
+| palette conformance | indexed-colour practice (Aseprite/Lospec) | **0 stray** of 147 456 | — | met |
+| pixel-perfect scaling | integer scaling, no resampling | **1.118 by 1.106** | — | **NOT MET** |
+
+**The one real violation is the scale.** Measured on a 412x915 phone viewport: the 288x512 art is displayed at
+322x566 - a scale of 1.118 horizontally and 1.106 vertically, i.e. neither integer NOR uniform (the aspect is
+stretched by 1.1%). `image-rendering: pixelated` keeps the edges hard, but the pixels still land on unequal screen
+widths, which is what every pixel-art standard forbids. Two fixes were attempted and REVERTED: sizing the canvas in
+pixels to the largest integer multiple (1x = 288x512) works mechanically (the probe reads `styleW: 288px`) but the
+frame's fractional layout then leaves bars, and wrapping the frame to the canvas makes the chip row overlap the art -
+a layout change, not a patch, so it was reverted rather than shipped half-done. **This row is open with its number.**
+
