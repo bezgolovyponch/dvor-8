@@ -13,9 +13,9 @@ of the height); everything outside it is the app's chrome (HUD, tool chips, butt
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `/tmp/owner-captures/1-imported-scene.png` | 306 457 | `3595f1773e7cb4a9143001a0c6c5d98b8289f5141b1929ab5cd9170ef7197727` | the yard as first built: `0 очки · 60 осталось · 0 разбито` |
-| 2 | `/tmp/owner-captures/2-drawer-open.png` | 199 643 | `44ad498b89be233cd0d7e492c99f3c92bf9f8ab1c35a44986a9858225c2e8dcb` | the drawer a thumb opens: nine cards |
-| 3 | `/tmp/owner-captures/3-after-damage.png` | 327 679 | `3b530e44488fa43cc9f7f8e4466645fc6b8e82a1c399ca6c071914b1875a221e` | after the scripted hits: `900 очки · 58 осталось` |
+| 1 | `/tmp/owner-captures/1-imported-scene.png` | 311 412 | `4f9d86ebc23eb1dacba13d60c322fe37faf31a51862866e2464b57229f31ef44` | the yard as first built: `0 очки · 60 осталось · 0 разбито` |
+| 2 | `/tmp/owner-captures/2-drawer-open.png` | 199 241 | `e99fc3943232c37cab92d590a446f7cb9c2174dcb74e776db194c397b7fd64ce` | the drawer a thumb opens: nine cards |
+| 3 | `/tmp/owner-captures/3-after-damage.png` | 307 083 | `dac8ccaaaa905acd899106e1f74712b45e0fc1e7a7a2fdaee2b513ef330e7b00` | after the scripted hits: `900 очки · 58 осталось` |
 
 
 **Copies live in the repository** (`reference/owner/`, byte-identical to the table above) so the sheet and the pictures travel together; `/tmp/owner-captures/` is where the tool writes them.
@@ -123,3 +123,6 @@ I have looked at the three captures and marked each line above.
 **Owner:** __________________________  **Date:** ______________
 
 **Overall verdict:** ACCEPT / ACCEPT WITH NOTES / REJECT
+**These captures are from the shipped build `v0.5.1`** (the release the README links to), taken with
+`tools/owner-captures.mjs` on `photos-test/v10a.jpg` at 412x915 — the same tree the chain passed on. If the code moves,
+re-run the tool and this sheet's hashes, or the sheet describes a build that no longer exists.
