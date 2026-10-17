@@ -17,7 +17,11 @@ import { RAMPS } from './flat.js';   // STEPS is already imported above; two imp
 import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js';
 import { MODES, splashTargets, chainNext } from './modes.js';
 import { THROWABLES, ORDER as THROW_ORDER, throwWith, aimWith } from './throwables.js';
-import { viewMotion, clientToWorld, cameraFor, stepDuck, LONG, SHORT, SCAN_TIME } from './view.js';
+// I3'S PANEL WAS NEVER UNBUILT - IT THREW. `PX` is exported by view.js:17 (= 2, LONG/256) and was missing
+// from this import list, so runSelfTest threw ReferenceError at main.js:224 and rows.map(...) at :229 never ran.
+// The button was wired twice all along (:668 click, :669 load). Cross-audit finding 14: a missing name, not
+// a missing feature - and NOT a new constant (the docs' "PX = 1" was wrong; view.js defines it as 2).
+import { viewMotion, clientToWorld, cameraFor, stepDuck, LONG, SHORT, SCAN_TIME, PX } from './view.js';
 import { yardFrom, grow, extend, edgeOf, room, bandTop } from './street.js';
 import { makeWalker, stepWalker, walked, standing } from './walk.js';
 import { makeDrink, swig, fresh, stepDrink, level, drunkItem, stagger, SWIG_TIME } from './drink.js';
