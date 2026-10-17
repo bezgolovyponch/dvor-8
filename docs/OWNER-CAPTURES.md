@@ -7,18 +7,28 @@ Where a line is also measured by a named gate, the gate is cited; where it is on
 **How to use it:** open each capture, read the "look at" column, mark **accept / reject / note** for each line, then
 sign at the bottom. A single **reject** blocks that capture; a note is recorded but does not block.
 
-The captures are phone-frame screenshots (412 × 915) of the judged yard (`photos-test/v10a.jpg`), produced by
-`tools/owner-captures.mjs`. The framed picture inside them starts at roughly **x 50, y 113** and runs down to the chip row (about two thirds
+The captures are phone-frame screenshots (412 × 915) of **two yards** - the judged photograph (`photos-test/v10a.jpg`) and
+the operator's own (`photos-test/yard2-new.jpg`) - produced by `tools/owner-captures.mjs` from the SHIPPED tree. The framed picture inside them starts at roughly **x 50, y 113** and runs down to the chip row (about two thirds
 of the height); everything outside it is the app's chrome (HUD, tool chips, buttons, panels).
+
+### judged photograph (v10a)
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `/tmp/owner-captures/1-imported-scene.png` | 311 412 | `4f9d86ebc23eb1dacba13d60c322fe37faf31a51862866e2464b57229f31ef44` | the yard as first built: `0 очки · 60 осталось · 0 разбито` |
-| 2 | `/tmp/owner-captures/2-drawer-open.png` | 199 241 | `e99fc3943232c37cab92d590a446f7cb9c2174dcb74e776db194c397b7fd64ce` | the drawer a thumb opens: nine cards |
-| 3 | `/tmp/owner-captures/3-after-damage.png` | 307 083 | `dac8ccaaaa905acd899106e1f74712b45e0fc1e7a7a2fdaee2b513ef330e7b00` | after the scripted hits: `900 очки · 58 осталось` |
+| 1 | `/tmp/oc-v10a/1-imported-scene.png` | 313 200 | `d0fa6f087fab532242c1596b9b73a747aa4da79a9ef7fa9f5673182c459c2812` | the yard as first built |
+| 2 | `/tmp/oc-v10a/2-drawer-open.png` | 199 949 | `aae510182480bc7787d28201b0e3d4eb31a43bf362c45a842c892f3a6972d764` | the drawer a thumb opens |
+| 3 | `/tmp/oc-v10a/3-after-damage.png` | 328 223 | `1ea759287a1e1760872d6b34c6a5a1515ff0b44501551292b27a0e47b2e40caa` | after the scripted hits |
+
+### the operator's second yard (yard2-new)
+
+| # | file | bytes | sha256 | what it shows |
+|---|---|---|---|---|
+| 1 | `/tmp/oc-yard2/1-imported-scene.png` | 278 305 | `187c1aedfa68eaeeb4c278f64154fdd1fdb8633a5fb450102ff7b92a386b6516` | the yard as first built |
+| 2 | `/tmp/oc-yard2/2-drawer-open.png` | 175 572 | `9e70ecf2c33030401256c3a15e999d48e59cc55f47eed29860afb50e09345282` | the drawer a thumb opens |
+| 3 | `/tmp/oc-yard2/3-after-damage.png` | 304 743 | `c5aafc05cc7faa669f6125aa6b00f81411a8fa8529f760f04ebeac4703dbb84a` | after the scripted hits |
 
 
-**Copies live in the repository** (`reference/owner/`, byte-identical to the table above) so the sheet and the pictures travel together; `/tmp/owner-captures/` is where the tool writes them.
+**Copies live in the repository** - `reference/owner/` (the judged photograph) and `reference/owner-yard2/` (the operator's yard), byte-identical to the tables above - so the sheet and the pictures travel together.
 
 The files are byte-identical to the ones this sheet describes as long as their sha256 matches the table. If a capture
 is regenerated, its hash changes and this sheet must be re-signed.
@@ -123,6 +133,6 @@ I have looked at the three captures and marked each line above.
 **Owner:** __________________________  **Date:** ______________
 
 **Overall verdict:** ACCEPT / ACCEPT WITH NOTES / REJECT
-**These captures are from the shipped build `v0.5.1`** (the release the README links to), taken with
+**These captures are from the shipped build `v0.5.2`** (the release the README links to), taken with
 `tools/owner-captures.mjs` on `photos-test/v10a.jpg` at 412x915 — the same tree the chain passed on. If the code moves,
 re-run the tool and this sheet's hashes, or the sheet describes a build that no longer exists.
