@@ -145,6 +145,17 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**The plan's own gate is RED on the judged frame (2026-10-18), and it stays open.** `tools/plan-check.mjs` reads the
+plan from the dump now (photo-shot carries `window.__plan`), and on the judged photograph it reads **7 of 8**: line H -
+"the plan names both archetypes on separate instances" - fails because the plan's instances are WALL FRAGMENTS, not
+buildings: the judged frame yields one instance covering the whole frame (dark 0.854) and a handful of 'grid' pieces.
+A same-tone merge was added and measured: it separates fragments but the frame-covering dark instance remains (its box
+is the frame because its PIXELS are scattered), so H stays red and the merge was reverted. **This is a known flaw, and by
+the project's own rule (REQUIREMENTS row 30) it is an OPEN row rather than a stopped loop:** the structural gate is not
+in the chain yet - it would be red - and making it green is the instance work D19's fourth finding describes (an
+instance must be a BUILDING, not a wall component nor a bounding box). The dump now carries the plan, so the check can
+be added to the chain the moment it reads 8 of 8.
+
 **CLOSED (2026-10-18).** The root was a single condition, and the fix is a single line of input choice: `big` (the
 three-pixel-per-game-pixel image the WINDOW finder wants) is null for a photograph narrower than 3x the grid - the
 operator's yard is 720 wide against a 288 grid - and the parse was called with **no input at all**, so it returned

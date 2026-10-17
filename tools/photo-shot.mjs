@@ -110,7 +110,12 @@ await withPage(BASE, {}, async (page) => {
     const d = g.getImageData(0, 0, c.width, c.height).data;
     const out = [];
     for (let y = 0; y < c.height; y += 1) for (let x = 0; x < c.width; x += 1) { const i = (y * c.width + x) * 4; out.push(d[i], d[i + 1], d[i + 2]); }
-    return { w: c.width, h: c.height, px: out.join(','), clockPin: window.__clockPin, clock: window.__clock };`);
+    // THE SCENE PLAN TRAVELS WITH THE DUMP: it is the photo-agnostic structure (bands + facade archetypes), and
+    // carrying it lets the chain ask a STRUCTURAL question about any photograph - tools/plan-check.mjs reads it from
+    // here instead of from a separate probe.
+    const pl = window.__plan || null;
+    return { w: c.width, h: c.height, px: out.join(','), clockPin: window.__clockPin, clock: window.__clock,
+      plan: pl ? { bands: pl.bands, facades: (pl.facades || []).map((f) => ({ role: f.role, box: f.box, mean: f.mean, dark: f.dark, blue: f.blue })) } : null };`);
   // THE SETTLED FLAG TRAVELS WITH THE DUMP. It used to go only to stdout, and no consumer read it - so a frame that
   // never settled was still measured as if it had. Now it is in canvas.json and deliver-check withholds lines 1/2
   // unless it is true.

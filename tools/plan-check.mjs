@@ -35,7 +35,11 @@ add('C the accepted frame is built of BANDS, not a gradient (every row has a dom
 // 2. OUR PLAN, produced by the page (tools/plan-probe writes /tmp/plan.json).
 const pf = process.argv[2] || '/tmp/plan.json';
 if (!existsSync(pf)) { console.log('FAIL  no plan (run the page with ?clock=7.5, then write window.__plan)'); process.exit(1); }
-const plan = JSON.parse(readFileSync(pf, 'utf8'));
+let plan = JSON.parse(readFileSync(pf, 'utf8'));
+// A DUMP CARRIES ITS PLAN NOW (photo-shot writes window.__plan into canvas.json), so the same check runs on any
+// photograph's own frame: pass the dump and the plan is taken from it.
+if (plan && plan.px !== undefined) plan = plan.plan;
+if (!plan) { console.log('FAIL  the dump carries no plan'); process.exit(1); }
 add('D the plan has the bands in order, starting with sky', plan.bands[0].role === 'sky' && plan.bands.every((b, i) => i === 0 || b.y0 >= plan.bands[i - 1].y1),
   plan.bands.map((b) => `${b.role} ${b.y0}-${b.y1}`).join(' · '));
 add('E every band role is one the vocabulary defines', plan.bands.every((b) => BANDS.includes(b.role)), plan.bands.map((b) => b.role).join(','));
