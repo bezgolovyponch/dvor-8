@@ -105,3 +105,31 @@ of the frame rather than of the moment. The launch path is the environment's own
 (`/tmp/chrome-nosandbox.sh`), because Chrome's inner sandbox cannot start inside the harness — and the failure that
 once looked like "left 0, console clean" is now impossible: a missing step is WITHHELD, never a passing zero.
 
+## D19 — OPEN: THE COMPOSITION IS TUNED TO THE JUDGED PHOTOGRAPH (measured on the operator's second yard)
+
+**The measurement.** The operator supplied a second yard (`photos-test/yard2-new.jpg`, 720x1280, md5
+`65ce7c2c1c3e44064eda76ff2a631f3a`). The same chain, same algorithm, same flags:
+
+| gate | judged photo (v10a) | second yard |
+|---|---|---|
+| 6 PAGE | PASS (left 60, clean) | **PASS** (left 52, clean) |
+| 6b FAMILIES | PASS | **PASS** (28 entries, sky 32%) |
+| 6c PAIRING | PASS (IoU 0.69) | **FAIL: sky IoU 0.43 (needs 0.60), dark structures kept 47% (needs 60%)** |
+| frame | the accepted composition | a black-and-white checkerboard mess over the left building |
+
+**Two distinct faults, both real:**
+1. **The grid is a global drawing mode.** With the grid default (mull 3, ink mullions) a wall that is NOT a curtain
+   wall becomes a pattern of ink and glass - on the second yard it reads as a checkerboard. The grid must be gated by
+   the PLAN's role (only `dark-plane` instances), which needs the pane geometry moved into the per-bay loop where the
+   plan's boxes are known.
+2. **The sky over-extends.** The frame paints 60% sky where the parse says 49% (IoU 0.43): the skyline/fill takes
+   building pixels for sky on this layout.
+
+**Attempted and reverted:** making the ring form the default and leaving the glass to the late plan-box pass broke
+the judged photograph (pairing IoU 0.58 just under 0.60, the mid-rise's white 4% because the checker's cells no
+longer fire). Reverted to the green commit: the shipped 0.5.0 is the judged photograph's build, and this row is the
+work that makes it the operator's build.
+
+**Nothing is shipped until it passes on both photographs.** The operator's own premise - "the yards and the photos
+can be different, so use the proven mechanisms, not theory" - is exactly what this row is about.
+
