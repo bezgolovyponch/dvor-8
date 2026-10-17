@@ -13,9 +13,12 @@ of the height); everything outside it is the app's chrome (HUD, tool chips, butt
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `/tmp/owner-captures/1-imported-scene.png` | 322 922 | `1d6f92dcec5b199fb43fab725522e8c72bbfdedb287061c10eb6c74b45d5fbd3` | the yard as first built: `0 очки · 60 осталось · 0 разбито` |
-| 2 | `/tmp/owner-captures/2-drawer-open.png` | 217 351 | `c3afde9439e5ddaf53b13e6fac0080c215cc77b14596d167c5d6627be18bb80a` | the throwables drawer open over the same yard |
-| 3 | `/tmp/owner-captures/3-after-damage.png` | 319 399 | `8b315dabc86b641e453d5b1dc4fe635a6f4ac71e3e5caf48fce433c31cbe87e4` | the same yard after a hit: `300 очки · 59 осталось · 1 разбито` |
+| 1 | `/tmp/owner-captures/1-imported-scene.png` | 306 457 | `3595f1773e7cb4a9143001a0c6c5d98b8289f5141b1929ab5cd9170ef7197727` | the yard as first built: `0 очки · 60 осталось · 0 разбито` |
+| 2 | `/tmp/owner-captures/2-drawer-open.png` | 199 643 | `44ad498b89be233cd0d7e492c99f3c92bf9f8ab1c35a44986a9858225c2e8dcb` | the drawer a thumb opens: nine cards |
+| 3 | `/tmp/owner-captures/3-after-damage.png` | 327 679 | `3b530e44488fa43cc9f7f8e4466645fc6b8e82a1c399ca6c071914b1875a221e` | after the scripted hits: `900 очки · 58 осталось` |
+
+
+**Copies live in the repository** (`reference/owner/`, byte-identical to the table above) so the sheet and the pictures travel together; `/tmp/owner-captures/` is where the tool writes them.
 
 The files are byte-identical to the ones this sheet describes as long as their sha256 matches the table. If a capture
 is regenerated, its hash changes and this sheet must be re-signed.
