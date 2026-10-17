@@ -15,18 +15,17 @@ of the height); everything outside it is the app's chrome (HUD, tool chips, butt
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `/tmp/oc-v10a/1-imported-scene.png` | 313 200 | `d0fa6f087fab532242c1596b9b73a747aa4da79a9ef7fa9f5673182c459c2812` | the yard as first built |
-| 2 | `/tmp/oc-v10a/2-drawer-open.png` | 199 949 | `aae510182480bc7787d28201b0e3d4eb31a43bf362c45a842c892f3a6972d764` | the drawer a thumb opens |
-| 3 | `/tmp/oc-v10a/3-after-damage.png` | 328 223 | `1ea759287a1e1760872d6b34c6a5a1515ff0b44501551292b27a0e47b2e40caa` | after the scripted hits |
+| 1 | `/tmp/oc3-v10a/1-imported-scene.png` | 287 565 | `1c1b1ef9869adfb6069b72fc39d17e4b3d07c7f4f411b686217131f24432c25d` | the yard as first built |
+| 2 | `/tmp/oc3-v10a/2-drawer-open.png` | 198 160 | `b839820aae65bb2979e1238ea5f46de0c1a2885b053eff571a7b613b4cd9e21c` | the drawer a thumb opens |
+| 3 | `/tmp/oc3-v10a/3-after-damage.png` | 281 715 | `897b2022d6154e28ec632f14e8d07af37314fa4317ee9ecd5a3a55974a2e32ba` | after the scripted hits |
 
 ### the operator's second yard (yard2-new)
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `/tmp/oc-yard2/1-imported-scene.png` | 278 305 | `187c1aedfa68eaeeb4c278f64154fdd1fdb8633a5fb450102ff7b92a386b6516` | the yard as first built |
-| 2 | `/tmp/oc-yard2/2-drawer-open.png` | 175 572 | `9e70ecf2c33030401256c3a15e999d48e59cc55f47eed29860afb50e09345282` | the drawer a thumb opens |
-| 3 | `/tmp/oc-yard2/3-after-damage.png` | 304 743 | `c5aafc05cc7faa669f6125aa6b00f81411a8fa8529f760f04ebeac4703dbb84a` | after the scripted hits |
-
+| 1 | `/tmp/oc3-yard2/1-imported-scene.png` | 284 580 | `050619c456fc23e6b3d31d06f2379588e39c0de7dc3ef7588e0a4054ea34e381` | the yard as first built |
+| 2 | `/tmp/oc3-yard2/2-drawer-open.png` | 177 118 | `e2b713fb8d50d742e26fb1570d62182fba2a389d6764305f002c281477da4268` | the drawer a thumb opens |
+| 3 | `/tmp/oc3-yard2/3-after-damage.png` | 306 367 | `6fb85b91069f3a851d2ccdcf9cbf1b0ace281c2996549f6c73b56d490be1a3e8` | after the scripted hits |
 
 **Copies live in the repository** - `reference/owner/` (the judged photograph) and `reference/owner-yard2/` (the operator's yard), byte-identical to the tables above - so the sheet and the pictures travel together.
 
@@ -133,6 +132,6 @@ I have looked at the three captures and marked each line above.
 **Owner:** __________________________  **Date:** ______________
 
 **Overall verdict:** ACCEPT / ACCEPT WITH NOTES / REJECT
-**These captures are from the shipped build `v0.5.2`** (the release the README links to), taken with
+**These captures are from the shipped build `v0.5.3`** (the release the README links to), taken with
 `tools/owner-captures.mjs` on `photos-test/v10a.jpg` at 412x915 — the same tree the chain passed on. If the code moves,
 re-run the tool and this sheet's hashes, or the sheet describes a build that no longer exists.
