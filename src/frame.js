@@ -183,8 +183,26 @@ export function findWindows({ rgba, w, h, unit = 1, what = null, owner = null, g
  * have exactly four sides") and a pane with a ragged edge reads as a stain. `flat` says it is ON a wall and
  * not standing in the yard: it can be thrown at, and nobody walks into it or jumps onto it.
  */
-export function addWindows(windows, regions, owner, w) {
+export function addWindows(windows, regions, owner, w, building = null) {
+  let dropped = 0;
   for (const win of windows) {
+    // A WINDOW IS AN OPENING IN A WALL. Measured (D19): the operator's second yard got 38 "windows" - the balcony's
+    // railings and balusters are dark openings in a bright surround, so the finder is right about the contrast and
+    // wrong about the thing. The PARSE's building mask is the semantic class, so a window must be surrounded by
+    // building: at least half of its one-pixel ring. Without a mask (a report-only caller) the old behaviour stands.
+    if (building) {
+      let ringOn = 0, ringN = 0;
+      for (let ry = win.y - 1; ry <= win.y + win.h; ry += 1) {
+        for (let rx = win.x - 1; rx <= win.x + win.w; rx += 1) {
+          if (rx < 0 || ry < 0 || rx >= w) continue;
+          if (ry === win.y - 1 || ry === win.y + win.h || rx === win.x - 1 || rx === win.x + win.w) {
+            ringN += 1;
+            if (building[ry * w + rx]) ringOn += 1;
+          }
+        }
+      }
+      if (ringN && ringOn / ringN < 0.5) { dropped += 1; continue; }
+    }
     const pixels = [];
     for (let y = win.y; y < win.y + win.h; y += 1) for (let x = win.x; x < win.x + win.w; x += 1) {
       if (owner[y * w + x] === -1) pixels.push(y * w + x);
@@ -198,6 +216,7 @@ export function addWindows(windows, regions, owner, w) {
       hp: GLASS_HP, hits: 0, gone: false, seen: false,
     });
   }
+  if (dropped) console.log(`[windows] ${dropped} of ${windows.length} detected openings are not in a wall and were dropped`);
   return regions;
 }
 

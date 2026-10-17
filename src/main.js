@@ -334,7 +334,7 @@ function withWindows(seg, st, w, h, big, photo) {
   const src = photo || st.smooth;
   const where = { what: st.surfaces ? st.surfaces.what : null, owner: seg.owner, gw: w, gh: h };
   const found = big ? findWindows({ rgba: big.data, w: big.w, h: big.h, unit: big.w / w, ...where }) : findWindows({ rgba: src, w, h, ...where });
-  addWindows(found, seg.regions, seg.owner, w);
+  addWindows(found, seg.regions, seg.owner, w, (typeof window !== 'undefined' && window.__parseBuilding) || null);
   return seg;
 }
 const windowsIn = (regions) => regions.filter((r) => r.kind === WINDOW).length;

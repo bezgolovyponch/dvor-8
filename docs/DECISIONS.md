@@ -145,6 +145,19 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**Sixth finding, decisive (2026-10-18): the PARSE over-covers on the second photograph.** Every mask-based decision
+downstream inherits the parser's segmentation, and on the operator's second yard the building mask covers **the whole
+frame** (one instance `0,0-288,512`). Consequences measured this round: the plan cannot separate buildings, the glass
+pass has nowhere honest to stop, and the frame's clutter is the DETECTED WINDOWS - 38 "windows" that are the balcony's
+railings and balusters (dark openings in a bright surround: the finder is right about the contrast, wrong about the
+thing). A semantic filter was added and is sound but cannot help there: `addWindows` now requires at least half of a
+window's one-pixel ring to be BUILDING (the parse's mask), which dropped 2 false openings on the judged photograph
+(52 -> 50 windows, chain still green) and **0 on the second yard, because its whole frame is "building"**. So the second
+photograph's defect is at the MODEL boundary - an ADE20k segmentation of a paved courtyard calling the ground a building
+- and no drawing rule can repair it. The next step is a mask discipline the renderer can trust: the parse's building
+class must not include the ground/road/sky classes, and every consumer (plan, windows, glass) must read that cleaned
+mask.
+
 **Fifth finding, and the one the pairing gate needed (2026-10-18).** The glass pass was rewritten to paint the
 instance's OWN PIXELS (the fix the fourth finding named) and the plan now carries those pixels with the role. On the
 judged photograph that change surfaced a DIFFERENT fault in a gate: our glass panes are the same blue as the sky, so
