@@ -186,3 +186,21 @@ work that makes it the operator's build.
 **Nothing is shipped until it passes on both photographs.** The operator's own premise - "the yards and the photos
 can be different, so use the proven mechanisms, not theory" - is exactly what this row is about.
 
+## D20 — THE GATES STILL LET A NONSENSE FRAME PASS (audit 2026-10-18, counterexamples recorded)
+
+An independent audit ran the chain and three gates against counterexamples it built in /tmp. **Its reproducibility
+claim was refuted with evidence** (the audit ran while an uncommitted experiment was in the tree: two chain runs on the
+clean tree both exit 0 with the same frame hash `465510666`, and three direct `photo-shot` runs are byte-identical — the
+audit measured the working tree, not the commit). **Its false-pass findings stand, and they are real:**
+
+| gate | counterexample | what it shows |
+|---|---|---|
+| 6e MATCH "7 of 7" | `/tmp/audit-fake-match.json` — flat rectangles, no facade, no outline, no photograph | the seven lines are REGION SHARES; a frame with rectangles of the right colours passes without being a picture |
+| 6c PAIRING "PAIRED IoU 1.00" | `/tmp/audit-fake-pair-skylack.json` — the photo's sky with BLACK below | the top-run definition tests WHERE the sky is, not that anything was built under it (dark kept 100% passes on black) |
+| 1 P1 "the PHOTOGRAPH decides the road" | `/tmp/audit-fake-p1.json` — 8 palette stripes | the line counts palette ENTRIES on the road, not that they came from a photograph |
+
+**The class is the project's oldest one:** a measurement that names a property ("matches the example", "built on the
+photograph's layout", "the photograph decides") while testing a proxy (a share, a count). The fix is to make each of
+those three lines require the STRUCTURE it names - an outline for match, something built under the sky for pairing, a
+photograph-derived tone set for P1 - and the counterexamples are the acceptance tests for that work.
+
