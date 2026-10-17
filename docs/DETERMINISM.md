@@ -45,10 +45,27 @@ A frame that cannot satisfy this is not "noisy", it is UNDEFINED: its measuremen
   G-DET-FRAME   `node tools/detgate.mjs`
                 two unpatched captures, same photo, same settings; judged by the published pixelmatch
                 6.0.0 + pngjs 7.0.0 (threshold 0.1, 288x512); prints premises; bar 500 px.
-                readings so far: 3237 px (unpatched) -> 2063 px (news ticker off) -> target <= 500.
-  G-DET-ANALYZE (to add) run any analyzer twice on the SAME dump and require identical output bytes.
-  G-DET-SEED    (to add) build twice with the same explicit seed, require 0 px; build with a different
-                seed and require > 0 px (a seed that changes nothing is not a seed).
+                readings so far: 3237 px (unpatched) -> 2063 px (news ticker off) -> 0 px PASS (Q9.2).
+  G-DET-ANALYZE `node tools/detgate-analyze.mjs [canvas.json]`                             (EXISTS, PASSES)
+                match-check and style-check are each run TWICE by node on the SAME stored canvas dump (never on
+                a copy); their stdout is written to two temp files per tool and compared byte for byte, and the
+                dump's sha256 is printed before and after, so "same input" is evidence. Neither analyzer is
+                touched. Prints premises; WITHHOLDS the verdict when the dump is missing or an analyzer prints
+                nothing (two empty outputs are not "identical bytes").
+                MEASURED 2026-10-17, dump /tmp/det-a/canvas.json (288x512, sha256 a16d52422a20c6d0):
+                  identical bytes: 819/819 (match-check, exit 1/1) · 417/417 (style-check, exit 0/0)
+                  dump sha256 unchanged by the four runs · exit 0.
+  G-DET-SEED    (STILL TO ADD - attempted 2026-10-17, REFUTED by measurement, affordance reverted)
+                build twice with the same explicit seed, require 0 px; build with a different seed and require
+                > 0 px (a seed that changes nothing is not a seed). The built frame does NOT consume the seed:
+                with `?seed=8` twice it measures 0 px, and with `?seed=12345` it STILL measures 0 px (the seeds
+                read back from the three dumps were 8@8 · 8@8 · 12345@12345), and threading the same seed into
+                the module-level product stream as a second entry changed nothing either. Cause, read then
+                confirmed by both measurements: `world.seed` is consumed only after a strike - src/world.js:431
+                (debris) and src/main.js:927 (glass cracks/shards) - so a different seed changes post-hit
+                damage, never the frame. The bar was NOT weakened to diff-seed == 0; the gate and the `?seed=`
+                affordance were reverted exactly (RUNLOG T+55). Next: make the build consume the seed at its
+                one entry, then re-add the gate with this same contract.
 
 ## 5. THE DECOMPOSITION LADDER (what to do when a level refuses)
 
