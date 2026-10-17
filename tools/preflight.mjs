@@ -46,8 +46,20 @@ if (gone.length) {
   console.log(`PREFLIGHT FAILED: the preamble lost ${gone.length} of its load-bearing statements: ${gone.join(' · ')}`);
   process.exit(1);
 }
-const criteria = (() => { try { return (readFileSync('docs/CRITERIA.md', 'utf8').match(/^\|\s*[A-Z]\d+\s*\|/gm) || []).length; } catch { return 19; } })();
-const composition = (() => { try { return (readFileSync('docs/COMPOSITION.md', 'utf8').match(/^\|\s*\d+\s*\|/gm) || []).length; } catch { return 10; } })();
+// A MISSING FILE IS NOT A COUNT. Both lines used to catch ENOENT and return the last known number (19 criteria,
+// 10 composition elements), so a deleted document printed as a healthy row and the chain's step 2 crashed on the
+// same file an instant later. Absent now prints as ABSENT and fails the preflight, naming the file: the chain's
+// own premise cannot be invented. (Measured 2026-10-17: docs/COMPOSITION.md was archived to docs/archive/ by
+// commit 3e97356, preflight still counted 10, and tools/composition-check.mjs threw ENOENT at its first line.)
+const countRows = (file, rx) => {
+  try { const n = (readFileSync(file, 'utf8').match(rx) || []).length; return n > 0 ? { n } : { n: 0, why: `${file} has no rows` }; }
+  catch { return { n: 0, why: `${file} is missing` }; }
+};
+const criteria = countRows('docs/CRITERIA.md', /^\|\s*[A-Z]\d+\s*\|/gm);
+const composition = countRows('docs/COMPOSITION.md', /^\|\s*\d+\s*\|/gm);
+for (const [label, c] of [['criteria', criteria], ['composition', composition]]) {
+  if (c.why) { console.log(`PREFLIGHT FAILED: ${label} cannot be read — ${c.why}. The chain's step cannot run on a document that is not there.`); process.exit(1); }
+}
 console.log(`PREFLIGHT OK — ${REQUIRED.length} parts present, the preamble carries all ${must.length} load-bearing statements.`);
-console.log(`  criteria: ${criteria} rows · composition: ${composition} elements · the chain: preflight -> criteria -> composition -> suite -> delivery -> reference`);
+console.log(`  criteria: ${criteria.n} rows · composition: ${composition.n} elements · the chain: preflight -> criteria -> composition -> suite -> delivery -> reference`);
 console.log('  read: docs/PREAMBLE.md (task, definition of done, critical findings, chain, protocol)');

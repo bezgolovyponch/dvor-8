@@ -678,3 +678,24 @@ def shannon_entropy(image, base=2):
 **What I could not fetch/verify:** commit SHAs for `minetest` and `scipy`/`sklearn` were obtained with `git ls-remote` (API rate limit hit at 60/60), so they are HEAD-at-fetch-time, not tags; `libimagequant`'s header at tag 4.4.1 declares `LIQ_VERSION_STRING "4.0.3"` (the Rust port keeps the C ABI version string — noted, not explained). No facade-pitch repository exists that I could find, and I say so in §3 rather than inventing one.
 
 **Nothing in `/Users/m/DVOR-8` was modified by the research itself** — the three files in this change set (`docs/CONSTRUCTOR.md`, `docs/CONSTRUCTOR-LEDGER.md`, `data/constructor.json`) are the only writes, and they were authorised after the research.
+
+## DRAINED — the cross-audit's BROKEN list, re-verified 2026-10-17 (round 1)
+
+The text above stays as written (retractions are append-only). Each row below was re-checked against the tree this
+turn; items 7, 9-12 were re-verified from the primary sources by a separate read-only pass (PyPI 1.0.0 sdist, the
+pinned GitHub commits), with the value quoted.
+
+| # | claim | state now | evidence |
+|---|---|---|---|
+| 1 | RAMPS at flat.js:96-110 | TRUE as the audit states: RAMPS is flat.js:66, RESERVED is :96-110 | grep -n "export const RAMPS\|RESERVED" src/flat.js |
+| 2 | OutlineRule never consulted | TRUE: render.js:4 imports mayBeOutlined, render.js:540 calls it | grep -n mayBeOutlined src/render.js |
+| 3 | sky.__edge at 1270, block 1255-1272 | TRUE at 1272; the block is 1258-1273 | src/vector.js:1272, :1258-1273 |
+| 4 | (`merge`, world.js:217) | TRUE: world.js:217 is `const k = cy * c.cols + cx;` | sed -n 217p src/world.js |
+| 5 | external.sh:7 REF=...art.png | FIXED in 3879946; line 7 is -canvas.png | gates/external.sh:7 |
+| 6 | flat figure at 13-14 | TRUE value: computed :17, printed :18 | gates/external.sh:17-18 |
+| 7 | outline_expansion(..., 9, 4) leaves erode/dilate at defaults | VERIFIED: pixelize.py:48-49 passes erode=thickness, dilate=thickness, k=patch_size, 9, 4; outline.py:42 defaults 2/2/16 are never used (CLI thickness 1, patch_size 6) | pixeloe-1.0.0 sdist, src/pixeloe/legacy/pixelize.py:48-49 |
+| 8 | detgate-parse prints a pipe line | TRUE: it prints PREMISES / LOAD 1 / LOAD 2 / CROSS-LOAD | tools/detgate-parse.mjs:84-87 |
+| 9 | sha256 8c1eff... | VERIFIED: that is PyPI's blake2b-256 path; sha256 = 93ff10ebd4e83024d8d11b25df5e3c673a7cbb60982c3fab0bd135c9bfae3872 | pypi.org/pypi/pixeloe/1.0.0/json digests.sha256 |
+| 10 | 2^H = 7,442 | VERIFIED 7,432: 2^12.859 = 7,429.25; the unrounded H = 12.859448 gives 2^H = 7,431.55 | reference/v10a-art.png histogram, 56,573 distinct |
+| 11 | snippet "verbatim 57-98" | VERIFIED: it omits :90-91 (`else: skylinePoints = np.array([0]*w)`) with no elision marker | SkyRegionDetector.py@43b9526:88-91 |
+| 12 | snippet verbatim, "one neighbour" | VERIFIED: table 491-503 is 11 entries one per line; :451-456 (leveled merge) is elided | falling.lua@db44f2f:450-456, 491-503 |

@@ -497,15 +497,33 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   };
   // ONE PIXEL OF THE THING'S OWN OUTLINE, WITH ONE PIXEL OF DARK UNDER IT, so it reads on anything it is
   // drawn over. A plane gets nothing: it is not a thing you point at, it is what things stand on.
+  // THE OUTLINE GATE'S PROBE (?outline=1). Every pixel this pass WRITES is recorded with the colour it was given,
+  // so the gate can check three things it cannot see from the finished frame: that the ink is a 1-px line and not a
+  // 2x2 mass, that no written pixel landed on sky (the outline is on the OBJECT side), and that what was written is
+  // still the exact colour afterwards (a later pass must not repaint the outline). Diagnostics only, never read by
+  // the build; armed by the page, not by the game.
+  const outlineProbe = typeof window !== 'undefined' && window.__outlineProbe
+    ? (window.__outline = { state: [], ink: [], colours: [] }) : null;
   const inkOutline = (r, colour) => {
     if (!r || planar(r)) return;
-    for (const p of silhouette(r)) {
+    const list = silhouette(r);
+    // TWO PASSES, NOT ONE. Drawn interleaved (ink, state, ink, state...), the ink under-pixel of an upper silhouette
+    // pixel lands ON the state pixel of the one below it, so a vertical edge came out half state colour and half
+    // ink - "never mixed" broken by the draw ORDER, not by the rule. Measured by tools/outline-check.mjs: purity
+    // 84.6% before, and the 37 missed pixels were exactly those overwritten by a later ink. Ink first, state last.
+    ctx.fillStyle = '#0b0018';
+    for (const p of list) {
       const ex = p % world.w, ey = (p / world.w) | 0;
       if (ex < cx - 1 || ex > cx + w) continue;
-      ctx.fillStyle = '#0b0018';
       ctx.fillRect(ex, ey + 1, 1, 1);                           // one pixel of dark under it, so it reads on anything
-      ctx.fillStyle = colour;
+      if (outlineProbe && ey + 1 < world.h) outlineProbe.ink.push(p + world.w);
+    }
+    ctx.fillStyle = colour;
+    for (const p of list) {
+      const ex = p % world.w, ey = (p / world.w) | 0;
+      if (ex < cx - 1 || ex > cx + w) continue;
       ctx.fillRect(ex, ey, 1, 1);
+      if (outlineProbe) { outlineProbe.state.push(p); outlineProbe.colours.push(colour); }
     }
   };
   // how much it can still take, as pips under it

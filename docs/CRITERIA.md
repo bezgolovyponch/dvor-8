@@ -56,4 +56,4 @@ panels and messages; each row says how it is checked. `tools/baseline-check.mjs`
 
 | id | criterion | checked by |
 |---|---|---|
-| R1 | the result must be comparable to the creator's own accepted frame | `tools/reference-check.mjs`: five measures, mine against the reference, refuses a verdict when they differ beyond tolerance |
+| R1 | the result must be comparable to the creator's own accepted frame | `tools/accepted-frame.py` (the owner's referee, PART A.3): the accepted frame is EXTRACTED from `reference/v10a-accepted-frame-screenshot.png` (lossy WebP, HUD masked), and both frames are measured with the same family classifier INSIDE the mask; comparable when every family share is within 0.05. The method is validated by reproducing the owner's own sky cross-check to 0.01. `tools/reference-check.mjs` against the DERIVED canvas stays as a printed diagnostic only |

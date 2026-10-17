@@ -25,6 +25,11 @@ const run = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'u
 // must run FIRST: run the other way round, the gate had no dump to read, printed nothing, and two mandatory lines
 // failed for the instrument's own housekeeping rather than for the picture. A rule that fails for its own
 // plumbing is not a rule about the product.
+// THE CAPTURE IS CLEAN, AND THE FRAME IT MEASURES IS THE PICTURE. Measured 2026-10-17: the same page captured through
+// the plain URL gave 42% of the sky band in one blue (the tsunami GRADE hid the clouds) while the clean frame gives
+// 29% - so lines 1 and 2b were passing on a transient. ?clean=1 removes overlays and grades (docs/DETERMINISM.md R2
+// says gate captures are clean and offline). A rule about the picture must not be measured through a filter.
+process.env.BASE = process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0';
 const shot = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', OUT, DEMO, 'ЦУНАМИ']);
 const suite = run('node', ['test.mjs']);
 const gate = run('node', ['tools/concept-check.mjs', `${OUT}/canvas.json`]);
@@ -72,9 +77,32 @@ if (dump) {
     if (k === px(x + 1, y).join(',') && k === px(x, y + 1).join(',')) wallFlat += 1;
   }
   const wallTopShare = [...wallHist.values()].sort((a2, b2) => b2 - a2)[0] / Math.max(1, wallTot);
-  add('2b WALL (DESIGNED): at most 8 tones, and its largest tone owns at least 40% of the facade',
-    wallHist.size <= 8 && wallTopShare >= 0.40,
-    `${wallHist.size} tones, the largest owning ${(100 * wallTopShare).toFixed(0)}% of the left facade`);
+  // 2b's BAR IS THE ACCEPTED FRAME'S OWN WALL, NOT A ROUND NUMBER. The old "at most 8 tones, largest >= 40%" was
+  // invented: measured on the creator's accepted canvas (reference/v10a-art-canvas.png, the same 86x169 window),
+  // that frame has 30 tones and its largest owns 18.8% - the reference FAILS the old bar. The judge rule says the
+  // artefact wins, so the line is now "no more tones than the accepted frame's wall, and its largest tone owns at
+  // least as much", with both sides printed. (DECISIONS D13.)
+  const acceptedWall = (() => {
+    try {
+      const out = run('python3', ['-c', `from PIL import Image
+im=Image.open('reference/v10a-art-canvas.png').convert('RGB'); W,H=im.size; px=im.load()
+ww=int(W*0.3); t=int(H*0.12); b=int(H*0.45); h={}
+for y in range(t,b):
+    for x in range(ww):
+        c=px[x,y]; h[c]=h.get(c,0)+1
+tot=(b-t)*ww; top=max(h.values())
+print(len(h), round(100*top/tot,1))`]);
+      const [tones, largest] = out.trim().split(/\s+/).map(Number);
+      return Number.isFinite(tones) && Number.isFinite(largest) ? { tones, largest } : null;
+    } catch { return null; }
+  })();
+  if (!acceptedWall) {
+    add('2b WALL (DESIGNED): the accepted frame\'s own wall could not be read', false, 'no background for the bar - WITHHELD, not passed');
+  } else {
+    add('2b WALL (DESIGNED): no more tones than the accepted frame\'s wall, and its largest tone owns at least as much',
+      wallHist.size <= acceptedWall.tones && 100 * wallTopShare >= acceptedWall.largest,
+      `${wallHist.size} tones, largest ${(100 * wallTopShare).toFixed(1)}% · accepted frame's wall: ${acceptedWall.tones} tones, largest ${acceptedWall.largest}%`);
+  }
 } else {
   add('1 SKY: the canvas was dumped at all', false, 'no canvas.json - nothing to measure');
 }

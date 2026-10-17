@@ -860,3 +860,22 @@ Also retracted / corrected elsewhere and not to be re-derived:
 
 *End of audit. 6 sections. No number in this report was produced by a model; each names its command, and the numbers
 carried from the evidence base are marked RECORDED with the RUNLOG/Q9.2 entry that produced them.*
+
+## DRAINED — the cross-audit's BROKEN list, re-verified 2026-10-17 (round 1)
+
+The text above stays as written (retractions are append-only). Re-checked against the tree this turn.
+
+| # | claim | state now | evidence |
+|---|---|---|---|
+| 13 | "the panel draws 0 rows on load" | FALSE then (onLoad.count was 3), FALSE now: 7 rows drawn at load (6 OK + 1 dot), 7 after the click | selftest.json, /tmp/sprint0b and /tmp/sprint1 (onLoad 7, afterClick 7, error null) |
+| 14 | "the button is not wired" / fix = import PX | WIRED TWICE; the crash was the undeclared PX. THE FIX IS NOW THE PREDICATE, not the import: the row asserts `width === world.w && height === world.h` (canvas 288x512 = world 288x512); the PX import was withdrawn by the operator 2026-10-18 because PX is a view scale | src/main.js:228-233 (today), RUNLOG T+57 |
+| 15 | G-DET-ANALYZE still to add | FIXED: it exists and passes - 823/823 and 417/417 identical bytes, dump sha a16d52422a20c6d0 unchanged | node tools/detgate-analyze.mjs, this turn |
+| 16 | palette check bare command / default ref | TRUE: bare = usage, exit 2; default reference is v10a-target-hi.webp | tools/reference-palette-check.mjs:14, run this turn |
+| 17 | pairing bare command | TRUE: usage, exit 2; needs <photo.jpg> <canvas.json> | run this turn |
+| 18 | dark/blue/white predicates in gates/external.sh | TRUE: none exist there | grep -n "dark\|blue\|white" gates/external.sh -> empty |
+| 19 | HUD «осталось» at main.js:246 | SHIFTED: it is main.js:273 today; :246 is a comment (the file grew with the self-test and error-listener work) | grep -n "left(world)" src/main.js -> 273 |
+| 20 | probe prints "L=210 -> BRIGHT"; no chroma_source | FIXED: the published rule picks 18 on 24x18+1x210 and 210 on the mirror; chroma is the patch median (a colour composed from a and b medians, not copied) | tools/piece-downscale-check.mjs, 8 assertions, this turn |
+| 21 | "150 classes of 150 labels" | TRUE: detgate-parse prints the PRESENT class count and names; the vendored config is 19-class Cityscapes | tools/detgate-parse.mjs:84-87 |
+| 22 | concept "7 OK 1 FAIL (largest 37%)" not reproducible | RESOLVED: it depends on the capture. PINNED captures give 7 OK 1 FAIL for BOTH rules (largest below sky 38% tuned / 37% published); UNPINNED captures read 5-6 OK. Use the pinned dump for this line | /tmp/det-a vs /tmp/pin-new, concept-check, this turn |
+| 23 | spurious step dependencies | ACCEPTED as doc judgement; not re-derived this turn | - |
+| 24 | Step 2 unachievable: different seed = 0 px | TRUE, re-confirmed at 079f119 and unchanged (the build reads no seed) | RUNLOG T+55 |

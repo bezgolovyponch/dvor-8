@@ -1,0 +1,20 @@
+# THE COMPOSITION MAP — what is what, from the accepted frame to the class that draws it
+
+Read the accepted frame (`docs/V10A.md`) element by element. Each element is bound to the creator's own requirement,
+to the module that owns its decision, to the baseline row that records it, and to the visual result expected. The
+binding is verified by `tools/composition-check.mjs`: a module that does not exist, a requirement quote that is not in
+that module's header, or a predicate that is not in the criteria registry is a **broken link**, and the tool reports
+it and exits non-zero.
+
+| # | WHAT YOU SEE in the accepted frame | REQUIREMENT (creator, verbatim) | CLASS / MODULE | BASELINE | EXPECTED VISUAL RESULT | PREDICATE |
+|---|---|---|---|---|---|---|
+| 1 | the road with its bike symbol, crossings and kerbs, in the photograph's own places | *"The road, sidewalk, hedge, trees, people and all 6 cars are the photo, pixelated: averaged into 288×512 and snapped to one palette, with nothing redrawn."* | `src/criteria/RoadRule.js` | REQUIREMENTS row 50 (road faithful) | the frame lines up with the photograph exactly; a marking sits where the photograph has it | P2 |
+| 2 | a flat blue sky with designed white clouds | *"The sky is the v6 design: one blue with designed clouds."* | `src/criteria/SkyRule.js` | delivery line 1 | one blue plane, one tone owning ≥ 35% of its band, designed clouds, no gradient | S1 |
+| 3 | the dark tower: a plane with regular rows of windows, floor after floor | *"The buildings are the v6 approach: rebuilt on the photo's column and floor grid, so every window and every floor can break."* | `src/criteria/FacadeRule.js` | delivery line 2b | a drawn plane in 2–3 tones carrying a regular grid of window sprites — never the photograph's grain | B1, B2 |
+| 4 | the checkered tower: light and dark tiles, a defined silhouette | *"v6 rebuilt on the photo grid liked · v7 invented rejected."* | `src/criteria/FacadeRule.js` | REQUIREMENTS row 58 (cited as 60 until 2026-10-17; the quote is row 58) | a pattern, not a sample; the silhouette clear against the sky | B2 |
+| 5 | windows that are darker than the wall, some lighter, none outlined | *"Every glass cell is a window object."* · *"windows are destroyable but you dont need to outline them"* | `src/criteria/OutlineRule.js` | MECHANICS table | frame · glass · sill as one sprite; destroyable; never outlined | M3 |
+| 6 | one-pixel dark outlines on the buildings against the sky and on each car | *"One outline rule (the darkest palette colour, 1 px) on every target, never mixed."* | `src/criteria/OutlineRule.js` | MECHANICS table | buildings and cars only; nothing else in the frame carries an outline | O1, M1 |
+| 7 | cars keeping their own proportions, bonnet and lights | *"v9 photo pixels plus one shared outline"* (the cartoon template **rejected**) | `src/criteria/OutlineRule.js` | REQUIREMENTS row 58 | the thing's own pixels, cut out of the reduced picture, with one silhouette outline | P3 |
+| 8 | the HUD: score, how many cars are left, the danger meter, the bar with what is in hand and the throw button | *"Baseline: the 10 checks … run automatically every time the page loads, and the results are shown on the page."* | `index.html` + `style.css` + `src/main.js` | delivery line 4 | score · cars left · danger meter · the bar; and the checks visible in the picture with a re-run button | I3 |
+| 9 | a hit that breaks glass, cracks, darkens, empties the frame, drops the panels, and everything above a missing piece falls | *"Throw at a window: the glass breaks. Hit the same spot again: it cracks, then darkens, then the panels fall off and leave the frame, then the frame falls. Anything above a missing piece falls after it, and the rubble stays."* | `src/criteria/DestructionRule.js` | MECHANICS table | the ladder per material, rubble kept, a chunk with no support falls | I1, B4 |
+| 10 | the whole frame comparable to the accepted one | the accepted frame itself | `tools/reference-check.mjs` | delivery line 11 (to be wired) | five measures within tolerance, art against art | R1 |

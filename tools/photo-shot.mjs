@@ -9,10 +9,16 @@
 //
 // Usage: BASE=... node tools/photo-shot.mjs <outdir> photos-test/5.jpg [disaster]
 import { withPage } from './browser.mjs';
+import { mkdirSync } from 'node:fs';
 
 const out = process.argv[2] || '.';
 const photo = process.argv[3] || 'photos-test/5.jpg';
 const fate = process.argv[4] || 'ЦУНАМИ';
+// THE OUTPUT DIRECTORY IS THE TOOL'S OWN PREMISE. Without this line a fresh PAGE_OUT made page.shot() throw ENOENT,
+// the harness printed no step line, chain.mjs parsed zero steps and reported `left 0, console clean` for a page that
+// was never driven - a missing measurement scored as a pass. G-INFRA: create it here, once, and let a real failure
+// be the only thing that can produce a missing artefact.
+mkdirSync(out, { recursive: true });
 const BASE = process.env.BASE || 'http://127.0.0.1:4312/game/';
 const results = [];
 
@@ -80,6 +86,24 @@ await withPage(BASE, {}, async (page) => {
     if (probe && probe.blue >= 0.5) break;
     await new Promise((r) => setTimeout(r, 700));
   }
+  // A CAPTURE MUST BE A FINISHED FRAME. The scan wipes the picture top-down, so the canvas keeps changing after the
+  // sky is blue; a dump taken then measures the wipe. MEASURED on the same page and photograph: the settled frame has
+  // 7 tones in the left facade window, a dump taken mid-scan has 38 - and delivery line 2b (at most 8 tones) failed
+  // on the transient. The dump now waits until two reads 350 ms apart have the same hash, and RECORDS whether that
+  // happened: a frame that never settles is reported as unverified instead of measured.
+  let settled = false, lastHash = null;
+  for (let tries = 0; tries < 20 && !settled; tries += 1) {
+    const h = await page.run(`
+      const c = document.getElementById('yard') || document.getElementById('view');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      let hsh = 2166136261;
+      for (let i = 0; i < d.length; i += 5) { hsh ^= d[i]; hsh = Math.imul(hsh, 16777619) >>> 0; }
+      return hsh;`);
+    if (lastHash !== null && h === lastHash) { settled = true; break; }
+    lastHash = h;
+    await new Promise((r) => setTimeout(r, 350));
+  }
+  console.log(JSON.stringify({ step: 'settled', settled }));
   const dump = await page.run(`
     const c = document.getElementById('yard') || document.getElementById('view');
     const g = c.getContext('2d');

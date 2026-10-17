@@ -9,6 +9,7 @@
 
 import { MAX_YARDS, scorchMap, colourCount } from './palette.js';
 import { makeWorld } from './world.js';
+import { mayBeDestroyed } from './criteria/DestructionRule.js';   // the clear condition's predicate (D9)
 
 export const STRIP = 32;        // width of one borrowed strip, picture pixels — doubled with the picture
                                  // (view.js PX): a strip is a share of the frame, not a fixed number of dots
@@ -162,7 +163,9 @@ export function extend(world, yard) {
   }
   Object.assign(world, { idx, owner, rubble, paint, w: W });
   world.yards.push({ x: x0, w: yard.w, base, made: yard.made, palette: yard.palette });
-  if (part.regions.length) world.done = false;
+  // THE CLEAR CONDITION IS RECOMPUTED, NEVER CLEARED. `done = false` on any arriving region let a stretch of two
+  // chairs resurrect a finished yard (measured); D9 says the clear counts destroyable things only.
+  if (part.regions.length) world.done = !world.regions.some((r) => !r.gone && mayBeDestroyed(r));
   return true;
 }
 

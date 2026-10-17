@@ -2,6 +2,7 @@
 // grid, so every window and every floor can break." And from the accepted frame (docs/V10A.md): the towers are a
 // PLANE with a REGULAR GRID of window rows, a checkerboard, a defined silhouette and a 1-px outline against the
 // sky - never a sample of the photograph.
+// From the creator's own v9 panel (docs/CRITERIA.md B2): "v6 rebuilt on the photo grid liked · v7 invented rejected." - the checkered tower is the pattern, not a picture.
 //
 // So this module owns one thing: HOW A BUILDING IS DRAWN. A facade is a plane in two or three tones of its own
 // family, carrying a regular grid of window sprites on the photograph's own column and floor pitch, bounded by a

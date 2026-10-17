@@ -401,7 +401,22 @@ export function chip(world, x, y, damage = 1, rnd = Math.random) {
       const p = yi * world.w + xi;
       if (world.env.label[p] !== s.r || world.owner[p] >= 0) continue;
       if (world.idx[p] !== OUT) debris.push({ x: xi, y: yi, c: world.idx[p], floor: yi + 4 });
-      world.idx[p] = world.scorch[world.idx[p]];
+      // A CHIP MUST BE VISIBLE. `scorch` drives a tone to 34% of its brightness and then snaps to the NEAREST
+      // palette entry, which for a dark surface tone is the tone itself - measured: stone hit, points scored, the
+      // pixel unchanged. The mark is now one tone down its own ramp (`dent`, the same map damage uses), and only
+      // where the ramp has nowhere darker does it fall back to the scorch.
+      // THREE STEPS TO A VISIBLE MARK, because a surface can be drawn as the ink line and the ink is not a
+      // material: (1) one tone down its own ramp; (2) the scorch, for a tone with nowhere darker; (3) the surface's
+      // own family, for a pixel drawn as the outline entry - measured on the fixture's stone: idx 48 = the ink, which
+      // dent and scorch both map to itself, so the disc took no mark at all.
+      const tone = world.idx[p];
+      let mark = world.dent[tone];
+      if (mark === tone) mark = world.scorch[tone];
+      if (mark === tone) {
+        const ramp = world.env.rampOf ? world.env.rampOf[s.r] : -1;
+        mark = ramp >= 0 ? Math.min(OUT - 1, ramp * STEPS + 1) : Math.min(OUT - 1, Math.max(0, tone - 1));
+      }
+      world.idx[p] = mark;
     }
     return { kind: 'chip', broke: false, points: ENV_HIT_POINTS, debris, name: s.name, hits: world.envHits[s.r], tough: s.tough };
   }
@@ -460,7 +475,16 @@ export function strike(world, region, x, y, { damage = 1, combo = 2.5 } = {}) {
     region.gone = true;
     world.broken += 1;
     points = 100 * region.hp * world.combo;
-    if (world.broken === world.regions.length) world.done = true;
+    // THE CLEAR CONDITION COUNTS ONLY DECLARED-DESTROYABLE THINGS (docs/DECISIONS.md D9, signed 2026-10-18).
+    // Counting every region made a bench or a bicycle block the clear forever, because the rules refuse to destroy
+    // them - the player could break everything the game allows and still never finish. Buildings, cars and windows
+    // count; furniture stays interactable and never blocks; people are never destroyable.
+    // DONE MEANS NOTHING DESTROYABLE IS STANDING - not "as many breaks as regions". `broken` also counts a chipped
+    // surface, so the old test could finish a yard with a car still intact (measured by the audit: one stone chip +
+    // one car wreck -> done=true, left=1). The count is of STANDING destroyables, the same predicate `left()` uses.
+    let standing = 0;
+    for (const rr of world.regions) if (!rr.gone && mayBeDestroyed(rr)) standing += 1;
+    if (standing === 0) world.done = true;
   } else {
     kind = 'crack';
     // A dent where it landed — one tone down, not to black — and three jagged cracks out of it, drawn into
@@ -515,4 +539,6 @@ export function tick(world, dt) {
   if (world.comboLeft === 0) world.combo = 0;
 }
 
-export const left = (world) => world.regions.length - world.broken;
+// «осталось» IS THE CLEAR CONDITION'S COUNTER, so it counts the same things the clear condition counts: destroyable
+// regions still standing. A bench or a bicycle is not "left to break" - the rules do not let you break it.
+export const left = (world) => world.regions.reduce((n, r) => n + (!r.gone && mayBeDestroyed(r) ? 1 : 0), 0);

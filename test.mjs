@@ -344,6 +344,13 @@ check('a combo runs out on its own; nothing is taken away when it does', w.combo
 w = yard();
 for (const r of w.regions) { if (!mayBeDestroyed(r)) continue; wreckLoop(w, r, 'wreck-everything'); if (!r.gone) break; }
 check('wrecking everything ends the yard', w.done && left(w) === 0 && w.score > 0, `score ${w.score}`);
+check('a yard with one destroyable thing still standing is not finished', (() => {
+  const w2 = yard();
+  const targets = w2.regions.filter(mayBeDestroyed);
+  if (targets.length < 2) return false;            // with one destroyable the slice wrecks nothing: the check would be vacuous
+  for (const r of targets.slice(0, -1)) wreckLoop(w2, r, 'partial');
+  return !w2.done && left(w2) === 1;
+})(), 'done is not "as many breaks as regions"');
 check('«ещё раз» is a clean yard: same things, nothing broken, no score', (() => { const n = yard(); return n.regions.length === w.regions.length && n.regions.every((r) => !r.gone && r.hits === 0) && n.score === 0; })());
 
 // ---- modes -------------------------------------------------------------------------------------------
@@ -605,10 +612,30 @@ check('a made yard continues the edge it joins, over many seeds rather than one'
 })());
 check('the street grows by a yard and what was there stays: score, dents, things', extend(w, joined) && w.w === W * 2 && w.yards.length === 2 && w.score === scoreBefore && w.idx.slice(0, W).join() === firstRow
   && w.regions[c0.id].hits === 1 && w.regions.every((r) => r.pixels.every((p) => w.owner[p] === r.id)), `${w.regions.length} things on ${w.w} px`);
-check('a thing on the new stretch can be picked and wrecked like any other', (() => { const r = [...w.regions].reverse().find((q) => q.x >= W && mayBeDestroyed(q)); if (!r) return false; if (pick(w, r.cx, r.cy) === null && pick(w, r.pixels[0] % w.w, (r.pixels[0] / w.w) | 0) !== r) return false; const res2 = wreckLoop(w, r, 'new-stretch'); return res2 !== null && res2.kind === 'break' && r.x >= W; })(),
-  `${w.regions.filter((q) => q.x >= W).map((q) => `${q.kind}${mayBeDestroyed(q) ? '' : '(not a target)'}`).join(',')} on the new stretch`);
+// A STRETCH'S THINGS ARE A RANDOM SAMPLE of the source yard's things, and this sample (seed 5) came out pure
+// furniture - bicycles and chairs, none of them destroyable - so the check could not exercise a wreck at all. The
+// fixture now samples the source's DESTROYABLE things (sign-off A: fixtures may be filtered by mayBeDestroyed;
+// assertions untouched). The street itself may still carry benches: that is the product, and D9 says they never
+// block the clear.
+check('a thing on the new stretch can be picked and wrecked like any other', (() => {
+  const w2 = makeWorld({ w: W, h: H, photo: DEMO.rgba, idx: st.idx, palette: st.palette, ...toRegions(DEMO.dets, DEMO.rgba, W, H), seed: 8 });
+  const src2 = { ...HOME, regions: HOME.regions.filter((q) => mayBeDestroyed(q)) };
+  if (!src2.regions.length) return false;
+  if (!extend(w2, grow(src2, mulberry32(5), edgeOf(w2, 0)))) return false;
+  const r = [...w2.regions].reverse().find((q) => q.x >= W && mayBeDestroyed(q));
+  if (!r) return false;
+  if (pick(w2, r.cx, r.cy) !== r) return false;   // the pick must BE the thing, not merely non-null
+  const res2 = wreckLoop(w2, r, 'new-stretch');
+  return res2 !== null && res2.kind === 'break' && r.x >= W;
+})(),
+  `a stretch of ${HOME.regions.filter((q) => mayBeDestroyed(q)).length} destroyable sources`);
 for (const r of w.regions) { if (!mayBeDestroyed(r)) continue; wreckLoop(w, r, 'more-street'); if (!r.gone) break; }
-check('more street means the yard is not finished', w.done && extend(w, grow(HOME, mulberry32(9), edgeOf(w, 0))) && !w.done);
+// THE STRETCH MUST ADD SOMETHING BREAKABLE, or "not finished" is vacuous: seed 9 of the whole source gives two
+// chairs (measured by the audit), and the old check passed only because `extend` cleared `done` on any region.
+check('more street means the yard is not finished', w.done && (() => {
+  const src = { ...HOME, regions: HOME.regions.filter((q) => mayBeDestroyed(q)) };
+  return extend(w, grow(src, mulberry32(9), edgeOf(w, 0))) && left(w) > 0;
+})() && !w.done);
 const other = styliseFlat(DEMO.rgba.map((v, i) => (i % 4 === 0 ? 255 - v : v)), W, H);
 const second = yardFrom({ w: W, h: H, idx: other.idx, palette: other.palette, ...toRegions(DEMO.dets, DEMO.rgba, W, H) });
 const before2 = w.palette.length;
@@ -930,7 +957,7 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
   const findSurface = (want) => {
     for (let y = 2; y < H - 2; y += 1) for (let x = 2; x < W - 2; x += 1) {
       const s = surfaceAt(we, x, y);
-      if (s && want.includes(s.name)) return { x, y, s };
+      if (s && want.includes(s.name) && we.owner[y * W + x] < 0) return { x, y, s };   // the YARD's own surface, not a thing's pixel
     }
     return null;
   };
@@ -941,11 +968,26 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
     `${soft?.s.name} ${soft?.s.tough}, ${hard?.s.name} ${hard?.s.tough}`);
 
   const cx = Math.round(hard.x), cy = Math.round(hard.y);
-  const before = we.idx[(cy * W) + cx];
+  // BOTH THE IMPACT PIXEL AND THE DISC. The impact pixel may historically have been drawn as the ink tone, which
+  // dent/scorch leave alone; the chip now guarantees a mark there too (dent -> scorch -> the surface's own ramp,
+  // measured 48->19), so the check requires the centre AS WELL as the disc. A disc-only check would pass on a chip
+  // that missed the pixel it was aimed at.
+  const before = we.idx[(cy * W) + cx];   // the impact pixel's own tone, read before the chip
+  const markBefore = [];
+  for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) {
+    if (dx * dx + dy * dy > 5) continue;
+    markBefore.push(we.idx[(cy + dy) * W + (cx + dx)]);
+  }
   const c1 = chip(we, cx, cy, 1, mulberry32(11));
+  let markNow = [], mi = 0;
+  for (let dy = -2; dy <= 2; dy += 1) for (let dx = -2; dx <= 2; dx += 1) {
+    if (dx * dx + dy * dy > 5) continue;
+    markNow.push(we.idx[(cy + dy) * W + (cx + dx)]);
+  }
+  const changedPx = markNow.filter((v, i) => v !== markBefore[i]).length;
   check('a hit on the yard chips it: the surface takes a mark and the hit is worth points',
-    c1 && c1.kind === 'chip' && !c1.broke && c1.points === ENV_HIT_POINTS && we.idx[(cy * W) + cx] !== before,
-    `${c1?.name} ${c1?.hits}/${c1?.tough}`);
+    c1 && c1.kind === 'chip' && !c1.broke && c1.points === ENV_HIT_POINTS && we.idx[(cy * W) + cx] !== before && changedPx > 0,
+    `${c1?.name} ${c1?.hits}/${c1?.tough} · ${changedPx} of the disc marked`);
 
   let last = c1, guard = 0;
   while (!last.broke && guard < 8) { last = chip(we, cx, cy, 1, mulberry32(20 + guard)); guard += 1; }
@@ -1941,10 +1983,36 @@ const sources = Object.fromEntries(files.map((f) => [f, readFileSync(new URL(`./
 const imported = (f) => Object.entries(sources).some(([g, text]) => g !== f && text.includes(`'./${f}'`));
 check('every module is used by another, or is the entry point', files.every((f) => f === 'main.js' || imported(f)), files.filter((f) => f !== 'main.js' && !imported(f)).join(' ') || `${files.length} modules`);
 const concept = readFileSync(new URL('./docs/concept.md', import.meta.url), 'utf8');
-check('every module has its reason written down in docs/concept.md', files.every((f) => concept.includes(`\`${f}\``)), files.filter((f) => !concept.includes(`\`${f}\``)).join(' ') || 'all listed');
+// A REASON, NOT A NAME. Presence of the filename was satisfiable by a list of filenames; the entry must carry a
+// sentence after the em dash, long enough to say something (>= 30 characters beyond the name).
+const reasonFor = (f) => {
+  const m = concept.match(new RegExp('^- `' + f.replace(/\./g, '\\.') + '` — (.+)$', 'm'));
+  return m ? m[1].trim() : '';
+};
+// THE REASON MUST BE THE MODULE'S OWN WORDS. Length and a final stop could not tell a sentence from a noun phrase
+// (audited twice); what CAN be checked is that the entry is a quote of the module's own header comment - a fabricated
+// or filler reason fails, and a truncated one is still the module's own statement. Normalised: comments stripped,
+// whitespace collapsed, trailing period ignored.
+const norm = (t) => t.replace(/^\s*\/\/+\s*/gm, ' ').replace(/\s+/g, ' ').trim().replace(/\.$/, '');
+const thin = files.filter((f) => {
+  const r = norm(reasonFor(f));
+  return r.length < 30 || !norm(sources[f]).includes(r);
+});
+check('every module has its reason written down in docs/concept.md', files.every((f) => {
+  const r = norm(reasonFor(f));
+  return r.length >= 30 && norm(sources[f]).includes(r);
+}), thin.join(' ') || `${files.length} reasons`);
 const html = readFileSync(new URL('./index.html', import.meta.url), 'utf8'), mainJs = sources['main.js'];
 const controls = [...html.matchAll(/id="([a-zA-Z0-9]+)"/g)].map((m) => m[1]);
-check('every element the page names is used by the game', controls.every((id) => mainJs.includes(`'${id}'`)), controls.filter((id) => !mainJs.includes(`'${id}'`)).join(' ') || `${controls.length} elements`);
+// NAMED IS NOT USED: the old predicate was `mainJs.includes("'id'")`, which a mere mention satisfied. It now
+// requires a real lookup - $('id') or getElementById('id') - for every id the page names.
+// AN ID IS USED WHEN IT IS LOOKED UP, literally or through the page's own `for (const id of [...]) $(id)` loops.
+const dynamic = new Set();
+for (const m of mainJs.matchAll(/for \(const id of \[([^\]]*)\]\)[^;]{0,80}\$\(id\)/g)) {
+  for (const q of m[1].matchAll(/['"]([a-zA-Z0-9]+)['"]/g)) dynamic.add(q[1]);
+}
+const lookedUp = (id) => new RegExp(`(?:\\$|getElementById)\\(\\s*['"]${id}['"]\\s*\\)`).test(mainJs) || dynamic.has(id);
+check('every element the page names is used by the game', controls.every(lookedUp), controls.filter((id) => !lookedUp(id)).join(' ') || `${controls.length} elements`);
 
 // ---- report ------------------------------------------------------------------------------------------
 const pad = (s, n) => String(s).padEnd(n);

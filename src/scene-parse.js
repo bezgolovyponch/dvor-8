@@ -15,6 +15,8 @@
 // sky class, per column, interpolated across the columns a building occludes.
 let pipelinePromise = null;
 const SEG_URL = '../vendor/seg/';
+import { horizonFromSky } from './horizon.js';   // the one definition of "where the sky ends", shared with the frame
+
 const TJS_URL = '../vendor/tjs/transformers.min.js';
 
 /** Load the segmenter once. Returns null when the runtime or the model cannot be loaded - never a guess. */
@@ -104,15 +106,13 @@ export async function sceneParse(source, w, h, sw, sh) {
     }
     masks[label] = m;
   }
-  // THE HORIZON, per column: the lowest row of the sky class. Columns a building occludes interpolate from their
-  // neighbours, which is the whole reason the horizon is taken from the CLASS and not from a brightness edge.
+  // THE HORIZON, per column, out of the sky class. The rule itself is one exported function so a unit gate can hold
+  // it still (tools/horizon-check.mjs); scene-parse only supplies the mask.
   const sky = masks.sky || new Uint8Array(w * h);
-  const horizon = new Int32Array(w).fill(-1);
-  for (let x = 0; x < w; x += 1) {
-    for (let y = h - 1; y >= 0; y -= 1) if (sky[y * w + x]) { horizon[x] = y; break; }
-  }
-  let last = -1;
-  for (let x = 0; x < w; x += 1) { if (horizon[x] >= 0) { last = horizon[x]; } else if (last >= 0) horizon[x] = last; }
-  for (let x = w - 1; x >= 0; x -= 1) { if (horizon[x] < 0 && x + 1 < w) horizon[x] = horizon[x + 1]; }
-  return { masks, horizon, w, h, classes: Object.keys(masks).length, input: [iw, ih], raw: out };
+  let skyPx = 0;
+  for (let i = 0; i < sky.length; i += 1) if (sky[i]) skyPx += 1;
+  const horizon = horizonFromSky(sky, w, h);
+  // NO-SKY IS A FACT, NOT A MISSING MASK. The old `masks.sky || new Uint8Array(...)` made "the model found no sky"
+  // and "the mask is absent" the same value, which is how a photo of a car against a wall got a designed sky.
+  return { masks, horizon, noSky: skyPx === 0, w, h, classes: Object.keys(masks).length, input: [iw, ih], raw: out };
 }

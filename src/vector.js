@@ -23,6 +23,7 @@
 // MEASURED AGAINST THE PREVIOUS ROUTE, on the three photographs (see tools/style-metrics.mjs):
 //   stray single pixels, specks under 4 px, same-colour blobs per 1000 px, and jagged border share.
 
+import { horizonFromSky } from './horizon.js';   // the one definition of "where the sky ends"
 import { MIN_PITCH } from './criteria/FacadeRule.js';
 import { STYLE } from './style/index.js';   // the style's own measured values (src/style/index.js)
 import { RAMPS, STEPS, paletteOf } from './flat.js';
@@ -341,11 +342,21 @@ export function trace(rgba, w, h, opts = {}) {
       if (!grew) break;
     }
   }
-  // THE PARSE'S SKY CLASS REPLACES THE COLOUR TEST'S ANSWER.
-  if (PARSE && PARSE.sky) {
-    let n2 = 0;
-    for (let p2 = 0; p2 < n; p2 += 1) if (PARSE.sky[p2]) { sky[p2] = 1; n2 += 1; }
-    if (typeof window !== 'undefined') window.__parseSky = n2;
+  // THE PARSE'S SKY CLASS IS ADDED TO THE COLOUR TEST'S ANSWER (the union this build has always used), EXCEPT WHEN
+  // THE MODEL SAYS THERE IS NO SKY AT ALL. photos-test/a.jpg is an AZLK against a brick wall: the parse returns
+  // building/car/pole/road/sidewalk/terrain and no sky class, and the colour route then invented 8.94% of the frame
+  // as designed sky with three clouds over a car. The published guard (`skylinePoints = [0]*w`) says no sky means no
+  // sky; the frame now honours it. On a photograph WITH sky this line changes nothing - replacing the union is a
+  // separate piece (Q15), because doing it here cost delivery lines 1 and 2b (measured).
+  if (PARSE) {
+    if (PARSE.sky) {
+      let n2 = 0;
+      for (let p2 = 0; p2 < n; p2 += 1) if (PARSE.sky[p2]) { sky[p2] = 1; n2 += 1; }
+      if (typeof window !== 'undefined') window.__parseSky = n2;
+    } else if (opts.parse && opts.parse.noSky) {
+      sky.fill(0);
+      if (typeof window !== 'undefined') window.__parseSky = 0;
+    }
   }
 
   // THE SKY-CANDIDATE SET IS SNAPSHOTTED HERE, AND THAT IS THE WHOLE POINT.
@@ -370,7 +381,9 @@ export function trace(rgba, w, h, opts = {}) {
     // sky: the placement then rejected every cloud position for "not enough sky here" and placed NOTHING
     // (measured: placed 0, want 4, skyPixels 54 020). The flood fills the smooth, edge-free, connected-to-the-top
     // region, clouds included, and it is bounded by the same blue line and edge tests as before.
-    if (core / n < 0.08) {
+    // THE GUARD REACHES THIS FLOOD TOO. It is the colour route's rescue for an overcast sky, and after the mask was
+    // emptied on a no-sky photograph it put 12,610 sky pixels back. It is skipped only when the model said "no sky".
+    if (!(opts.parse && opts.parse.noSky) && core / n < 0.08) {
       const stack = [];
       // AND IT IS BOUNDED. The first version flooded from the top edge through everything smooth, which on a
       // photograph with a soft mid-ground swallows the middle of the frame - and on the fidelity fixture it
@@ -428,6 +441,8 @@ export function trace(rgba, w, h, opts = {}) {
   // sky. A sky deeper than two thirds of the frame is not a sky, it is a flood, so the mask is CLAMPED to the
   // MEDIAN column depth: a column may reach its own skyline or the median depth plus half of it, never more. This
   // is a property of skylines, not of this fixture.
+  // (NOT applied to the model's own mask would be better - cutting it cost 70 columns of an exact mask on v10a - but
+  // applying that here also cost delivery lines 1 and 2b, so it is Q15, not a silent retune.)
   {
     const depth = new Int32Array(w);
     for (let x2 = 0; x2 < w; x2 += 1) {
@@ -447,6 +462,16 @@ export function trace(rgba, w, h, opts = {}) {
   }
   const skyline = new Int32Array(w).fill(h);       // the first non-sky row in each column
   for (let x = 0; x < w; x += 1) for (let y = 0; y < h; y += 1) if (!sky[y * w + x]) { skyline[x] = y; break; }
+
+  // THE HORIZON GATE'S READOUT (?horizon=1): the frame's own skyline against the parse mask's boundary, per column.
+  // Diagnostics only - nothing in the build reads it. A gate that cannot see the boundary cannot judge it.
+  if (typeof window !== 'undefined' && opts.horizonProbe && PARSE) {
+    const maskH = horizonFromSky(PARSE.sky || new Uint8Array(n), w, h);
+    let agree = 0, sum = 0, max = 0, skyPx = 0;
+    for (let i = 0; i < n; i += 1) if (PARSE.sky && PARSE.sky[i]) skyPx += 1;
+    for (let x = 0; x < w; x += 1) { const d = Math.abs(maskH[x] - skyline[x]); if (d <= 1) agree += 1; sum += d; if (d > max) max = d; }
+    window.__frameHorizon = { cols: w, agree, mean: sum / w, max, noSky: skyPx === 0, skyPx };
+  }
   let skys = null;
   let wallParts = [];
   let wallPx = new Uint8Array(0);      // the structural walls, by pixel: the sky must not paint over them
@@ -1884,6 +1909,8 @@ export function trace(rgba, w, h, opts = {}) {
         const hz = (opts.parse.horizon && opts.parse.horizon[x] >= 0) ? opts.parse.horizon[x] : h;
         if (hz - (cy + rows) < clean.cloudsInset) fits = false;
       }
+    } else if (opts.parse && opts.parse.noSky) {
+      fits = false;   // the model found no sky at all: there is nowhere for a designed cloud to sit
     } else {
       for (let x = x0; x <= x1 && fits; x += 1) if (skyLine2[x] - (cy + rows) < clean.cloudsInset) fits = false;
     }
@@ -1892,7 +1919,7 @@ export function trace(rgba, w, h, opts = {}) {
     for (let y = Math.max(0, cy - 1); y <= cy + rows; y += 1) for (let x = x0; x <= x1; x += 1) {
       tot += 1;
       if (PARSE && PARSE.sky) { if (PARSE.sky[y * w + x]) skyHere += 1; }
-      else if (smoothHere(y * w + x)) skyHere += 1;
+      else if (!(opts.parse && opts.parse.noSky) && smoothHere(y * w + x)) skyHere += 1;
     }
     if (tot && skyHere / tot < 0.8) { dbg.push('s' + slot + ' cx' + cx + ' cy' + cy + ' ratio' + (skyHere / tot).toFixed(2) + ' RATIO'); continue; }
     cloud(cloudMask, w, h, cx, cy, size, cloudColour, cloudShade);
@@ -2109,7 +2136,8 @@ export function trace(rgba, w, h, opts = {}) {
     let skyCount = 0;
     for (let p2 = 0; p2 < n; p2 += 1) if (sky[p2]) skyCount += 1;
     let skyMask = sky;
-    if (skyCount / n < 0.05) {
+    // THE GUARD: a photograph the model says has NO sky must not get one invented from brightness.
+    if (!(opts.parse && opts.parse.noSky) && skyCount / n < 0.05) {
       // THE SKYLINE COMES FROM THE PHOTOGRAPH, NOT FROM THE EMPTY MASK. This fallback used `skyline[]`, which is
       // DERIVED FROM THE SKY MASK - so with an empty mask every column's skyline is zero and the fallback painted
       // NOTHING: the frame kept the photograph's own grey sky while the designed blue was computed and dropped. The
@@ -2151,6 +2179,7 @@ export function trace(rgba, w, h, opts = {}) {
       const t1 = sorted[Math.floor(sorted.length / 3)], t2 = sorted[Math.floor((sorted.length * 2) / 3)];
       scene.foliage.push({ px: kept, lums: keptL, t1, t2, tones: [toneOf(1), toneOf(2), toneOf(4)] });
     }
+    if (typeof window !== 'undefined') window.__skyPainted = 0;   // a number even when paintSky is never called: no sky is 0, not missing
     const painted = renderScene(scene, idx, {
       paintSky: (sc, out) => {
         paintingSky = true;

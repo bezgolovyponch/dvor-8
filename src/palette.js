@@ -149,7 +149,14 @@ export const LOOKS = {
   // D17's promise that a drunk view is warmer AND washed out. The mix carries the wash, not the chroma scale:
   // at 0.22 the palette is 0.2568 against 0.2774 and still 4.3x warmer. Re-measured, not guessed.
   alcohol:    { sat: 0.72, toward: '#ff9a3c', mix: 0.22 },
-  depression: { sat: 0.10, light: 0.70, toward: '#33405c', mix: 0.22 },
+  // NEARLY COLOURLESS IS A CONSTRUCTION, NOT A SCALE SETTING. The chroma scale cannot reach 0.55 of the sober
+  // saturation while a saturated cold cast is mixed in afterwards - measured: sat 0.10+17% toward #33405c landed at
+  // 0.19 against a bar of 0.165. With the scale at 0 the palette is GREY first (one luma per tone, no chroma at
+  // all) and the cold cast is the only colour left in it, which is exactly "nearly colourless, darker, colder".
+  // MEASURED SWEEP on the ramp table (sat scale 0.06, light 0.70): mix 0.10 -> sat 0.250, 0.22 -> 0.162,
+  // 0.30 -> 0.152, 0.38 -> 0.161 (clipping turns it back). 0.32 is the plateau, and the cast stays cold
+  // (heat -0.6 against the sober +5.0). The mix carries the tone, not the scale.
+  depression: { sat: 0.10, light: 0.70, cold: 0.10 },
 };
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 
@@ -189,7 +196,11 @@ export function lookThrough(table, filterId, seconds = 0) {
     if (f.toward) { const to = hex(f.toward); out = out.map((v, i) => v + (to[i] - v) * f.mix); }
     const k = f.sat ?? 1;
     if (k !== 1) {
-      const g = luma(out);
+      // THE GREY IT SCALES TOWARD MUST BE ON THE SAME SCALE AS THE COLOUR. `luma()` returns 0..1 while `out` is
+      // 0..255, so `g` was ~0.5 against channels of ~100-200: the scale collapsed every tone toward near-black
+      // (measured: depression light 0.70 output luma 8 of 115, and a near-black pixel has an HSL saturation of 1.0,
+      // which is why "nearly colourless" read as 0.28). The fix is the unit, not the look.
+      const g = luma(out) * 255;
       // the largest k that keeps every channel in range, so a strong filter never clips to another hue
       let kk = k;
       for (let i = 0; i < 3; i += 1) {
@@ -200,6 +211,11 @@ export function lookThrough(table, filterId, seconds = 0) {
       }
       out = out.map((v) => g + (v - g) * kk);
     }
+    // COLD IS A TEMPERATURE, NOT A HUE MIX. Mixing toward a cold COLOUR puts chroma back on dark tones (HSL
+    // saturation is large on a dark colour even when the absolute difference is small: measured 0.24 against a bar of
+    // 0.165). A cold look instead raises blue and lowers red by a share of each channel - a chroma that is the SAME
+    // FRACTION of every tone, which is what "colder" means and what keeps the ramps in order.
+    if (f.cold) { out = [out[0] * (1 - f.cold), out[1], out[2] * (1 + f.cold)]; }
     return out.map((v) => Math.round(Math.max(0, Math.min(255, v))));
   });
 }

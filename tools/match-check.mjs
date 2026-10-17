@@ -67,9 +67,13 @@ const line = (ok, region, what, want, got) => {
 {
   const s = regionStats('tower');
   const dark = s.rows.filter((r) => Math.max(...r.rgb) < 90).reduce((n, r) => n + r.share, 0);
-  line(dark >= 0.35, 'tower', 'dark plane dominates', '≥35% of the region', `${(100 * dark).toFixed(0)}%`);
+  // ONE DECIMAL, BECAUSE THE VERDICT USES THE RAW RATIO. At toFixed(0) a frame measuring 9.6% printed "10%" beside a
+  // ≥10% bar and was reported FAIL - the number could not explain the verdict it sat next to (measured: the same
+  // build gave 5/7 and 6/7 on two dumps, and the tower line was the difference). A share near its bar is printed
+  // with enough resolution to show which side of it the frame is on.
+  line(dark >= 0.35, 'tower', 'dark plane dominates', '≥35% of the region', `${(100 * dark).toFixed(1)}%`);
   const blue = s.rows.filter((r) => { const q = hsl(...r.rgb); return q.h > 200 && q.h < 250 && q.s > 0.25; }).reduce((n, r) => n + r.share, 0);
-  line(blue >= 0.10, 'tower', 'blue-glass windows', '≥10% of the region', `${(100 * blue).toFixed(0)}%`);
+  line(blue >= 0.10, 'tower', 'blue-glass windows', '≥10% of the region', `${(100 * blue).toFixed(1)}%`);
 }
 // 3. THE MID-RISE: the checkerboard means BOTH a near-white and a dark blue at once.
 {

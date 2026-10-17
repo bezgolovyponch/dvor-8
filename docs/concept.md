@@ -62,3 +62,42 @@ assembled. This is the fix for the conceptual error: pieces first, pipeline seco
 
 **The rule of assembly:** the pipeline may only place pieces in the scene order ground → sky → facade → window →
 thing → outline, and no pass may write a pixel another piece owns.
+
+## Every module, and its reason (one line each — the suite checks every file is named here)
+
+- `album.js` — What a player keeps between visits, and what they can show someone.
+- `audio.js` — Sound, made from oscillators and noise: no files.
+- `decal.js` — A splat that stays where it landed. Throw a coloured ball at a wall and the colour is still there tomorrow.
+- `detect.js` — The detector: a real object-detection model, run on the device.
+- `disaster.js` — DISASTERS — hurricane, tsunami, Godzilla, and one very large pixelated Beyoncé eating the cars.
+- `drink.js` — The bottle, before it is thrown. Pure.
+- `enhance.js` — ENHANCE — make the FUNDAMENTAL SHAPES visible before anything tries to recognise them.
+- `flat.js` — Photograph -> flat-colour scene with drawn outlines.
+- `folk.js` — The people who pass through the yard, and whether they have seen you.
+- `font.js` — Letters, five pixels by seven, for words drawn INSIDE the picture.
+- `frame.js` — What in this yard can be interacted with, and how.
+- `fx.js` — Everything that makes a hit FEEL like a hit, and nothing that decides whether it was one.
+- `glass.js` — Windows you can actually break, built the way a shipped engine builds them.
+- `horizon.js` — THE HORIZON FROM A SKY MASK — one pure function, one definition, two users (the parse's own horizon and the frame's skyline), so the two can never disagree about what a horizon IS.
+- `kind.js` — KIND ACTIONS — the three things you can do to a yard that are not wrecking it.
+- `lore.js` — LORE — a completely random, always different, TRUE fact for every thing the player taps.
+- `main.js` — The flow: a photograph, a search for the real things in it, a scan, a yard to take apart, a score, again.
+- `modes.js` — The four ways of SEEING the yard. Each is a look: how much of the yard is sharp, and how the view leans.
+- `news.js` — What the world did today, as lines short enough to fly over a yard.
+- `objects.js` — From what a detector says is in the photograph to the things you can hit.
+- `palette.js` — The palette. The yard is stored as INDICES and looked up through a table every frame, so a filter is a different table, not a different picture (docs/style.md, F1 and F3).
+- `parts.js` — Debris, dust, shards and paint droplets, spawned by the convention the original particle-systems paper established — and fed into the particle system the game already has, rather than a second one beside it.
+- `render.js` — Drawing. The picture is rebuilt from indices through the current table on every frame, which is what lets a filter change everything at once and a broken thing simply be a wreck.
+- `rng.js` — A small seeded generator, so everything that looks random can be reproduced by a test.
+- `scene-parse.js` — STAGE 1 + 2 OF THE METHOD SET (docs/METHODS.md): WHAT IS ON THE SCREEN, AND WHERE THE SKY IS.
+- `scene.js` — THE SCENE: the thing the renderer draws, in the order it is drawn.
+- `sky.js` — What flies over the yard carrying a line of news.
+- `street.js` — The street beyond the photograph. Pure: arrays in, arrays out.
+- `stylise.js` — The photograph -> the scene the game draws.
+- `surfaces.js` — What the picture is made of, as far as anything needs to know.
+- `throwables.js` — What is in your hand. Six things you can pick up, each flying and landing its own way.
+- `vector.js` — VECTOR TRACE — the r9 route: flat designed surfaces with straight edges, one colour per shape.
+- `view.js` — How the picture sits on the screen, and the way back from a finger to a pixel.
+- `walk.js` — Down in the yard: someone who walks, jumps, and comes down on things.
+- `weather.js` — WEATHER — the yard's own disasters: rain, snow, fog and a storm that throws lightning.
+- `world.js` — The yard as a thing that can be hit. Plain data and pure functions: no canvas, no clock of its own.

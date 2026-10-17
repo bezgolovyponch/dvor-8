@@ -1,6 +1,6 @@
 // THE REFERENCE-PALETTE GATE — the creator's question "why aren't you comparing it to the requested frame?" as a check.
 //
-// It reads the ACCEPTED frame (reference/v10a-target-hi.webp) and extracts the colours that define its identity by
+// It reads the ACCEPTED frame and extracts the colours that define its identity by
 // role - the sky, the clouds, the outline, the road greys - then measures the same roles in OUR frame and reports the
 // distance. This is a comparison of a frame against the accepted frame, which is what "matching the design" means;
 // the roles are DERIVED from the reference every run, never typed in here.
@@ -11,7 +11,12 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const dumpPath = process.argv[2];
-const refPath = process.argv[3] || 'reference/v10a-target-hi.webp';
+// THE DEFAULT REFERENCE IS THE PALETTE-EXACT EXPECTED CANVAS, not the page shot. reference/README.md calls the
+// target a screen photograph re-encoded (never a measurement input), and assets/REGISTRY.md names
+// reference/v10a-art-canvas.png (288x512, 48 colours) as the R1/F3 input; gates/external.sh was pointed at it for
+// the same reason in 3879946. Measured this turn: the same frame matches against BOTH, but the canvas gives a
+// tighter warmth gap (0.012 against 0.020) - compare like with like.
+const refPath = process.argv[3] || 'reference/v10a-art-canvas.png';
 if (!dumpPath) { console.log('usage: node tools/reference-palette-check.mjs <canvas.json> [reference-image]'); process.exit(2); }
 
 const rgb2hsl = (r, g, b) => {

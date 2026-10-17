@@ -17,11 +17,11 @@ import { RAMPS } from './flat.js';   // STEPS is already imported above; two imp
 import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js';
 import { MODES, splashTargets, chainNext } from './modes.js';
 import { THROWABLES, ORDER as THROW_ORDER, throwWith, aimWith } from './throwables.js';
-// I3'S PANEL WAS NEVER UNBUILT - IT THREW. `PX` is exported by view.js:17 (= 2, LONG/256) and was missing
-// from this import list, so runSelfTest threw ReferenceError at main.js:224 and rows.map(...) at :229 never ran.
-// The button was wired twice all along (:668 click, :669 load). Cross-audit finding 14: a missing name, not
-// a missing feature - and NOT a new constant (the docs' "PX = 1" was wrong; view.js defines it as 2).
-import { viewMotion, clientToWorld, cameraFor, stepDuck, LONG, SHORT, SCAN_TIME, PX } from './view.js';
+// THE SELF-TEST'S FRAME ROW ASSERTS THE 1:1 BUFFER, NOT A VIEW SCALE. The yard canvas buffer is exactly
+// world.w x world.h (measured live: 288x512 vs world 288x512), so the row compares those two and nothing else.
+// view.js's PX=2 is a view-layer constant; importing it here (an earlier revision) made the predicate demand
+// world.w*2 and could only ever be red. The panel's own throw then kept the load-time readout on screen.
+import { viewMotion, clientToWorld, cameraFor, stepDuck, LONG, SHORT, SCAN_TIME } from './view.js';
 import { yardFrom, grow, extend, edgeOf, room, bandTop } from './street.js';
 import { makeWalker, stepWalker, walked, standing } from './walk.js';
 import { makeDrink, swig, fresh, stepDrink, level, drunkItem, stagger, SWIG_TIME } from './drink.js';
@@ -50,6 +50,19 @@ import { css, VOID } from './palette.js';
 const $ = (id) => document.getElementById(id);
 const canvas = $('yard'), ctx = canvas.getContext('2d');
 const frameEl = $('frame'), tiltEl = $('tilt'), pops = $('pops');
+// THE PANEL'S ERROR ROW MUST BE ABLE TO FAIL. It read window.__err, and nothing in the repo ever SET it, so
+// «ошибок на странице нет» could only ever print OK - a check that cannot see what it claims to check. These two
+// listeners are the missing setter: the page's own uncaught errors and unhandled rejections.
+if (typeof window !== 'undefined') {
+  window.__err = undefined;
+  addEventListener('error', (ev) => {
+    window.__err ||= `${ev.message || 'error'} @ ${ev.filename || '?'}:${ev.lineno || 0}`;
+  });
+  addEventListener('unhandledrejection', (ev) => {
+    const r = ev.reason;
+    window.__err ||= `unhandled rejection: ${String((r && (r.stack || r.message)) || r)}`;
+  });
+}
 const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches || false;
 const rnd = mulberry32(8);
 const BEST_AT = 'dvor8.best', ALBUM_AT = 'dvor8.album', NEWS_AT = 'dvor8.news', NEWS_ON = 'dvor8.newsOn';
@@ -218,18 +231,30 @@ function runSelfTest() {
     let offPalette = 0;
     for (let i = 0; i < n; i += 7) if (world.idx[i] >= world.palette.length) offPalette += 1;
     add('одна палитра на весь кадр', offPalette === 0, `${world.palette.length} цветов, вне палитры ${offPalette}`);
-    const cars = world.regions.filter((r) => /car|truck|bus|van/i.test(r.label || '')).length;
+    // THE LABEL IS RUSSIAN AND THE KIND IS ENGLISH (live: label «машина», kind 'car'). Testing the label alone made
+    // this row read "машин 0" forever, on a yard that had four cars in it.
+    const kindLabel = (r) => String(r.kind || '') + ' ' + String(r.label || '');
+    const cars = world.regions.filter((r) => /car|truck|bus|van|машин|грузовик|автобус/i.test(kindLabel(r))).length;
     add('машины найдены и разрезаны', cars > 0, `машин ${cars}`);
-    const win = world.regions.filter((r) => /window|окно/i.test(r.label || '')).length;
+    const win = world.regions.filter((r) => /window|окно/i.test(kindLabel(r))).length;
     add('окна — отдельные вещи', win > 0, `окон ${win}`);
     const outlined = world.regions.filter((r) => /car|truck|bus|van|building|house|tower|block/i.test(String(r.kind || '') + ' ' + String(r.label || ''))).length;
     const notOutlined = world.regions.length - outlined;
     add('обводка только у зданий и машин', outlined > 0 && notOutlined >= 0, `с обводкой ${outlined} из ${world.regions.length}`);
-    add('размер кадра — как у фото', ($('#yard') || {}).width === world.w * PX && ($('#yard') || {}).height === world.h * PX, `${($('#yard') || {}).width}x${($('#yard') || {}).height}`);
+    // 1:1, AND THE ELEMENT IS $('yard') - NOT $('#yard'). `$` is getElementById, so the '#' made this null and the
+    // row printed "undefinedxundefined" while the canvas was 288x512. Both defects are the same class: a check that
+    // cannot see the thing it names, reporting a failure that is in the check.
+    const yardEl = $('yard') || {};
+    add('размер кадра — как у фото', yardEl.width === world.w && yardEl.height === world.h, `${yardEl.width}x${yardEl.height} против ${world.w}x${world.h}`);
   }
   add('ошибок на странице нет', !(window.__err), window.__err ? String(window.__err).slice(0, 40) : 'нет');
   add('проверки командной строки', null, 'node tools/chain.mjs — критерии, композиция, сверка с эталоном');
-  const box = document.getElementById('selfRows');
+  // THE PANEL IS THE PAGE'S ELEMENT (index.html:171 #selfTest), and the rows go inside it. Naming the container
+  // here is not decoration: the page names #selfTest, and a source read that the suite runs ("every element the page
+  // names is used by the game") found the container named by no line of the game.
+  const panel = $('selfTest');
+  const box = panel ? panel.querySelector('#selfRows') : $('selfRows');
+  if (panel) panel.dataset.rows = String(rows.length);
   if (box) box.innerHTML = rows.map(([name, pass, detail]) => `<div class="selfRow"><b>${pass === null ? '·' : pass ? 'OK' : 'FAIL'}</b> <span>${name}</span> <i>${detail}</i></div>`).join('');
   return rows;
 }
@@ -351,8 +376,32 @@ async function build(rgba, w, h, dets, big = null) {
     ? await sceneParse(shot, w, h, shot.width, shot.height).catch((e) => { if (typeof window !== 'undefined') window.__parseError = String(e && e.message || e); return null; })
     : null;
   if (typeof window !== 'undefined') window.__parse = parse ? { classes: parse.classes, sky: !!parse.masks.sky, building: !!parse.masks.building } : null;
+  // THE OUTLINE GATE'S PROBE (?outline=1): the render records every pixel it inks, and the sky mask is exposed so the
+  // gate can ask whether any of them landed on sky. Diagnostics only.
+  if (typeof window !== 'undefined') {
+    window.__outlineProbe = params.get('outline') === '1';
+    if (window.__outlineProbe && parse && parse.masks.sky) window.__skyMask = parse.masks.sky;
+  }
+  // THE HORIZON GATE'S PARSE READOUT (?horizon=1): the implementation's horizon against an INDEPENDENT recomputation
+  // of "the first non-sky row" from the same mask. Two loops, written apart, on the real masks of the real
+  // photograph - a property test, not a tautology (the gate also keeps the frame's own agreement as a diagnostic).
+  if (typeof window !== 'undefined' && params.get('horizon') === '1' && parse) {
+    const m = parse.masks.sky || new Uint8Array(w * h);
+    // A RESOLVED COLUMN is one whose top row is sky: its boundary is a fact of the mask. A column that starts
+    // non-sky (a tower fills the top) has no boundary of its own - the published source IMPUTES it from its
+    // neighbour (`skylinePoints[i] = skylinePoints[i-1]`), so it is reported as imputed, not counted as agreement.
+    let agree = 0, resolved = 0;
+    for (let x = 0; x < w; x += 1) {
+      if (!m[x]) continue;                       // row 0 of this column is not sky: imputed by the rule
+      resolved += 1;
+      let y = 0;
+      while (y < h && m[y * w + x]) y += 1;
+      if (parse.horizon[x] === y) agree += 1;
+    }
+    window.__parseHorizon = { cols: w, agree, resolved, imputed: w - resolved, noSky: !!parse.noSky };
+  }
   if (typeof window !== 'undefined' && params.get('parse') === '1') window.__parseFirst = parse;
-  const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse });
+  const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
   if (typeof window !== 'undefined') window.__spriteBays = (st.stats && st.stats.spriteBays) || null;   // DIAGNOSTIC
   // THE THINGS ARE CUT OUT OF THE REDUCED PICTURE, NOT OUT OF THE PHOTOGRAPH.
   //
