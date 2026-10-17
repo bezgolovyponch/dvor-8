@@ -145,6 +145,18 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**CLOSED (2026-10-18).** The root was a single condition, and the fix is a single line of input choice: `big` (the
+three-pixel-per-game-pixel image the WINDOW finder wants) is null for a photograph narrower than 3x the grid - the
+operator's yard is 720 wide against a 288 grid - and the parse was called with **no input at all**, so it returned
+null and the renderer fell back to luminance. The model downsizes to its own 512 input regardless, so the game-sized
+canvas is a perfectly good parse input: it is now built from the pixels the renderer already has when `big` is
+absent. **Measured, both photographs:** the second yard's parse goes from null to **13 classes** (sky and building
+present); its frame goes from a black-and-white checkerboard to **a picture** (sky with clouds, the building, the
+parking lot, the embankment); its chain goes from **FAIL at 6c PAIRING (IoU 0.43)** to **PASS at 6c (IoU 0.94, dark
+kept 63%, 26 ground tones)** and stops only at 6e MATCH, whose regions are the accepted example's rectangles and so
+are meaningful only for the judged photograph. The judged photograph is unchanged and still green. Published as
+**v0.5.2**.
+
 **Seventh finding, the root (2026-10-18): the SEGMENTATION RETURNS NULL on the second photograph.** Measured on the
 page: the judged photograph yields **11 classes** (road, sidewalk, building, wall, pole, traffic sign, vegetation,
 terrain, sky, person, car) and a building mask of 47 123 pixels; the operator's second yard yields **null with no
