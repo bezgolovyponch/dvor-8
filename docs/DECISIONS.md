@@ -145,6 +145,15 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**The refactor that followed (committed, green):** the plan is now computed ONCE, inside `trace()`, from the same wall
+parts every consumer gets (area >= 400), BEFORE the bay loop. The bay loop asks it per bay, the checker pass reads the
+same plan instead of computing its own, and main shows it as `window.__plan` instead of building a second one. Verified
+on the judged photograph: chain PASSED, match 7/7, R1 0.049; suite 321/0 (the plan is null in the headless fixtures and
+every reader guards it). **Still open:** on the operator's second yard the plan reads **NULL** - the next lead - and the
+frame is still wrong there while the judged photograph is right. The plan being null rather than wrong-shaped is itself
+the finding: something in the second photograph's trace prevents the plan from being built at all, and that has to be
+read before the grid can be judged again.
+
 **Attempted and reverted:** making the ring form the default and leaving the glass to the late plan-box pass broke
 the judged photograph (pairing IoU 0.58 just under 0.60, the mid-rise's white 4% because the checker's cells no
 longer fire). Reverted to the green commit: the shipped 0.5.0 is the judged photograph's build, and this row is the
