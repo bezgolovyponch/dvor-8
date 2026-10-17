@@ -78,3 +78,13 @@ then builds, creates the release with the measured vector in its notes, rewrites
 the README. **Stability is the chain's verdict, not a judgement call** — which is why nothing was published today:
 the chain stops at 1 CRITERIA (R1, whole-frame comparability 0.111), and the release script said REFUSED.
 
+## D18 — G-INFRA IS PROVEN BY THE DETERMINISM PAIR (2026-10-18)
+
+The gate infrastructure is proven, not asserted: `tools/detgate.mjs` captures the same photograph twice through the
+gate path and reports **0 px** differ between two unpatched runs (bar 500), with the clock pin read back from both
+pages (7.5@7.5); `tools/detgate-analyze.mjs` runs match-check and style-check twice on the same dump and reports
+**identical bytes** with both analyzers exiting 0. Those two runs are what makes every other gate's number a property
+of the frame rather than of the moment. The launch path is the environment's own: a `--no-sandbox` Chrome wrapper
+(`/tmp/chrome-nosandbox.sh`), because Chrome's inner sandbox cannot start inside the harness — and the failure that
+once looked like "left 0, console clean" is now impossible: a missing step is WITHHELD, never a passing zero.
+
