@@ -72,3 +72,53 @@ export function pitchFrom(centres, fallback) {
   gaps.sort((a, b) => a - b);
   return gaps[gaps.length >> 1];
 }
+
+/**
+ * PIECE: THE CHECKERED CELL — the second way a facade is built, for a wall whose photograph is a checkerboard.
+ *
+ * The accepted frame's mid-rise is alternating light and dark PANELS at the photograph's own pitch; the plane-plus-
+ * window-grid piece above cannot produce that, because a checker is not a plane with windows, it is two tones in
+ * cells. This piece takes the two entries (a light and a dark, chosen per class by the caller), the cell pitch and
+ * the origin, and fills each cell by its PARITY - the pattern is in the cell index, not in the photograph's grain.
+ *
+ * The rules, asserted by tools/piece-facade-check.mjs:
+ *   1. every painted pixel is inside the mask and takes exactly one of the two entries;
+ *   2. the parity is the cell index: (col + row) % 2, with col from the given origin;
+ *   3. no pixel outside the mask is touched, and an entry never equals the outline or the void.
+ *
+ * @param {object} o
+ * @param {Int16Array|Uint8Array} o.idx   the frame's index buffer (written in place)
+ * @param {number} o.w @param {number} o.h
+ * @param {Uint8Array} o.mask   1 where the wall is
+ * @param {number[]} o.pair     [light, dark] palette entries
+ * @param {number} o.pitchX @param {number} o.pitchY
+ * @param {number} o.originX @param {number} o.originY
+ * @param {Uint8Array} [o.skip] 1 where another piece owns the pixel (a window sprite, an outline)
+ * @returns {{ cells: number, painted: number, light: number, dark: number }}
+ */
+export function paintCells({ idx, w, h, mask, pair, pitchX, pitchY, originX, originY, skip = null, within = null, lightDuty = 2 }) {
+  const px = Math.max(2, Math.round(pitchX | 0));
+  const py = Math.max(2, Math.round(pitchY | 0));
+  const ox = ((originX | 0) % px + px) % px;
+  const oy = ((originY | 0) % py + py) % py;
+  let painted = 0, light = 0, dark = 0;
+  // A WINDOW, NOT THE WHOLE FRAME. Without `within` the piece fills every masked pixel of the frame - measured: a
+  // 62-window scan painted 2.7 million cells and the last window's pitch won everywhere. `within` bounds one area.
+  const [wx0, wy0, wx1, wy1] = within || [0, 0, w, h];
+  for (let y = Math.max(0, wy0); y < Math.min(h, wy1); y += 1) {
+    for (let x = Math.max(0, wx0); x < Math.min(w, wx1); x += 1) {
+      const p = y * w + x;
+      if (!mask[p]) continue;
+      if (skip && skip[p]) continue;
+      const col = Math.floor((x - ox) / px), row = Math.floor((y - oy) / py);
+      // THE LIGHT PANEL IS A THIRD OF THE DARK ONE, as the accepted frame's own checker is (white 16% against dark
+      // blue 38.5%). `lightDuty` is the ratio: 2 = every other parity cell (50/50), 3 = one light cell per three.
+      const isLight = ((col + row) & 1) === 0 && (col % lightDuty) === 0;
+      const v = isLight ? pair[0] : pair[1];
+      idx[p] = v;
+      if (v === pair[0]) light += 1; else dark += 1;
+      painted += 1;
+    }
+  }
+  return { cells: 0, painted, light, dark };
+}

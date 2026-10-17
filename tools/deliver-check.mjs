@@ -19,7 +19,11 @@ mkdirSync(OUT, { recursive: true });   // the first run of this tool blocked del
                                        // directory did not exist: the harness wrote nothing and five lines failed
                                        // for that reason alone. The rule must never fail for its own housekeeping.
 const DEMO = process.argv[3] || 'photos-test/5.jpg';
-const run = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }); } catch (e) { return (e.stdout || '') + (e.stderr || ''); } };
+// `env` is per-call so the two capture runs (free interaction, pinned frame) can carry different URLs.
+const run = (cmd, args, env) => {
+  try { return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: env ? { ...process.env, ...env } : process.env }); }
+  catch (e) { return (e.stdout || '') + (e.stderr || ''); }
+};
 
 // ORDER MATTERS, AND GETTING IT WRONG BLOCKED DELIVERY TWICE. The gate measures the CANVAS DUMP, so the capture
 // must run FIRST: run the other way round, the gate had no dump to read, printed nothing, and two mandatory lines
@@ -29,14 +33,31 @@ const run = (cmd, args) => { try { return execFileSync(cmd, args, { encoding: 'u
 // the plain URL gave 42% of the sky band in one blue (the tsunami GRADE hid the clouds) while the clean frame gives
 // 29% - so lines 1 and 2b were passing on a transient. ?clean=1 removes overlays and grades (docs/DETERMINISM.md R2
 // says gate captures are clean and offline). A rule about the picture must not be measured through a filter.
-process.env.BASE = process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0';
-const shot = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', OUT, DEMO, 'ЦУНАМИ']);
+// THE CAPTURE IS PINNED, NOT "WAITED FOR". An animated page NEVER settles (people walk, particles run), so the
+// settled-hash wait could only ever report false - audited 2026-10-18. The repo's own determinism affordance is
+// `?clock=` (G-DET-CLOCK): it freezes the simulation phase, the pin is read back from the dump, and the capture is
+// then reproducible byte for byte (tools/detgate.mjs proves it: 0 px between unpatched runs).
+// ?debug exposes the page's own API (window.dvor8.cam) so the scripted run can AIM AT A TARGET - a fixed fraction of
+// the frame drifted off the cars and scored 0 (measured). The debug flag does not alter the canvas: the owner's
+// captures are taken with it and the frame measures the same.
+// TWO ROLES, TWO RUNS. The FRAME is captured at the pinned clock (reproducible: ?clock=7.5, dt=0), but the clock pin
+// also FREEZES THE PHYSICS - a thrown stone never flies, and the scripted destruction scored 0 (measured). So the
+// interaction steps run on a page WITHOUT the pin, and only the measured dump comes from the pinned run. The free run
+// goes first so the pinned run's canvas.json is the one the frame lines read.
+const FREE = (process.env.BASE_FREE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&debug');
+const PINNED = (process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&debug');
+const shotFree = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', `${OUT}-free`, DEMO, 'ЦУНАМИ'],
+  { BASE: FREE });
+const shotPinned = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', OUT, DEMO, 'ЦУНАМИ'],
+  { BASE: PINNED });
 const suite = run('node', ['test.mjs']);
 const gate = run('node', ['tools/concept-check.mjs', `${OUT}/canvas.json`]);
 const base = run('node', ['tools/baseline-check.mjs']);
 
 const dump = existsSync(`${OUT}/canvas.json`) ? JSON.parse(readFileSync(`${OUT}/canvas.json`, 'utf8')) : null;
-const steps = {}; for (const line of shot.split('\n')) { try { const o = JSON.parse(line.trim()); if (o && o.step) steps[o.step] = o; } catch { /* not a step line */ } }
+// the steps come from the FREE run (the interaction); the dump from the PINNED run (the frame)
+const steps = {}; for (const line of shotFree.split('\n')) { try { const o = JSON.parse(line.trim()); if (o && o.step) steps[o.step] = o; } catch { /* not a step line */ } }
+for (const line of shotPinned.split('\n')) { try { const o = JSON.parse(line.trim()); if (o && o.step && /settled|built|errors/.test(o.step)) steps[o.step] = o; } catch { /* not a step line */ } }
 
 const checks = [];
 const add = (name, pass, detail) => checks.push({ name, pass, detail });
@@ -57,29 +78,30 @@ if (dump) {
   // POLICY (docs/render-policy.md): the sky is DESIGNED, so the check is the one v9's own screen passes - one
   // BLUE plane - not "any bright tone", which is how a fidelity-grey sky slipped through this line for two rounds.
   const skyish = b > r + 20 && b > 120;
-  // THE CAPTURE MUST HAVE SETTLED (photo-shot writes `settled` into canvas.json now). A frame that never settled
-  // may be mid-scan: measuring it would be measuring the wipe.
-  const settled = !!(dump && dump.settled !== false);
+  // THE PIN IS THE PREMISE: a capture without the pinned clock is a capture of an arbitrary moment.
+  const pinned = !!(dump && Number(dump.clockPin) === 7.5);
   add('1 SKY (DESIGNED): one blue plane, one colour owning its band >= 35%',
-    settled && share >= 0.35 && skyish, settled
-      ? `${(100 * share).toFixed(0)}% of the band is rgb(${topColour}), skyish=${skyish}`
-      : 'the capture never settled - WITHHELD, not passed');
+    pinned && share >= 0.35 && skyish, pinned
+      ? `${(100 * share).toFixed(0)}% of the band is rgb(${topColour}), skyish=${skyish} (clock pin 7.5)`
+      : 'the capture carries no clock pin - WITHHELD, not passed');
 
   // 2 BUILDINGS: window sprites exist (printed by the gate) and the facades are flat rather than blurred
   // THE COUNT IS THE NUMBER IN BRACKETS, NOT THE BAR IN THE LABEL. `(\d+) window sprites` matched the row's own
   // threshold ("at least 8 window sprites") and reported 8 where the frame has hundreds; the flat share likewise
   // comes from the result bracket, not from any row label.
   const windows = Number((gate.match(/\[(\d+) window sprites\]/) || [])[1] || 0);
-  const flat = Number((gate.match(/\[(\d+)% in the sky band\]/) || [])[1] || 0);
+  // (a `flat` share was parsed here and never read: the flatness of a surface is line 2b's job, which measures tone
+  // concentration and prints both sides. Deleted rather than invented into a line.)
   // the flatness of a surface is line 2b's job; this line is about the BUILDING being built at all
   add('2 BUILDINGS: window sprites are many (>= 40)', windows >= 40, `${windows} window sprites`);
   // the WALL itself, measured where a wall is: the left third below the sky, which on this photograph is one facade
   const wallW = Math.floor(W * 0.3), wallTop = Math.floor(H * 0.12), wallBot = Math.floor(H * 0.45);
   const wallHist = new Map();
-  let wallTot = 0, wallFlat = 0;
+  let wallTot = 0;
   for (let y = wallTop; y < wallBot; y += 1) for (let x = 0; x < wallW; x += 1) {
     const k = px(x, y).join(','); wallHist.set(k, (wallHist.get(k) || 0) + 1); wallTot += 1;
-    if (k === px(x + 1, y).join(',') && k === px(x, y + 1).join(',')) wallFlat += 1;
+    // (a `wallFlat` neighbour counter was computed here and never read; 2b's tone concentration is the measurement
+    // that decides flatness, so the dead counter is deleted rather than given an invented bar.)
   }
   const wallTopShare = [...wallHist.values()].sort((a2, b2) => b2 - a2)[0] / Math.max(1, wallTot);
   // 2b's BAR IS THE ACCEPTED FRAME'S OWN WALL, NOT A ROUND NUMBER. The old "at most 8 tones, largest >= 40%" was
@@ -130,7 +152,15 @@ add('5 INFO: a tap in info mode produces a fact', noteText.length > 20, noteText
 add('6 NO PAGE ERRORS during the whole run', !!steps.errors && (steps.errors.errors || []).length === 0,
   steps.errors ? JSON.stringify(steps.errors.errors || []).slice(0, 90) : 'the errors step never printed - WITHHELD, not passed');
 add('7 THE SUITE passes', /FAIL 0/.test(suite), (suite.match(/PASS \d+\s+FAIL \d+/) || ['no suite output'])[0]);
-add('8 THE BASELINE does not regress', /BASELINE \d+ OK/.test(base), (base.match(/BASELINE \d+ OK\s+\d+ FAIL\s+of \d+/) || ['no baseline output'])[0]);
+// THE LINE MUST COMPARE THE NUMBERS. `/BASELINE \d+ OK/` passed beside "BASELINE 32 OK 18 FAIL of 50" - a report
+// that prints its own contradiction. The recorded baseline is 31 OK / 19 FAIL of 50 (RUNLOG T+54); "does not
+// regress" means at least 31 OK and at most 19 FAIL, and both numbers are printed.
+{
+  const m = /BASELINE\s+(\d+) OK\s+(\d+) FAIL\s+of\s+(\d+)/.exec(base);
+  const okN = m ? Number(m[1]) : NaN, failN = m ? Number(m[2]) : NaN;
+  add('8 THE BASELINE does not regress', Number.isFinite(okN) && okN >= 31 && failN <= 19,
+    m ? `${okN} OK / ${failN} FAIL of ${m[3]} (recorded floor: 31 OK / 19 FAIL)` : 'no baseline output - WITHHELD, not passed');
+}
 // LINE 10: THE TARGET. The creator's criteria are in one file, and the frame must be comparable to the reference
 // frame on five measures. This is the line that knows what the result should LOOK like - the one that was missing
 // for the whole project, which is how ten lines could pass on a posterised photograph.
@@ -140,9 +170,15 @@ add('10 THE CREATOR\'S CRITERIA are in one file, with every area represented',
   crit ? 'docs/CRITERIA.md: frame, photograph, sky, buildings, windows, objects, interactions, reference' : 'docs/CRITERIA.md missing');
 add('0 THE DEFINITION OF DONE is written down and read by this rule', existsSync('docs/DONE.md') && /THE DEFINITION OF DONE/.test(readFileSync('docs/DONE.md', 'utf8')),
   'docs/DONE.md: the nine conditions and the six missing pieces');
-add('9 THE INSTRUMENT states its premises and does not withhold the verdict',
-  /INSTRUMENT: the dump is 1:1/.test(gate) && !/VERDICT WITHHELD/.test(gate),
-  (gate.match(/GATE \d+ OK\s+\d+ FAIL/) || ['no gate output'])[0]);
+// THE INSTRUMENT LINE MUST NOT PASS BESIDE ITS OWN FAILING ROW. It tested the premises pattern and "no WITHHELD",
+// so `[GATE 7 OK 1 FAIL]` read as a pass (audited 2026-10-18). The gate's own FAIL count is the verdict now, and
+// both numbers are printed.
+{
+  const gm = /GATE\s+(\d+) OK\s+(\d+) FAIL/.exec(gate);
+  add('9 THE INSTRUMENT states its premises and does not withhold the verdict',
+    !!gm && Number(gm[2]) === 0 && /INSTRUMENT: the dump is 1:1/.test(gate) && !/VERDICT WITHHELD/.test(gate),
+    gm ? `${gm[1]} OK / ${gm[2]} FAIL from the concept gate` : 'no gate output - WITHHELD, not passed');
+}
 
 const failed = checks.filter((c) => !c.pass);
 for (const c of checks) console.log(`${c.pass ? 'OK  ' : 'FAIL'}  ${c.name}  [${c.detail}]`);

@@ -38,7 +38,7 @@ const steps = [
     // flights - whose HEADLINE IS DRAWN INTO THE CANVAS (render.js plane()/ship() write it with the 5x7 font). Without
     // news=0 the gate dumps carried a live headline across the top of the frame; measured on the same page: the
     // ticker's paper was 16% of the sky band.
-    { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0' });
+    { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5' });
   // THE STEP LINES ARE JSON: READ THEM AS JSON. A regex over the harness's stdout reported `left 0, console DIRTY`
   // for a page that was in fact clean (`errors: []`), which is the fourth time one of my instruments described
   // itself instead of the thing it measured. Each line the harness prints IS a JSON object; the last one for a
@@ -100,6 +100,20 @@ const steps = [
   console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  6d REFERENCE  ${(line || '').slice(0, 140)}`);
   if (r.code !== 0 && !process.env.KEEP_GOING) {
     console.log('\nTHE CHAIN STOPPED AT 6d REFERENCE: the frame does not use the accepted frame\'s colours.');
+    process.exit(1);
+  }
+}
+// STEP 6e - THE MATCH GATE. It was MISSING FROM THE CHAIN, which is how "CHAIN GREEN" stayed true while
+// `node tools/match-check.mjs` exited 1 on every dump (6 of 7: the mid-rise's checkerboard). A chain that omits a
+// red gate is not a chain: this step runs it on the frame PAGE just wrote, gates SHOWING like the others, and the
+// operator's own DONE list names match 7/7.
+{
+  const dump = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
+  const r = run('node', ['tools/match-check.mjs', dump], {});
+  const line = r.out.trim().split(String.fromCharCode(10)).filter((l) => /lines match|NOT THE EXAMPLE|IN THE EXAMPLE/.test(l)).slice(-1)[0];
+  console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  6e MATCH      ${(line || '').slice(0, 140)}`);
+  if (r.code !== 0 && !process.env.KEEP_GOING) {
+    console.log('\nTHE CHAIN STOPPED AT 6e MATCH: the frame does not match the accepted example. A chain that omits a red gate is not a chain.');
     process.exit(1);
   }
 }

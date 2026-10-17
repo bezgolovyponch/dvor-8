@@ -161,28 +161,40 @@ await withPage(BASE, {}, async (page) => {
     return 'aimed';`);
   await page.shot(`${out}/2-aim.png`);
 
-  // INFO: the tooltip and its outline
+  // INFO: the ask panel, a tap that names a thing, and its note
   await page.run(`
-    document.getElementById('infoBtn').click();
+    const ib = document.getElementById('infoBtn');
+    if (ib.getAttribute('aria-pressed') !== 'true') { ib.click(); await new Promise((r) => setTimeout(r, 200)); }
     const el = document.getElementById('tilt'), r = document.getElementById('frame').getBoundingClientRect();
     const o = { clientX: r.left + r.width * 0.45, clientY: r.top + r.height * 0.68, bubbles: true, cancelable: true, pointerId: 1 };
     el.dispatchEvent(new PointerEvent('pointerdown', o));
+    el.dispatchEvent(new PointerEvent('pointerup', o));
     return 'asked';`);
   await page.wait(900);
   results.push({ step: 'info', ...(await page.run(`return { note: document.getElementById('note').textContent.slice(0, 120) }`)) });
   await page.shot(`${out}/3-info.png`);
 
-  // DESTROYABILITY, on the real photograph: throw at the same thing until the game has taken it apart, and
-  // capture what is left. This is the check that matters for requirement 14 - remains, not a black hole.
-  await page.run(`
-    document.getElementById('infoBtn').click();
+  // DESTROYABILITY, on the real photograph: throw at a car until the game has taken it apart, and capture what is left.
+  // The mode is READ from the page (aria-pressed) instead of assumed, and the aim is the car's own centre - measured:
+  // a fixed fraction of the frame drifted off the targets and scored 0 for eight throws.
+  const destroy = await page.run(`
+    const w2 = window.__world;
     const el = document.getElementById('tilt'), r = document.getElementById('frame').getBoundingClientRect();
-    const o = { clientX: r.left + r.width * 0.34, clientY: r.top + r.height * 0.68, bubbles: true, cancelable: true, pointerId: 1 };
+    const ib = document.getElementById('infoBtn');
+    if (ib.getAttribute('aria-pressed') === 'true') { ib.click(); await new Promise((res) => setTimeout(res, 250)); }
+    const cam = window.dvor8 && window.dvor8.cam ? window.dvor8.cam() : null;
+    const t = cam ? w2.regions.find((q) => /car|truck|bus|van/i.test(String(q.kind || ''))) : null;
+    if (!t) return { thrown: false, why: 'no page API (the aim needs ?debug) - the score decides' };
+    const o = { clientX: r.left + ((t.x + t.w / 2 - cam.x) / cam.w) * r.width,
+                clientY: r.top + ((t.y + t.h / 2 - cam.y) / cam.h) * r.height, bubbles: true, cancelable: true, pointerId: 1 };
+    const before = w2.score;
     for (let i = 0; i < 8; i += 1) { el.dispatchEvent(new PointerEvent('pointerdown', o)); el.dispatchEvent(new PointerEvent('pointerup', o)); await new Promise((res) => setTimeout(res, 420)); }
-    return 'thrown';`);
-  await page.wait(600);
-  await page.shot(`${out}/6-destroyed.png`);
+    await new Promise((res) => setTimeout(res, 700));
+    return { thrown: true, before, after: w2.score };`);
   results.push({ step: 'destroyed', ...(await page.run(`return { left: document.getElementById('left').textContent, score: document.getElementById('score').textContent }`)) });
+  if (!destroy.thrown || destroy.after <= destroy.before) console.log(JSON.stringify({ step: 'destroyed-warning', ...destroy }));
+  await page.wait(500);
+  await page.shot(`${out}/6-destroyed.png`);
 
   // THE DISASTER, mid-event
   await page.run(`

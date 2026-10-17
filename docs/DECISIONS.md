@@ -32,3 +32,49 @@ default. Any new decision must be added to this table BEFORE it is used in the p
   O2  Which tonal register the ground's own ladder should stop at, when the accepted frame's road is 46.6% dark
       and the style's register requires a lighter grey. Currently rung 2 of 3 by measurement, recorded in
       src/vector.js with the four measured configurations.
+
+## D15 — THE COMPOSITION IS A PLAN, NOT A NUMBER (2026-10-18, operator directive)
+
+**The operator's ruling:** "it's not a palette first — you have to verify the acceptance; the main is the conceptual
+look of the result; get WHY composition and conceptually the desired and expected result looks how it looks, and add
+the structure for it. Deterministic, not just numbered, but conceptual."
+
+**Read off the accepted frame's own pixels** (`tools/plan-check.mjs` re-reads it every run):
+
+| rows | band | the rule it obeys |
+|---|---|---|
+| 0–352 | **sky** | one flat blue plane (rgb(77,156,232)) carrying drawn white clouds; one colour owns the band, no gradient |
+| 352–384 | **horizon** | one dark line (rgb(27,18,32), 25–29% of its rows) — the frame's structural spine |
+| 384–512 | **ground** | the photograph's own tones (road rgb(98,94,105), asphalt rgb(74,70,80)), vehicles kept from the photo |
+| everywhere | **facades** | exactly two archetypes: `checker` (light/dark panels alternating; accepted mid-rise white 16.0%, dark blue 38.5%, 2-D parity .361) and `dark-plane` (dark ≥35% carrying blue glass ≥10%); `grid` is the unclaimed case |
+
+**The structure:** `src/plan.js` produces `scenePlan({w,h,horizon,parts,rgb})` — bands in order, facades with a role,
+deterministic (same input, same plan; the check asserts it), and `buildingsFrom(mask,w,h)` — buildings as instances by
+connected components on the semantic mask. `tools/plan-check.mjs` judges the plan: 7 structural lines, three of them
+read from the accepted frame's own pixels (horizon row 352, sky band, band structure) and four on our plan.
+
+**Measured:** our plan's bands are `sky 0–358 · horizon 358–390 · ground 390–512` — the accepted's structure within
+6 rows. **Open finding:** the parse's building mask MERGES the tower and the mid-rise into one component (box
+`0,0,211,342`), so the plan can name `dark-plane` but not yet both archetypes; instance segmentation of touching
+buildings (edges/watershed on the mask) is the next structural step, and it is what the accepted frame's two
+archetypes require.
+
+**Split into instances:** `splitByTone()` splits a merged component by its own two tones (Otsu 1979) - measured on the judged frame, the tower arrives as `dark-plane@0,0,131,342` (dark 93.6%) and the mid-rise as `checker@160,201,209,258`, both named on SEPARATE buildings, 8 of 8 structural lines. The dark-plane bar is dark >=35% (the accepted frame's own), not the mask's blue share: the mask is the silhouette (1.1% blue), the glass is drawn over it (11.7% of the region). **The plan is a DIAGNOSTIC for now:** the painter still decides for itself; inverting that (drawing FROM the plan) is the next structural step.
+
+**A bug this exposed:** `vector.js` re-declared `wallParts` inside the facade block, shadowing the function's own, so
+every `wallParts` the renderer returned was EMPTY. Fixed (assignment, not declaration).
+
+## D17 — A RELEASE IS MADE ONLY FROM A CHAIN-GREEN TREE (2026-10-18, operator directive)
+
+**The operator's rule:** "when you get a stable version push it on the link in repo APK".
+
+**The link:** the README's `Download dvor-8-<version>.apk` points at a GitHub release asset on
+`github.com/bezgolovyponch/dvor-8/releases`. The repo also carries `android/` — a WebView app that packages the
+game's own files, built by `android/build.sh` with the Android SDK's tools (no Gradle), signed with a key kept
+outside the repository so updates install over the previous build.
+
+**The rule, implemented:** `android/release.sh <version> <code>` refuses unless `node tools/chain.mjs` exits 0; it
+then builds, creates the release with the measured vector in its notes, rewrites the README's link, and commits only
+the README. **Stability is the chain's verdict, not a judgement call** — which is why nothing was published today:
+the chain stops at 1 CRITERIA (R1, whole-frame comparability 0.111), and the release script said REFUSED.
+

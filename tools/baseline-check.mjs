@@ -50,10 +50,28 @@ const ROWS = [
   ['L1 v6\'s edges map replaced the traced polyline for outlining', 'src/world.js', () => has(src('world.js'), 'export function edgesOf')],
   // THE DESTRUCTION MODEL: recorded before anything is built on it, and implemented in the three parts the
   // knowledge base names - the ladder, the carrier, the transition.
-  ['L2 The frame is FLAT by measurement: despeckle and shaped markings', 'src/vector.js',
-    () => has(src('vector.js'), 'DESPECKLE', 'mk.area < 14', 'four neighbours agree')],
+  // THE ROW MUST MEASURE THE THING IT NAMES. It grepped two constants (`DESPECKLE`, `mk.area < 14`) that were
+  // removed when the despeckle became a counted pass, so it failed on a stale NAME even though the requirement -
+  // a frame that is FLAT by measurement - now exists as a measured row of the concept gate ("at least as flat as
+  // the accepted frame's", bar read from reference/v10a-art-canvas.png: flatShare 0.164). This row reads that
+  // verdict, and the gate prints its own numbers.
+  ['L2 The frame is FLAT by measurement: despeckle and shaped markings', 'the concept gate',
+    () => {
+      // The gate must ASSERT it (a row exists); when a frame is supplied, the gate must print it OK. The gate's own
+      // exit code is not this row's verdict - another row of it ("largest colour below the sky") is legitimately red
+      // - so the output is read with spawnSync and this row judges ITS line only.
+      const asserts = readFileSync(new URL('../tools/concept-check.mjs', import.meta.url), 'utf8').includes('the frame is FLAT by measurement');
+      if (!asserts) return false;
+      if (!process.env.DUMP) return true;
+      const r = spawnSync('node', ['tools/concept-check.mjs', process.env.DUMP], { encoding: 'utf8' });
+      return /OK\s+the frame is FLAT by measurement/.test(String(r.stdout || ''));
+    }],
+  // THE ROW MUST MEASURE THE THING IT NAMES, against the code that exists. It grepped a style SELECTOR
+  // (`get('style') || 'vector'`) and a comment; the selector is gone because there is ONE RENDERER now (main.js says
+  // so at the call site), so the row reads that call: the constructive route, by default, with the parse and the
+  // fundamentals it measures from.
   ['L1 The product renders constructively by default, on measurement', 'src/main.js',
-    () => has(src('main.js'), "get('style') || 'vector'", 'flat surfaces at 18%')],
+    () => has(src('main.js'), 'styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse')],
   ['L1 The gate reads the DRAWN canvas, not a screenshot', 'tools/photo-shot.mjs + tools/concept-check.mjs',
     () => has(read('tools/photo-shot.mjs'), 'canvas.json', 'getImageData') && has(read('tools/concept-check.mjs'), "endsWith('.json')")],
   ['L1 The layer-3 model is chosen by MEASUREMENT, with its licence and size', 'docs/knowledge-base.md',
@@ -75,15 +93,20 @@ const ROWS = [
     () => (read('docs/REQUIREMENTS.md').match(/^\| R\d /gm) || []).length >= 9],
   ['L3 The outlines are SILHOUETTES on a real photo (a picture proves it)', 'docs/shots/version-outlines.png',
     () => existsSync(shot('version-outlines.png')) && shotNewerThan('version-outlines.png', 'src/render.js')],
+  // The outline is drawn from the thing's SILHOUETTE now, not from a box: the row reads the two calls that decide
+  // it (mayBeOutlined = whether the thing may carry a line; silhouette(r) = the shape the line follows).
   ['L2 No thing is drawn as a box when its shape is known', 'src/render.js',
-    () => has(src('render.js'), 'edgesOf(world, r)', 'THE THING IS OUTLINED IN ITS OWN SHAPE')],
+    () => has(src('render.js'), 'mayBeOutlined(r)', 'const list = silhouette(r)')],
   ['L1 THE INTERIM GATE exists and reads the concept', 'tools/concept-check.mjs + docs/concept-gate.md',
     () => has(read('tools/concept-check.mjs'), 'flatShare', 'transPerPx', 'window sprites') && has(read('docs/concept-gate.md'), 'The gate cannot be calibrated from a screenshot')],
   ['L1 THE CORE ISSUE is recorded as a rule: adopt the reference\'s ARCHITECTURE, not its parts', 'docs/knowledge-base.md',
     () => has(read('docs/knowledge-base.md'), 'THE CORE ISSUE IN MY APPROACH', 'ADOPT THE REFERENCE\'S ARCHITECTURE FOR THAT LAYER', 'BUILD THE WORLD', 'BUILD THE THINGS', 'THEN THE EVENTS')],
   ['L2 A window is a SPRITE: frame, glass and sill - not one dark rectangle', 'src/vector.js',
     () => has(src('vector.js'), 'glassEntry', 'sillEntry', 'onFrame')],
-  ['L2 A wall is BUILT: a plane tone plus a turned-away tone', 'src/vector.js', () => has(src('vector.js'), 'shadeEntry', 'en.line[p2] > 0.25 ? shadeEntry : entry')],
+  // The wall is built as three PLANE FACES (lit / plain / turned away) by position in its own box; the constants this
+  // row used to grep (`shadeEntry`) were replaced by that face rule, so the row reads the rule itself.
+  ['L2 A wall is BUILT: a plane tone plus a turned-away tone', 'src/vector.js',
+    () => has(src('vector.js'), 'rec.tones[face]', 'town < 1 / 3 ? 2')],
   ['L3 Buildings re-rendered on a REAL photo, with a storm through them', 'docs/shots/photo-hurricane.png',
     () => existsSync(shot('photo-hurricane.png')) && shotNewerThan('photo-hurricane.png', 'src/vector.js')],
   ['L1 The destruction model is written down with its sources', 'docs/knowledge-base.md',

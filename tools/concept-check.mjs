@@ -130,6 +130,12 @@ const INSTRUMENT = [
   ['the frame measured is a whole frame', n === w * h && n > 0, `${n} samples for ${w}x${h}`],
 ];
 
+// the frame's own colours, against the project's table (used by the palette row; computed before ROWS because the
+// row's predicate runs while the array is built)
+const paletteSet = new Set(PALETTE.map((c) => c.join(',')));
+const paletteSeen = new Set();
+for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) paletteSeen.add(px(x, y).join(','));
+const paletteStrays = [...paletteSeen].filter((k) => !paletteSet.has(k));
 const ROWS = [
   ['the frame is a daylight place, not a murk (mean luma 55..200)', mean >= 55 && mean <= 200, `mean luma ${mean.toFixed(0)}`],
   // A CONSTRUCTED FRAME IS MADE OF PLANES, and its largest plane is allowed to be large: a wall, the road, the
@@ -149,7 +155,17 @@ const ROWS = [
   ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp', roadTones.size >= 8, `${roadTones.size} palette entries on the road`],
   ['the sky is a plane, not a gradient (its own band: at most 12 palette entries)', palSky.size <= 12, `${palSky.size} entries in the sky band`],
   ['facades are built with windows (at least 8 window sprites)', windows >= 8, `${windows} window sprites`],
-  ['the palette is the project own table', true, `${PALETTE.length} entries`],
+  // THE PALETTE ROW WAS THE LITERAL `true` (audited 2026-10-18: an unfalsifiable row inside "19 of 19"). It now
+  // checks what it says: every colour drawn in the dump is an entry of the project's own palette table, so a stray
+  // colour - a gradient, a blend, a photograph pixel - FAILS it.
+  // THE FLATNESS WAS COMPUTED AND NEVER ASSERTED (audited 2026-10-18: flatShare and transPerPx were computed at
+  // :110 and no row read them, while the baseline row that claimed "the frame is FLAT by measurement" grepped two
+  // constants that no longer exist). MEASURED on the creator's accepted frame, same band and same definition:
+  // flatShare 0.164, transPerPx 0.688 - clouds are irregular, so the reference is LESS flat than a plain plane. The
+  // bar is therefore the accepted frame's own flatness, not a round number: being at least as flat as the frame the
+  // creator accepted.
+  ['the frame is FLAT by measurement: its sky band is at least as flat as the accepted frame\'s (0.164)', flatShare >= 0.164, `flat ${(100 * flatShare).toFixed(0)}%, transitions ${transPerPx.toFixed(2)} per pixel (accepted frame: 16%, 0.69)`],
+  ['the palette is the project own table', paletteStrays.length === 0, `${PALETTE.length} entries · ${paletteSeen.size} colours in the frame · ${paletteStrays.length} not in the table`],
 ];
 let fail = 0;
 for (const [what, ok, detail] of ROWS) { console.log(`${ok ? 'OK  ' : 'FAIL'}  ${what}  [${detail}]`); if (!ok) fail += 1; }

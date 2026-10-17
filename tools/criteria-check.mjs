@@ -22,7 +22,10 @@ const rows = [...criteria.matchAll(/^\|\s*([A-Z]\d+)\s*\|([^|]*)\|([^|]*)\|/gm)]
 
 const gate = () => run('node', ['tools/concept-check.mjs', process.env.DUMP || '']);
 const suite = () => run('node', ['test.mjs']);
-const delivery = () => run('node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/crit', process.env.PHOTO || 'photos-test/5.jpg']);
+// THE JUDGED PHOTOGRAPH, NOT A DIFFERENT ONE. S1/B1/B2 read delivery-check's output, and delivery was being run on
+// photos-test/5.jpg while the chain and deliver-check itself use photos-test/v10a.jpg - so S1 could pass on one
+// photograph and line 1 fail on another (audited 2026-10-18). Both now use the judged pair's input.
+const delivery = () => run('node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/crit', process.env.PHOTO || 'photos-test/v10a.jpg']);
 // THE FRAME THE FRAME-CRITERIA READ, AND THE REFERENCE THEY ARE JUDGED AGAINST.
 //
 // Four criteria (F1, F3, F4, P1) measure a FRAME, and until now they were called with no frame at all: the gate
@@ -97,8 +100,11 @@ const REGISTRY = {
     const mine = Number(m[1]), ref = Number(m[2]);
     return mine <= ref ? true : `stray share ${mine}% is rougher than the accepted frame's own ${ref}%`;
   },
-  F4: () => (/sky/i.test(gate()) && frame() ? true : (frame() ? 'the gate reports no sky line on ' + frame() : 'no frame supplied (set DUMP=<canvas.json>)')),
-  P1: () => (/PHOTOGRAPH decides the road/.test(gate()) ? true
+  // F4 IS THE SKY BEING A PLANE, so its predicate is the sky rows being OK - not the word "sky" appearing anywhere
+  // in the gate's output (the label prints beside FAIL too).
+  F4: () => (/^OK\s+the SKY is a plane/m.test(gate()) && /^OK\s+and one tone owns it/m.test(gate()) ? true
+    : (frame() ? 'the concept gate does not report the sky as a plane on ' + frame() : 'no frame supplied (set DUMP=<canvas.json>)')),
+  P1: () => (/^OK\s+the PHOTOGRAPH decides the road/m.test(gate()) ? true
     : (frame() ? 'the gate does not report the photograph deciding the road on ' + frame() : 'no frame supplied (set DUMP=<canvas.json>)')),
   P2: () => readFileSync('src/criteria/RoadRule.js', 'utf8').includes('BLOCK = 5')
     && readFileSync('src/main.js', 'utf8').includes('photoLayer'),

@@ -52,13 +52,19 @@ if (gone.length) {
 // own premise cannot be invented. (Measured 2026-10-17: docs/COMPOSITION.md was archived to docs/archive/ by
 // commit 3e97356, preflight still counted 10, and tools/composition-check.mjs threw ENOENT at its first line.)
 const countRows = (file, rx) => {
+  // THE COUNT IS THE BAR. `n > 0` accepted ANY number of rows - one row printed as a healthy document. The expected
+  // counts are the project's own published ones (19 criteria, 10 composition elements), stated here and compared.
   try { const n = (readFileSync(file, 'utf8').match(rx) || []).length; return n > 0 ? { n } : { n: 0, why: `${file} has no rows` }; }
   catch { return { n: 0, why: `${file} is missing` }; }
 };
 const criteria = countRows('docs/CRITERIA.md', /^\|\s*[A-Z]\d+\s*\|/gm);
 const composition = countRows('docs/COMPOSITION.md', /^\|\s*\d+\s*\|/gm);
+// THE EXPECTED COUNTS ARE THE PROJECT'S OWN: 19 criteria rows and 10 composition elements. A document that has been
+// truncated to one row is not a document, and `n > 0` could not see the difference.
+const EXPECT = { criteria: 19, composition: 10 };
 for (const [label, c] of [['criteria', criteria], ['composition', composition]]) {
   if (c.why) { console.log(`PREFLIGHT FAILED: ${label} cannot be read — ${c.why}. The chain's step cannot run on a document that is not there.`); process.exit(1); }
+  if (c.n !== EXPECT[label]) { console.log(`PREFLIGHT FAILED: ${label} has ${c.n} rows; the project states ${EXPECT[label]}. The chain's step is written against that count.`); process.exit(1); }
 }
 console.log(`PREFLIGHT OK — ${REQUIRED.length} parts present, the preamble carries all ${must.length} load-bearing statements.`);
 console.log(`  criteria: ${criteria.n} rows · composition: ${composition.n} elements · the chain: preflight -> criteria -> composition -> suite -> delivery -> reference`);

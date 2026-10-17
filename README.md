@@ -10,6 +10,14 @@ are found by a detector running on the phone itself.
 
 **[Download dvor-8-0.4.0.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.4.0/dvor-8-0.4.0.apk)** (20 MB, Android 8 and later).
 
+### Building and publishing
+
+`sh android/build.sh` builds the signed APK from this tree with the Android SDK's own tools (no Gradle).
+`sh android/release.sh <version> <versionCode>` publishes it - and it **refuses unless `node tools/chain.mjs`
+exits 0**: a release is made only from a chain-green tree, and the release asset is the artefact while the
+repository only points at it. The signing key lives outside the repository (`~/.android/dvor8.keystore`), so
+updates install over the previous build.
+
 The repository is private, so the link works for a browser signed in to GitHub with access to it. On the
 phone: open the file, allow installing from that source when Android asks, install. The app is the same game
 with its files inside the package: it plays with no Wi-Fi and no computer. Only the headlines go to the

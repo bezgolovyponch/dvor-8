@@ -106,17 +106,17 @@ if (fails === 0) {
         const guardOk = h.skyPx === 0 && clouds === 0 && (painted === null || painted === 0);
         say(guardOk && ph.noSky,
           `${photo}: NO SKY in the parse -> guard fires (noSky ${ph.noSky}), horizon 0 in ${ph.cols} columns, ${clouds} clouds, painted ${painted === null ? 'n/a (no yard built)' : painted + ' px'}`);
-        console.log(`      DIAGNOSTIC (not an acceptance line): the FRAME's own skyline still agrees with masks.sky on ${(100 * share).toFixed(1)}% of columns - the frame's sky composition is Q15, and the 0.90 acceptance above is on the parse's horizon.`);
+        console.log(`      OPEN ITEM Q15 (measured, NOT a pass): the FRAME's own skyline agrees with masks.sky on only ${(100 * share).toFixed(1)}% of columns. The 0.90 acceptance above is on the PARSE's horizon; the frame still does not use that mask, and this number is the size of the gap. It is reported in the verdict below, never dropped.`);
       } else {
         say(painted > 0,
           `${photo}: the frame paints ${painted} sky px`);
-        console.log(`      DIAGNOSTIC (not an acceptance line): the FRAME's skyline agrees with masks.sky on ${(100 * share).toFixed(1)}% of ${h.cols} columns (mean |d| ${h.mean.toFixed(2)}, max ${h.max}) - the frame's sky composition is Q15.`);
+        console.log(`      OPEN ITEM Q15 (measured, NOT a pass): the FRAME's skyline agrees with masks.sky on ${(100 * share).toFixed(1)}% of ${h.cols} columns (mean |d| ${h.mean.toFixed(2)}, max ${h.max}). The frame does not use the mask; the acceptance above is the parse's own horizon.`);
       }
     } catch (e) {
       fails += 1;
       console.log(`FAIL  ${photo}: ${String(e.message || e).slice(0, 120)}`);
     }
   }
-  console.log(fails ? `\nTHE HORIZON IS NOT CONFIRMED: ${fails} assertion(s) failed.` : '\nTHE HORIZON IS CONFIRMED: the parse\'s horizon is the first non-sky row (exact on resolved columns), the no-sky guard fires, and the frame\'s own agreement is printed as a labelled diagnostic (Q15), never as an acceptance line.');
+  console.log(fails ? `\nTHE HORIZON IS NOT CONFIRMED: ${fails} assertion(s) failed.` : '\nTHE HORIZON IS CONFIRMED for the PARSE: its horizon is the first non-sky row (exact on resolved columns) and the no-sky guard fires. NOT confirmed for the FRAME: Q15 is open - the frame\'s skyline agrees with masks.sky on a minority of columns, and that gap is measured and named above rather than demoted to a comment.');
 }
 process.exit(fails ? 1 : 0);

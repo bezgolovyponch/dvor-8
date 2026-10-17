@@ -47,9 +47,10 @@ const TOOLS = [
   { name: 'match-check', args: () => ['tools/match-check.mjs', DUMP] },
   { name: 'style-check', args: () => ['tools/style-check.mjs', DUMP, PHOTO] },
 ];
-console.log(`PREMISES: one stored dump ${DUMP} (${d.w}x${d.h}, ${d.w * d.h} px, sha256 ${sha(before).slice(0, 16)}) · each analyzer run TWICE by node on the SAME file, never on a copy · stdout compared byte for byte · photo ${PHOTO} for style-check · each analyzer's own exit code is recorded, not judged (this gate measures reproducibility, not the frame)`);
+console.log(`PREMISES: one stored dump ${DUMP} (${d.w}x${d.h}, ${d.w * d.h} px, sha256 ${sha(before).slice(0, 16)}) · each analyzer run TWICE by node on the SAME file, never on a copy · stdout compared byte for byte · photo ${PHOTO} for style-check · each analyzer's own exit code is RECORDED AND JUDGED (reproducible output of a failing analysis is reported as REPRODUCIBLE BUT RED, never as a pass)`);
 
 let differs = 0, silent = 0;
+const exits = [];   // every analyzer's own exit code, judged at the end (see the verdict)
 for (const t of TOOLS) {
   const passes = ['a', 'b'].map((pass) => {
     const r = run(t.args());
@@ -58,6 +59,7 @@ for (const t of TOOLS) {
     return { ...r, file };
   });
   const [A, B] = passes;
+  exits.push({ name: t.name, code: A.code, sameCode: A.code === B.code });
   let common = 0;
   while (common < A.out.length && common < B.out.length && A.out[common] === B.out[common]) common += 1;
   const same = A.out.length === B.out.length && common === A.out.length;
@@ -81,7 +83,17 @@ if (silent) {
   console.log(`G-DET-ANALYZE VERDICT WITHHELD: ${silent} analyzer(s) produced no output - there is no measurement to compare.`);
   process.exit(2);
 }
-console.log(differs
-  ? `G-DET-ANALYZE FAIL: ${differs} analyzer(s) did not reproduce their own output on the same dump.`
-  : `G-DET-ANALYZE PASS: match-check and style-check each printed identical bytes twice on the same dump.`);
-process.exit(differs ? 1 : 0);
+// THE EXIT CODES ARE JUDGED, NOT RECORDED. "Identical bytes" proves reproducibility; it says nothing about whether
+// the analysis reproduces a PASS. An analyzer that exits 1 twice, byte for byte, is DETERMINISTIC AND RED - reporting
+// it as this gate's PASS (the old behaviour) let a red match-check sit inside a green chain step.
+const reds = exits.filter((r) => r.code !== 0);
+if (differs) {
+  console.log(`G-DET-ANALYZE FAIL: ${differs} analyzer(s) did not reproduce their own output on the same dump.`);
+  process.exit(1);
+}
+if (reds.length) {
+  console.log(`G-DET-ANALYZE REPRODUCIBLE BUT RED: ${reds.map((r) => r.name + ' exits ' + r.code).join(', ')} - the output is identical twice, but what it reproduces is a failing analysis. This gate measures reproducibility; the failure itself is named here so a green step cannot hide it.`);
+  process.exit(1);
+}
+console.log('G-DET-ANALYZE PASS: match-check and style-check each printed identical bytes twice on the same dump, and both exited 0.');
+process.exit(0);

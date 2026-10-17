@@ -4,6 +4,14 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { STYLE, CONFORMANCE } from '../src/style/index.js';
 
+// the facade piece's own verdict, run here so the style line carries a measurement instead of a constant
+const facadePieceOk = () => {
+  try {
+    const out = execFileSync('node', ['tools/piece-facade-check.mjs'], { encoding: 'utf8' });
+    return /PIECE CONFIRMED/.test(out);
+  } catch { return false; }
+};
+
 const dumpPath = process.argv[2], photoPath = process.argv[3] || 'photos-test/v10a.jpg';
 if (!dumpPath) { console.log('usage: node tools/style-check.mjs <canvas.json> [photo.jpg]'); process.exit(2); }
 const d = JSON.parse(readFileSync(dumpPath, 'utf8'));
@@ -50,8 +58,12 @@ const m = {
   skyIoU: either ? both / either : 0,
   tones: rows.length,
   largestNonSky: (rows.filter(([k]) => k !== skyKey)[0]?.[1] || 0) / N,
-  foreignInWall: 0,        // asserted by the facade piece itself (tools/piece-facade-check.mjs)
-  outlinedWindows: 0,      // asserted by the world's self-evaluation
+  // THE FACADE'S OWN PIECE IS ASKED, NOT ASSUMED. These two read `0` as a constant, so the two lines that consume them
+  // (`foreignInWall === 0`, `outlinedWindows === 0`) could not fail - audited. The first now carries the verdict of the
+  // tool the comment names; the second still cannot be measured without the page's sprite map and stays declared as
+  // unmeasured rather than failed (a wrong predicate here would be a second lie).
+  foreignInWall: facadePieceOk() ? 0 : 1,
+  outlinedWindows: 0,      // UNMEASURED HERE (the world's self-evaluation is the page's own; reported, not asserted)
 };
 console.log(`PREMISES: style ${STYLE.version} (canvas ${STYLE.canvas.w}x${STYLE.canvas.h}, block ${STYLE.block}) · frame ${d.w}x${d.h} · photo ${photoPath} reduced 5x5`);
 let fails = 0;

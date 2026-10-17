@@ -1391,8 +1391,10 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
   const d3 = dis.makeDisaster('tsunami', mulberry32(9));
   let drowned = 0;
   for (let i = 0; i < 900; i += 1) for (const ev of dis.stepDisaster(d3, w3, 1 / 30, mulberry32(70 + i))) if (ev.type === 'drown') drowned += 1;
+  // `d3.water >= 0 && drowned >= 0` could not fail - a run that drowned NOTHING passed a line named "drowns what is
+  // under the water line". The drowning is now required; the water level stays printed as the context it is.
   check('the tsunami drowns what is under the water line and leaves the rest standing',
-    d3.water >= 0 && drowned >= 0 && w3.regions.every((r) => r.gone === false || r.hits === r.hp),
+    drowned >= 1 && w3.regions.every((r) => r.gone === false || r.hits === r.hp),
     `${drowned} drowned, water peaked at ${d3.water.toFixed(2)}`);
   check('the day rolls a disaster rarely and the same day rolls the same one',
     dis.CHANCE > 0 && dis.CHANCE < 0.5
@@ -1616,7 +1618,11 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
   check('the curve is steep, which is what makes accumulated hits escalate',
     shakeFor(0.9) / Math.max(1e-9, shakeFor(0.3)) > 20,
     `${(shakeFor(0.9) / shakeFor(0.3)).toFixed(0)}x from trauma 0.3 to 0.9`);
-  check('shake never exceeds the stated maximum', [0.5, 0.9, 1, 1.5].every((t) => shakeFor(t) <= SHAKE_MAX));
+  // `every((t) => shakeFor(t) <= SHAKE_MAX)` was TRUE BY CONSTRUCTION - shakeFor IS Math.min(SHAKE_MAX, ...), so the
+  // line could not fail. It now pins the CLAMP: reached at trauma 1, held beyond it, and NOT reached just below.
+  check('shake is clamped at the stated maximum (reached at 1, held beyond it, not before)',
+    shakeFor(1) === SHAKE_MAX && shakeFor(1.5) === SHAKE_MAX && shakeFor(0.99) < SHAKE_MAX,
+    `0.99 -> ${shakeFor(0.99).toFixed(2)} px, 1 -> ${shakeFor(1).toFixed(1)} px, 1.5 -> ${shakeFor(1.5).toFixed(1)} px (max ${SHAKE_MAX})`);
   check('trauma accumulates: three dents reach further than one dent', (() => {
     const x = makeFx(w);
     impact(x, 'dent'); const one = x.shake;

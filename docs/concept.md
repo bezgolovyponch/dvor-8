@@ -98,6 +98,7 @@ thing → outline, and no pass may write a pixel another piece owns.
 - `throwables.js` — What is in your hand. Six things you can pick up, each flying and landing its own way.
 - `vector.js` — VECTOR TRACE — the r9 route: flat designed surfaces with straight edges, one colour per shape.
 - `view.js` — How the picture sits on the screen, and the way back from a finger to a pixel.
+- `plan.js` — THE SCENE PLAN — the composition the accepted frame is built from, as STRUCTURE, not as thresholds.
 - `walk.js` — Down in the yard: someone who walks, jumps, and comes down on things.
 - `weather.js` — WEATHER — the yard's own disasters: rain, snow, fog and a storm that throws lightning.
 - `world.js` — The yard as a thing that can be hit. Plain data and pure functions: no canvas, no clock of its own.

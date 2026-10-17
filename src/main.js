@@ -10,6 +10,7 @@
 import { sceneParse } from './scene-parse.js';   // stage 1+2: what is on the screen, and where the sky is
 import { downscaleContrast, expandContrast } from './pieces/downscale.js';   // the published reduction logic (PixelOE), confirmed by its own check
 import { styliseVector } from './stylise.js';
+import { scenePlan, buildingsFrom, splitByTone } from './plan.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { makeWorld, pick, strike, tick, left } from './world.js';
@@ -376,10 +377,21 @@ async function build(rgba, w, h, dets, big = null) {
     ? await sceneParse(shot, w, h, shot.width, shot.height).catch((e) => { if (typeof window !== 'undefined') window.__parseError = String(e && e.message || e); return null; })
     : null;
   if (typeof window !== 'undefined') window.__parse = parse ? { classes: parse.classes, sky: !!parse.masks.sky, building: !!parse.masks.building } : null;
+  // THE PLAN NEEDS THE BUILDING MASK ITSELF, and the parse lives inside build(); it is handed over here.
+  if (typeof window !== 'undefined') window.__parseBuilding = (parse && parse.masks && parse.masks.building) || null;
   // THE OUTLINE GATE'S PROBE (?outline=1): the render records every pixel it inks, and the sky mask is exposed so the
   // gate can ask whether any of them landed on sky. Diagnostics only.
   if (typeof window !== 'undefined') {
     window.__outlineProbe = params.get('outline') === '1';
+    window.__checkerProbe = params.get('checker') === '1';
+    window.__PANE = params.get('pane') ? params.get('pane').split(',').map(Number) : null;
+    window.__RING = params.get('ring') === '1';
+    window.__NOCHECK = params.get('nocheck') === '1';
+    window.__MULL = params.get('mull') ? Number(params.get('mull')) : 3;   // the accepted curtain wall's mullion
+    window.__COVER = params.get('cover') ? Number(params.get('cover')) : 0.5;
+    window.__SHADOW = params.get("shadow") ? Number(params.get("shadow")) : 1;
+    window.__CLOUDK = params.get('clouds') ? Number(params.get('clouds')) : 7;
+    window.__DUTY = params.get('duty') ? Number(params.get('duty')) : 2;
     if (window.__outlineProbe && parse && parse.masks.sky) window.__skyMask = parse.masks.sky;
   }
   // THE HORIZON GATE'S PARSE READOUT (?horizon=1): the implementation's horizon against an INDEPENDENT recomputation
@@ -403,6 +415,7 @@ async function build(rgba, w, h, dets, big = null) {
   if (typeof window !== 'undefined' && params.get('parse') === '1') window.__parseFirst = parse;
   const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
   if (typeof window !== 'undefined') window.__spriteBays = (st.stats && st.stats.spriteBays) || null;   // DIAGNOSTIC
+  if (typeof window !== 'undefined') { window.__traceParts = (st.stats && st.stats.wallParts) || []; window.__traceRgb = (st.stats && st.stats.rgb) || null; }   // the PLAN's inputs
   // THE THINGS ARE CUT OUT OF THE REDUCED PICTURE, NOT OUT OF THE PHOTOGRAPH.
   //
   // The reduction (areas first, in vector.js) turns the frame into flat fields; cutting the objects out of the RAW
@@ -724,7 +737,27 @@ async function fromFile(file) {
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   const names = found.kept.map((d) => TARGETS[d.label].ru);
   // build() awaits the scene parse, so the note is written when the yard actually exists
-  if (await build(rgba, w, h, found.kept, big)) {
+  // A THROW INSIDE THE BUILD IS SWALLOWED BY ITS OWN try/catch AND LEAVES AN EMPTY YARD - the failure this project
+  // has shipped twice. The recorder below makes the next one visible instead of silent: it never changes behaviour.
+  let built = false;
+  try {
+    built = await build(rgba, w, h, found.kept, big);
+  } catch (error) {
+    if (typeof window !== 'undefined') window.__buildError = String(error && (error.stack || error.message) || error);
+    throw error;
+  }
+  // THE SCENE PLAN, exposed for the structural check: the composition as bands and facade archetypes, computed from
+  // the same parse the painter used. It is deterministic, so the check can compare two runs byte for byte.
+  try {
+    const bMask = (typeof window !== 'undefined' && window.__parseBuilding) || null;
+    // the parse merges touching buildings; split each one by its own two tones (Otsu on the component)
+    const merged = bMask ? buildingsFrom(bMask, w, h) : (window.__traceParts || []);
+    const bParts = [];
+    for (const m2 of merged) { for (const s2 of splitByTone(m2, w, (window.__traceRgb || null))) bParts.push(s2); }
+    const plan = scenePlan({ w, h, horizon: Math.round(h * 0.70), parts: bParts, rgb: (window.__traceRgb || null) });
+    if (typeof window !== 'undefined') window.__plan = plan;
+  } catch (error) { if (typeof window !== 'undefined') window.__planError = String(error && (error.stack || error.message) || error); }
+  if (built) {
     const panes = windowsIn(yard.regions);
     note(`нашёл за ${secs} с: ${[...names, panes ? `окон ${panes} (на глаз, по тёмным проёмам в стене)` : ''].filter(Boolean).join(', ')}`);
   } else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
@@ -1171,7 +1204,11 @@ function frame(now) {
   // It is a gate affordance of the same kind as `?clean=1&news=0`: no product path reads it, and every gate that
   // uses it prints the pin it used.
   const raw = Math.min(0.05, (now - last) / 1000);
-  const dt = clockPin >= 0 ? 1 / 60 : raw;
+  // THE PIN IS AUTHORITATIVE (research 2026-10-18, cited in RUNLOG): it froze `fx.clock` but still advanced dt, so
+  // stepFx() below kept ageing particles, trauma, rings and rocks every frame - the "pinned" frame kept changing for
+  // about 2.5 s and only then froze. That is why a hash-settle wait could pass on an already-stopped page and never
+  // on a live one. With dt = 0 the pinned frame is the FIRST frame and stays it.
+  const dt = clockPin >= 0 ? 0 : raw;
   last = now;
   clock = clockPin >= 0 ? clockPin : clock + raw;
   if (typeof window !== 'undefined') window.__clock = clock;   // the pin's own readout, for G-DET-CLOCK
@@ -1185,7 +1222,7 @@ function frame(now) {
   if (world) {
     let scanY = null;
     if (stage === 'scan') {
-      scanT += dt;
+      scanT = clockPin >= 0 ? SCAN_TIME : scanT + dt;   // a pinned capture is of the finished frame, never of the wipe
       scanY = Math.min(1, scanT / SCAN_TIME) * world.h;
       for (const r of world.regions) {
         if (r.seen || r.cy > scanY) continue;

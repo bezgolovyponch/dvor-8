@@ -28,3 +28,12 @@ objects can be destroyed. Windows are destroyable but are NOT outlined.**
 The outline was drawn for **every visible region** (so the cars read as rings), and the aim highlight marked
 everything at once. Windows were outlined as well, which doubled the rings on every facade. The policy above is now
 the only thing that decides, and it is checked.
+
+### The whole frame compared to the accepted one (composition row 10, criterion R1)
+
+The comparability of the drawn frame with the creator's accepted frame is measured by `tools/accepted-frame.py`, the
+owner's referee: the accepted frame is extracted from `reference/v10a-accepted-frame-screenshot.png` (lossy VP8 WebP,
+art rect exactly 1.25x, HUD/rings/seams masked), and **our** dump and that extraction are measured with the same
+family classifier inside the HUD mask. The criterion passes when every family share (white, mullion, blue, other) is
+within **0.05** of the accepted's. The extraction reproduces the owner's own cross-check on 11 of 13 lines, which is
+the premise; the criterion is the whole-frame comparison, and today it reads worst 0.173 (mullion), so R1 is NOT MET.

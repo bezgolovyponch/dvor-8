@@ -62,11 +62,31 @@ const out = await withPage(BASE, {}, async (page) => {
     for (const p of probe.ink) {
       if (ink.has(p + 1) && ink.has(p + c.width) && ink.has(p + c.width + 1)) inBlock += 1;
     }
+    // 3 THE INK IS ONE COLOUR, AND IT IS THE DARKEST THE FRAME USES. The criterion is "one outline rule (the darkest
+    // palette colour, 1 px)"; the old gate measured the shape of the ink (no 2x2, purity of the state colours) and
+    // never its COLOUR - a mixed-colour or light ink would have passed. Measured: the modal colour of the ink pixels
+    // and the share of ink pixels carrying it; the darkest colour the canvas uses, for the comparison.
+    const inkColours = new Map();
+    for (const p of probe.ink) { const k = rgbAt(p).join(','); inkColours.set(k, (inkColours.get(k) || 0) + 1); }
+    const inkSorted = [...inkColours.entries()].sort((a, b) => b[1] - a[1]);
+    const inkTop = inkSorted[0] || ['', 0];
+    const inkShare = probe.ink.length ? inkTop[1] / probe.ink.length : 0;
+    let darkest = null, darkestL = 1e9;
+    const seenC = new Set();
+    for (let i = 0; i < img.length; i += 4) {
+      const k = img[i] + ',' + img[i + 1] + ',' + img[i + 2];
+      if (seenC.has(k)) continue;
+      seenC.add(k);
+      const l = 0.299 * img[i] + 0.587 * img[i + 1] + 0.114 * img[i + 2];
+      if (l < darkestL) { darkestL = l; darkest = img[i] + ',' + img[i + 1] + ',' + img[i + 2]; }
+    }
+    const inkIsDarkest = inkTop[0] === darkest || (darkestL < 30 && inkColours.has(darkest));
     // 1 OBJECT-SIDE: written pixels over sky
     const sky = window.__skyMask;
     let overSky = 0;
     if (sky) for (const p of probe.state) if (sky[p]) overSky += 1;
     return { aim: !!t, n: probe.state.length, inkN: probe.ink.length, exact, inBlock, overSky, haveSky: !!sky,
+      inkTop: inkTop[0], inkShare, inkKinds: inkColours.size, darkest, inkIsDarkest,
       canvas: [c.width, c.height], regions: ${world.n} };
   `);
   return aimed;
@@ -80,5 +100,9 @@ say(out.n > 0, `the outline pass wrote ${out.n} pixels while a car was aimed at`
 say(out.haveSky && out.overSky === 0, `object-side: ${out.overSky} of ${out.n} written pixels lie on sky`);
 say(lineShare >= 0.95, `no 2x2 of the ink: ${(100 * lineShare).toFixed(1)}% of the ${out.inkN} ink pixels are not in a 2x2 block (bar 95%)`);
 say(share >= 0.95, `purity: ${(100 * share).toFixed(1)}% of the written pixels still carry the exact state colour (bar 95%)`);
-console.log(fails ? `\nTHE OUTLINE IS NOT CONFIRMED: ${fails} assertion(s) failed.` : '\nTHE OUTLINE IS CONFIRMED: object-side, 1-px ink, exact colour.');
+// 4 ONE INK COLOUR: the criterion's own words. Bar 99% - a one-pixel line drawn from one palette entry carries one
+// colour; a mixed ink is a second drawing rule.
+say(out.inkN > 0 && out.inkShare >= 0.99, `one ink colour: ${(100 * out.inkShare).toFixed(1)}% of the ink is rgb(${out.inkTop}) (bar 99%, ${out.inkKinds} colour(s) in the ink)`);
+say(out.inkIsDarkest, `the ink is the darkest colour the frame uses (ink rgb(${out.inkTop}) against the canvas's darkest rgb(${out.darkest}))`);
+console.log(fails ? `\nTHE OUTLINE IS NOT CONFIRMED: ${fails} assertion(s) failed.` : '\nTHE OUTLINE IS CONFIRMED: object-side, 1-px ink, one ink colour, exact colour.');
 process.exit(fails ? 1 : 0);
