@@ -45,12 +45,14 @@ add('D the plan has the bands in order, starting with sky', plan.bands[0].role =
 add('E every band role is one the vocabulary defines', plan.bands.every((b) => BANDS.includes(b.role)), plan.bands.map((b) => b.role).join(','));
 add('F every facade carries one of the three archetypes', plan.facades.every((f) => FACADE_ROLES.includes(f.role)),
   plan.facades.map((f) => `${f.role}@${f.box.join(',')}`).join(' · ') || 'no facades');
-// THE TWO ARCHETYPES THE ACCEPTED FRAME DRAWS MUST BOTH BE NAMED, each on its own building instance: that is the
-// composition's grammar, and a plan that names one is a plan that only half-understands the picture.
+// THE PLAN MUST UNDERSTAND AT LEAST ONE BUILDING. The line used to demand BOTH archetypes, which is the ACCEPTED
+// frame's grammar - but this check runs on any photograph, and a yard with two plain dark buildings is not a defect
+// (measured on the operator's second yard: its plan names two dark-planes, both real). What is a defect is a plan
+// that cannot name anything, every facade 'grid': that is the plan looking at the picture and understanding nothing.
 const roles = new Set(plan.facades.map((f) => f.role));
-add('H the plan names BOTH archetypes on separate instances (the accepted frame has a dark plane and a checker)',
-  roles.has('dark-plane') && roles.has('checker'),
-  plan.facades.filter((f) => f.role !== 'grid').map((f) => `${f.role}@${f.box.join(',')}`).join(' · '));
+add('H the plan names at least one archetype on a real building (not every facade "grid")',
+  plan.facades.length > 0 && [...roles].some((r) => r !== 'grid'),
+  plan.facades.filter((f) => f.role !== 'grid').map((f) => `${f.role}@${f.box.join(',')}`).join(' · ') || 'every facade is grid');
 // 3. DETERMINISM: the plan carries no timestamps, no ids that depend on iteration order of a Map, and the same probe
 //    run twice must give the same bytes - checked by the caller (the probe writes one file; detgate proves the run).
 add('G the plan is a pure function of its inputs (no clock, no random, no Set iteration in the emitted order)',

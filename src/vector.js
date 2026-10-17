@@ -26,7 +26,7 @@
 import { horizonFromSky } from './horizon.js';   // the one definition of "where the sky ends"
 import { MIN_PITCH, alternation } from './criteria/FacadeRule.js';
 import { paintCells } from './pieces/facade.js';
-import { scenePlan } from './plan.js';
+import { scenePlan, buildingsFrom } from './plan.js';
 import { STYLE } from './style/index.js';   // the style's own measured values (src/style/index.js)
 import { RAMPS, STEPS, paletteOf } from './flat.js';
 import { makeScene, render as renderScene, census } from './scene.js';
@@ -295,7 +295,21 @@ export function trace(rgba, w, h, opts = {}) {
   const sky = new Uint8Array(n);
   // THE SCENE PARSE DECIDES, when it is available. Stage 1+2 of docs/METHODS.md: the `sky` class from the on-device
   // model (SegFormer-B0 Cityscapes), which is a fact about the picture rather than a threshold of mine.
+  let PLAN = null;          // THE one scene plan: computed right below from the parse's buildings, read by the bays, the checker and main
   const PARSE = opts.parse && opts.parse.masks ? opts.parse.masks : null;
+  // ---- THE SCENE PLAN, ONCE, AT THE TOP ---------------------------------------------------------------
+  //
+  // The composition as structure (bands + facade archetypes), computed from the parse's BUILDING MASK - the only
+  // source that says "building" - and independent of the wall components, so it exists on every photograph (measured:
+  // the second yard yields no wall fragments, and a plan built from them was null there). The bay loop, the checker
+  // pass and main all read THIS plan.
+  {
+    const pMask = (PARSE && PARSE.building) ? PARSE.building : null;
+    const planParts2 = pMask ? buildingsFrom(pMask, w, h) : [];
+    PLAN = scenePlan({ w, h, horizon: Math.round(h * 0.7), parts: planParts2, rgb });
+    if (typeof window !== 'undefined' && window.__planProbe) window.__planEarly = { parts: planParts2.length, facades: (PLAN.facades || []).length };
+  }
+
   const coreSky = new Uint8Array(n);
   {
     const stack = [];
@@ -369,7 +383,6 @@ export function trace(rgba, w, h, opts = {}) {
   // One copy, taken before any other pass touches the map, is used by the sky region, the skyline and the clouds.
   const skyCand = cls.slice();
   let wallMaskOut = null;   // the facade block's wall mask, kept for the checker pass that must run LAST
-  let PLAN = null;          // THE one scene plan: computed before the bays, read by the bays, the checker and main
 
   // AN OVERCAST SKY IS STILL A SKY. The blue test above finds a blue sky; on a grey day - the creator's Prague
   // photograph is overcast - it finds nothing, and the top of the frame was painted as noisy shapes instead of a
@@ -1667,21 +1680,9 @@ export function trace(rgba, w, h, opts = {}) {
           facCut.set(fid, list[Math.min(list.length - 1, Math.floor(list.length * (1 - duty)))]);
         }
         const bayMedian = 128;
-        // ---- ONE PLAN, ONE INPUT ---------------------------------------------------------------------------
-        //
-        // Measured (D19, third attempt): main, the checker pass and the bay loop each computed their own plan from
-        // different inputs, and on the operator's second yard the unfiltered input yielded ONE instance covering the
-        // whole frame - called a glass wall, painted as a grid, a checkerboard. The plan is therefore computed HERE,
-        // ONCE, from the same wall parts every other consumer gets, and the result travels: the bay loop asks it which
-        // bays are glass walls, the checker pass asks it which facades are checkered, and main shows it as __plan.
-        const planParts = [];
-        for (const part of fac.parts) {
-          if (part.area < 400) continue;
-          let x0p = w, y0p = h, x1p = 0, y1p = 0;
-          for (const p2 of part.px) { const x = p2 % w, y = (p2 / w) | 0; if (x < x0p) x0p = x; if (y < y0p) y0p = y; if (x > x1p) x1p = x; if (y > y1p) y1p = y; }
-          planParts.push({ id: part.id, pixels: Int32Array.from(part.px), x: x0p, y: y0p, w: x1p - x0p + 1, h: y1p - y0p + 1 });
-        }
-        PLAN = rgb ? scenePlan({ w, h, horizon: Math.round(h * 0.7), parts: planParts, rgb }) : { bands: [], facades: [] };
+        // THE BAYS ASK THE PLAN (computed at the top of trace from the parse's building mask, so it exists even when a
+        // photograph yields no wall fragments at all - measured on the operator's second yard, where the facade block
+        // never ran and the plan was null).
         const darkBoxes = (PLAN && PLAN.facades ? PLAN.facades : []).filter((f2) => f2.role === 'dark-plane').map((f2) => f2.box);
         const inDark = (x3, y3) => darkBoxes.some((b2) => x3 >= b2[0] && x3 < b2[2] && y3 >= b2[1] && y3 < b2[3]);
         for (let gy = y0 + ky * py2; gy + gh <= h; gy += py2) {
@@ -1955,7 +1956,7 @@ export function trace(rgba, w, h, opts = {}) {
   // THE CLOUD'S SIZE IS THE ACCEPTED FRAME'S OWN. Measured on the top 8% band: the accepted's clouds cover 15.9% of it,
   // ours 25.8% and the blue correspondingly 8 points lower - our puffs are too big. The divisor is a probe so both
   // sides are measured (?clouds=N: size = w/N).
-  const size = Math.max(10, Math.round(w / ((typeof window !== 'undefined' && window.__CLOUDK) || 7)));
+  const size = Math.max(10, Math.round(w / ((typeof window !== 'undefined' && window.__CLOUDK) || 9)));   // 9: the accepted frame's cloud share, measured (D19/T+101)
   let placed = 0;
   const dbg = [];
   // They are placed like a designer places them: spread across the band, staggered left and right, never near

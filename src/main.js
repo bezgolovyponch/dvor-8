@@ -404,7 +404,7 @@ async function build(rgba, w, h, dets, big = null) {
     window.__MULL = params.get('mull') ? Number(params.get('mull')) : 3;   // the accepted curtain wall's mullion
     window.__COVER = params.get('cover') ? Number(params.get('cover')) : 0.5;
     window.__SHADOW = params.get("shadow") ? Number(params.get("shadow")) : 1;
-    window.__CLOUDK = params.get('clouds') ? Number(params.get('clouds')) : 7;
+    window.__CLOUDK = params.get('clouds') ? Number(params.get('clouds')) : 9;
     window.__DUTY = params.get('duty') ? Number(params.get('duty')) : 2;
     if (window.__outlineProbe && parse && parse.masks.sky) window.__skyMask = parse.masks.sky;
   }

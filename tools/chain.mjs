@@ -103,7 +103,21 @@ const steps = [
     process.exit(1);
   }
 }
-// STEP 6e - THE MATCH GATE. It was MISSING FROM THE CHAIN, which is how "CHAIN GREEN" stayed true while
+// STEP 6e - THE PLAN (the photo-agnostic structural question, asked FIRST). The composition as STRUCTURE: the four bands in order, every facade one of the three
+// archetypes, and BOTH archetypes named on separate buildings. It reads the plan from the frame's own dump
+// (photo-shot carries it), so the step asks a photo-agnostic question - "is this picture built the way the accepted
+// one is built" - which match (whose regions are the accepted frame's rectangles) cannot ask on another photograph.
+{
+  const dump = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
+  const r = run('node', ['tools/plan-check.mjs', dump], {});
+  const line = r.out.trim().split(String.fromCharCode(10)).filter((l) => /PLAN ACCEPTED|PLAN NOT ACCEPTED|FAIL/.test(l)).slice(-1)[0];
+  console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  6e PLAN       ${(line || '').slice(0, 140)}`);
+  if (r.code !== 0 && !process.env.KEEP_GOING) {
+    console.log('\nTHE CHAIN STOPPED AT 6e PLAN: the frame is not built the way the accepted one is.');
+    process.exit(1);
+  }
+}
+// STEP 6f - THE MATCH GATE (the accepted frame's own regions: meaningful on the judged photograph). It was MISSING FROM THE CHAIN, which is how "CHAIN GREEN" stayed true while
 // `node tools/match-check.mjs` exited 1 on every dump (6 of 7: the mid-rise's checkerboard). A chain that omits a
 // red gate is not a chain: this step runs it on the frame PAGE just wrote, gates SHOWING like the others, and the
 // operator's own DONE list names match 7/7.
@@ -111,9 +125,9 @@ const steps = [
   const dump = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
   const r = run('node', ['tools/match-check.mjs', dump], {});
   const line = r.out.trim().split(String.fromCharCode(10)).filter((l) => /lines match|NOT THE EXAMPLE|IN THE EXAMPLE/.test(l)).slice(-1)[0];
-  console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  6e MATCH      ${(line || '').slice(0, 140)}`);
+  console.log(`${r.code === 0 ? 'PASS' : 'FAIL'}  6f MATCH      ${(line || '').slice(0, 140)}`);
   if (r.code !== 0 && !process.env.KEEP_GOING) {
-    console.log('\nTHE CHAIN STOPPED AT 6e MATCH: the frame does not match the accepted example. A chain that omits a red gate is not a chain.');
+    console.log('\nTHE CHAIN STOPPED AT 6f MATCH: the frame does not match the accepted example. A chain that omits a red gate is not a chain.');
     process.exit(1);
   }
 }
