@@ -369,6 +369,7 @@ export function trace(rgba, w, h, opts = {}) {
   // One copy, taken before any other pass touches the map, is used by the sky region, the skyline and the clouds.
   const skyCand = cls.slice();
   let wallMaskOut = null;   // the facade block's wall mask, kept for the checker pass that must run LAST
+  let PLAN = null;          // THE one scene plan: computed before the bays, read by the bays, the checker and main
 
   // AN OVERCAST SKY IS STILL A SKY. The blue test above finds a blue sky; on a grey day - the creator's Prague
   // photograph is overcast - it finds nothing, and the top of the frame was painted as noisy shapes instead of a
@@ -1666,13 +1667,33 @@ export function trace(rgba, w, h, opts = {}) {
           facCut.set(fid, list[Math.min(list.length - 1, Math.floor(list.length * (1 - duty)))]);
         }
         const bayMedian = 128;
+        // ---- ONE PLAN, ONE INPUT ---------------------------------------------------------------------------
+        //
+        // Measured (D19, third attempt): main, the checker pass and the bay loop each computed their own plan from
+        // different inputs, and on the operator's second yard the unfiltered input yielded ONE instance covering the
+        // whole frame - called a glass wall, painted as a grid, a checkerboard. The plan is therefore computed HERE,
+        // ONCE, from the same wall parts every other consumer gets, and the result travels: the bay loop asks it which
+        // bays are glass walls, the checker pass asks it which facades are checkered, and main shows it as __plan.
+        const planParts = [];
+        for (const part of fac.parts) {
+          if (part.area < 400) continue;
+          let x0p = w, y0p = h, x1p = 0, y1p = 0;
+          for (const p2 of part.px) { const x = p2 % w, y = (p2 / w) | 0; if (x < x0p) x0p = x; if (y < y0p) y0p = y; if (x > x1p) x1p = x; if (y > y1p) y1p = y; }
+          planParts.push({ id: part.id, pixels: Int32Array.from(part.px), x: x0p, y: y0p, w: x1p - x0p + 1, h: y1p - y0p + 1 });
+        }
+        PLAN = rgb ? scenePlan({ w, h, horizon: Math.round(h * 0.7), parts: planParts, rgb }) : { bands: [], facades: [] };
+        const darkBoxes = (PLAN && PLAN.facades ? PLAN.facades : []).filter((f2) => f2.role === 'dark-plane').map((f2) => f2.box);
+        const inDark = (x3, y3) => darkBoxes.some((b2) => x3 >= b2[0] && x3 < b2[2] && y3 >= b2[1] && y3 < b2[3]);
         for (let gy = y0 + ky * py2; gy + gh <= h; gy += py2) {
           for (let gx = x0 + kx * px2; gx + gw <= w; gx += px2) {
             if (gx < 1 || gy < 1) continue;
+            // THE BAY'S FORM IS THE PLAN'S DECISION, AND THE COVERAGE TEST MEASURES THAT FORM'S AREA.
+            const gridBay = inDark(gx + (px2 >> 1), gy + (py2 >> 1));
+            const gwB = gridBay ? px2 : gw, ghB = gridBay ? py2 : gh;
             // ON THE WALL ONLY: the whole sprite must be wall, and never a pixel a window or the outline owns
             let on = 0, tot = 0, blocked = false;
-            for (let y = gy; y < gy + gh && !blocked; y += 1) {
-              for (let x = gx; x < gx + gw; x += 1) {
+            for (let y = gy; y < gy + ghB && !blocked; y += 1) {
+              for (let x = gx; x < gx + gwB; x += 1) {
                 const p2 = y * w + x;
                 tot += 1;
                 if (protectedPx.has(p2) || idx[p2] === palette.length - 2) { blocked = true; break; }
@@ -1734,13 +1755,13 @@ export function trace(rgba, w, h, opts = {}) {
         // only 11.2% of the tower against the 27% its geometry implies; the accepted's curtain wall carries ~35% dark.
         // The width is a probe (?mull=N) so both sides are measured, not guessed.
         const mull = (typeof window !== 'undefined' && window.__MULL) || 3;
-        const xa = gridForm ? gx : gx + 1, xb = gx + gw - 1 - mull, ya = gridForm ? gy : gy + 1, yb = gy + gh - 1 - mull;
+        const xa = gridBay ? gx : gx + 1, xb = gx + gwB - 1 - mull, ya = gridBay ? gy : gy + 1, yb = gy + ghB - 1 - mull;
         // THE MULLION IS INK. Measured on the accepted tower: its mullions are near-black rgb(27,18,32), and that is
         // why a CURTAIN WALL carries 35% dark with 30-50% glass. In grid form the one-pixel mullion takes the frame's
         // own outline entry (the darkest colour the palette has); in ring form the old lip is kept.
-        const mullionEntry = gridForm ? palette.length - 2 : lipEntry;
-            for (let y = gy; y < gy + gh; y += 1) {
-              for (let x = gx; x < gx + gw; x += 1) {
+        const mullionEntry = gridBay ? palette.length - 2 : lipEntry;
+            for (let y = gy; y < gy + ghB; y += 1) {
+              for (let x = gx; x < gx + gwB; x += 1) {
                 const p2 = y * w + x;
                 if (!wallMask[p2]) continue;
                 const gv = x >= xa && x <= xb && y >= ya && y <= yb ? glassEntry : mullionEntry;
@@ -2335,9 +2356,9 @@ export function trace(rgba, w, h, opts = {}) {
     // as a glass grid read as a checker window-by-window and was painted white/blue (measured: tower white 35.4%),
     // because the window test cannot tell a grid from a checker - the plan can, by the instance's own tones.
     const horizonRow = (typeof skyline !== 'undefined' && skyline && skyline.length) ? Math.max(...skyline) : Math.round(h * 0.7);
-    const plan = scenePlan({ w, h, horizon: horizonRow, parts: wallParts, rgb });
+    const plan = PLAN;   // THE ONE PLAN (computed before the bays): the checker pass reads it, not its own
     let windows = 0, painted = 0;
-    if (!((typeof window !== 'undefined') && window.__NOCHECK)) for (const f2 of plan.facades) {
+    if (!((typeof window !== 'undefined') && window.__NOCHECK)) for (const f2 of ((plan && plan.facades) || [])) {
       if (f2.role !== 'checker') continue;
       windows += 1;
       const [bx0, by0, bx1, by1] = f2.box;
@@ -2363,7 +2384,7 @@ export function trace(rgba, w, h, opts = {}) {
     // glass if the building mask says building, or the wall mask says wall - and never if it is sky or ink.
     const bMask2 = (typeof window !== 'undefined' && window.__parseBuilding) || null;
     let glassPainted = 0;
-    for (const f2 of plan.facades) {
+    for (const f2 of ((plan && plan.facades) || [])) {
       if (f2.role !== 'dark-plane') continue;
       const [bx0, by0, bx1, by1] = f2.box;
       const px2b = (spriteBays && spriteBays.px2) || 8, py2b = (spriteBays && spriteBays.py2) || 6;
@@ -2395,6 +2416,7 @@ export function trace(rgba, w, h, opts = {}) {
 
   return {
     wallParts,
+    plan: PLAN,
     rgb,   // the reduced photograph, for the scene plan (a diagnostic: the plan is not drawn, it is compared)
     // the identities this renderer resolved, so a check can measure what was decided instead of guessing a constant
     ramps: {

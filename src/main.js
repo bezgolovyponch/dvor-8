@@ -10,7 +10,6 @@
 import { sceneParse } from './scene-parse.js';   // stage 1+2: what is on the screen, and where the sky is
 import { downscaleContrast, expandContrast } from './pieces/downscale.js';   // the published reduction logic (PixelOE), confirmed by its own check
 import { styliseVector } from './stylise.js';
-import { scenePlan, buildingsFrom, splitByTone } from './plan.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { makeWorld, pick, strike, tick, left } from './world.js';
@@ -416,6 +415,10 @@ async function build(rgba, w, h, dets, big = null) {
   const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
   if (typeof window !== 'undefined') window.__spriteBays = (st.stats && st.stats.spriteBays) || null;   // DIAGNOSTIC
   if (typeof window !== 'undefined') { window.__traceParts = (st.stats && st.stats.wallParts) || []; window.__traceRgb = (st.stats && st.stats.rgb) || null; }   // the PLAN's inputs
+  // THE SCENE PLAN IS THE RENDERER'S OWN: trace() computes it ONCE from the wall parts and returns it, so the bay
+  // loop, the checker pass and this display all read the same plan (D19: three plans from three inputs made the whole
+  // frame a glass wall on the operator's second yard).
+  if (typeof window !== 'undefined') window.__plan = (st.stats && st.stats.plan) || null;
   // THE THINGS ARE CUT OUT OF THE REDUCED PICTURE, NOT OUT OF THE PHOTOGRAPH.
   //
   // The reduction (areas first, in vector.js) turns the frame into flat fields; cutting the objects out of the RAW
@@ -746,17 +749,6 @@ async function fromFile(file) {
     if (typeof window !== 'undefined') window.__buildError = String(error && (error.stack || error.message) || error);
     throw error;
   }
-  // THE SCENE PLAN, exposed for the structural check: the composition as bands and facade archetypes, computed from
-  // the same parse the painter used. It is deterministic, so the check can compare two runs byte for byte.
-  try {
-    const bMask = (typeof window !== 'undefined' && window.__parseBuilding) || null;
-    // the parse merges touching buildings; split each one by its own two tones (Otsu on the component)
-    const merged = bMask ? buildingsFrom(bMask, w, h) : (window.__traceParts || []);
-    const bParts = [];
-    for (const m2 of merged) { for (const s2 of splitByTone(m2, w, (window.__traceRgb || null))) bParts.push(s2); }
-    const plan = scenePlan({ w, h, horizon: Math.round(h * 0.70), parts: bParts, rgb: (window.__traceRgb || null) });
-    if (typeof window !== 'undefined') window.__plan = plan;
-  } catch (error) { if (typeof window !== 'undefined') window.__planError = String(error && (error.stack || error.message) || error); }
   if (built) {
     const panes = windowsIn(yard.regions);
     note(`нашёл за ${secs} с: ${[...names, panes ? `окон ${panes} (на глаз, по тёмным проёмам в стене)` : ''].filter(Boolean).join(', ')}`);
