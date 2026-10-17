@@ -1685,9 +1685,17 @@ export function trace(rgba, w, h, opts = {}) {
         // never ran and the plan was null).
         const darkBoxes = (PLAN && PLAN.facades ? PLAN.facades : []).filter((f2) => f2.role === 'dark-plane').map((f2) => f2.box);
         const inDark = (x3, y3) => darkBoxes.some((b2) => x3 >= b2[0] && x3 < b2[2] && y3 >= b2[1] && y3 < b2[3]);
+        // A CHECKERED BUILDING IS THE PATTERN ALREADY. Measured on the judged frame: the mid-rise's checker was
+        // covered by its WINDOW SPRITES, whose lip is the sky ramp's darkest tone rgb(9,34,113) - 26.4% of the
+        // region read as BLACK cells where the accepted frame has DARK BLUE - and the checker's own pair showed
+        // through only where a sprite did not sit. The plan names the checker, so its bays take no window sprite:
+        // the checker pass paints the cells.
+        const checkerBoxes = (PLAN && PLAN.facades ? PLAN.facades : []).filter((f2) => f2.role === 'checker').map((f2) => f2.box);
+        const inChecker = (x3, y3) => checkerBoxes.some((b2) => x3 >= b2[0] && x3 < b2[2] && y3 >= b2[1] && y3 < b2[3]);
         for (let gy = y0 + ky * py2; gy + gh <= h; gy += py2) {
           for (let gx = x0 + kx * px2; gx + gw <= w; gx += px2) {
             if (gx < 1 || gy < 1) continue;
+            if (inChecker(gx + (px2 >> 1), gy + (py2 >> 1))) continue;   // the checker is the facade: no window sprite
             // THE BAY'S FORM IS THE PLAN'S DECISION, AND THE COVERAGE TEST MEASURES THAT FORM'S AREA.
             const gridBay = inDark(gx + (px2 >> 1), gy + (py2 >> 1));
             const gwB = gridBay ? px2 : gw, ghB = gridBay ? py2 : gh;
