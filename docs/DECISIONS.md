@@ -145,6 +145,18 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**Seventh finding, the root (2026-10-18): the SEGMENTATION RETURNS NULL on the second photograph.** Measured on the
+page: the judged photograph yields **11 classes** (road, sidewalk, building, wall, pole, traffic sign, vegetation,
+terrain, sky, person, car) and a building mask of 47 123 pixels; the operator's second yard yields **null with no
+error** (`__parse` null, `__parseError` null). `sceneParse` returns null when the pipeline produces no parts, so on that
+photograph there is NO semantic layer at all - no building, sky or wall class - and the renderer falls back to the
+luminance path, which is the checkerboard. **The six findings above are consequences of this one.** A mask cleaning
+(ground subtracted from building) was written, measured inert on the judged frame (0 of 47 123 removed) and
+inapplicable on the second (no mask), and reverted. The next step is narrow and testable: a probe that calls
+`sceneParse` on that stored image and prints the pipeline's own result (parts count, timing, backend) - the three
+candidates are the input size (same as the judged photo, so unlikely), the model's failure on a low-contrast courtyard,
+or a backend timeout that resolves empty instead of throwing.
+
 **Sixth finding, decisive (2026-10-18): the PARSE over-covers on the second photograph.** Every mask-based decision
 downstream inherits the parser's segmentation, and on the operator's second yard the building mask covers **the whole
 frame** (one instance `0,0-288,512`). Consequences measured this round: the plan cannot separate buildings, the glass
