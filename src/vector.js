@@ -2002,7 +2002,12 @@ export function trace(rgba, w, h, opts = {}) {
       else if (!(opts.parse && opts.parse.noSky) && smoothHere(y * w + x)) skyHere += 1;
     }
     if (tot && skyHere / tot < 0.8) { dbg.push('s' + slot + ' cx' + cx + ' cy' + cy + ' ratio' + (skyHere / tot).toFixed(2) + ' RATIO'); continue; }
-    cloud(cloudMask, w, h, cx, cy, size, cloudColour, cloudShade);
+    // THE CLOUDS VARY. Measured on the accepted frame: its cloudscape is many puffs of different sizes; ours drew
+    // every cloud at the same `size`, so the sky read as three stamps of one shape (the same repetition its own
+    // comment warns about for the window sprites). The variation is DETERMINISTIC by slot - 0.72, 0.9, 1.0, 1.12 -
+    // so two runs of the same photograph still give the same sky.
+    const cloudScale = [1.0, 0.72, 1.12, 0.9][slot % 4];
+    cloud(cloudMask, w, h, cx, cy, Math.max(6, Math.round(size * cloudScale)), cloudColour, cloudShade);
     placed += 1;
   }
   if (typeof window !== 'undefined') window.__clouds = { placed, want, size, skyCount2 };
@@ -2371,7 +2376,22 @@ export function trace(rgba, w, h, opts = {}) {
       if (f2.role !== 'checker') continue;
       windows += 1;
       const [bx0, by0, bx1, by1] = f2.box;
-      painted += paintCells({ idx, w, h, mask: wallMaskOut, pair: [lightEntry, darkEntry],
+      // THE CELLS ARE THE PATTERN, NOT THE MASK'S SHAPE. Painted only where the WALL mask allowed, the cells came out in
+      // rows of all-dark and rows of alternating light (measured: a 6x6 sample read `DDDDDD / WDWDWD / DDDDDD` - a
+      // STRIPE, not a checker), because the mask holes are exactly where a cell is. The instance's own plane pixels are
+      // the honest extent: a cell is painted where the pixel is a wall or a neutral PLANE (never the sky, never ink,
+      // never a photo-kept surface), and the cells then keep their parity.
+      const skyBaseC = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
+      const planeFams = new Set(['stone', 'metal', 'dusk'].map((nm) => RAMPS.findIndex((R) => R.name === nm)));
+      const allow = new Uint8Array(n);
+      for (let p2 = 0; p2 < n; p2 += 1) {
+        const v2 = idx[p2];
+        if (wallMaskOut[p2]) { allow[p2] = 1; continue; }
+        const fam = Math.floor(v2 / STEPS);
+        const isSky = v2 >= skyBaseC && v2 < skyBaseC + STEPS;
+        if (!isSky && planeFams.has(fam) && v2 !== palette.length - 2) allow[p2] = 1;
+      }
+      painted += paintCells({ idx, w, h, mask: allow, pair: [lightEntry, darkEntry],
         pitchX: (spriteBays && spriteBays.px2) || 8, pitchY: (spriteBays && spriteBays.py2) || 6,
         originX: bx0, originY: by0, skip, within: [bx0, by0, bx1, by1] }).painted;
     }

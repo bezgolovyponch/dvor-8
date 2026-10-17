@@ -27,8 +27,22 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   const built = await page.run(`
     const t0 = performance.now();
     while (!window.__world && performance.now() - t0 < 60000) await new Promise((r) => setTimeout(r, 250));
+    // THE ANNOUNCEMENT MUST FADE BEFORE THE PICTURE IS TAKEN. The yard's "58 ЦЕЛЕЙ" banner is a DOM overlay that sits
+    // over the art for a few seconds after the build; a capture taken then photographs the announcement, not the yard
+    // (measured in every earlier sheet: the banner covered the picture's middle). Wait for it to be hidden.
+    // THE BANNER FADES BY OPACITY, NOT BY display: it keeps its box and its text while the CSS animation takes it to
+    // zero, so the first version of this wait looked at style.display, saw '' and shot the announcement anyway
+    // (measured: the pink "58 ЦЕЛЕЙ" covered the art in every capture). The wait is on the COMPUTED opacity.
+    const ban = document.getElementById('banner');
+    const t1 = performance.now();
+    while (ban && performance.now() - t1 < 8000) {
+      const op = parseFloat(getComputedStyle(ban).opacity) || 0;
+      if (op <= 0.02 && !ban.classList.contains('show') && !ban.classList.contains('hold')) break;
+      await new Promise((r) => setTimeout(r, 150));
+    }
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return { left: document.getElementById('left').textContent, note: document.getElementById('note').textContent.slice(0, 80) };`);
+    return { left: document.getElementById('left').textContent, note: document.getElementById('note').textContent.slice(0, 80),
+      banner: ban ? (ban.style.display || 'shown') : 'no banner' };`);
   console.log(JSON.stringify({ step: 'built', ...built }));
   // THE DRAWERS OPEN ON LOAD, so the DRAWER capture comes first and the SCENE capture after closing them. That
   // order is deliberate: the drawer's own header toggles reliably open->closed but the reopen path depends on the

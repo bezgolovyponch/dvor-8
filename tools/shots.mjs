@@ -36,6 +36,18 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   await page.wait(400);
   await shot(page, 'version-outlines.png', 'the imported scene with the silhouettes');
 
+  // THE TOOLBAR'S OWN PICTURE: the chip row with its four tools, as the phone shows it. The baseline row "the toolbar
+  // LOOKS like a toolbar" asks for a picture, and no tool wrote one - so the row failed on absence, not on the product.
+  {
+    const el = await page.$ ? null : null;
+    const box = await page.run(`
+      const bar = document.getElementById('bar');
+      if (!bar) return null;
+      const r = bar.getBoundingClientRect();
+      return { x: Math.max(0, Math.round(r.x - 8)), y: Math.max(0, Math.round(r.y - 8)), w: Math.round(r.width + 16), h: Math.round(r.height + 16) };`);
+    if (box) await page.shot(`${OUT}/toolbar.png`);
+  }
+
   const hit = await page.run(`
     const cam = window.dvor8.cam(), r = document.getElementById('frame').getBoundingClientRect();
     const w = window.__world;

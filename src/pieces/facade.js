@@ -96,7 +96,7 @@ export function pitchFrom(centres, fallback) {
  * @param {Uint8Array} [o.skip] 1 where another piece owns the pixel (a window sprite, an outline)
  * @returns {{ cells: number, painted: number, light: number, dark: number }}
  */
-export function paintCells({ idx, w, h, mask, pair, pitchX, pitchY, originX, originY, skip = null, within = null, lightDuty = 2 }) {
+export function paintCells({ idx, w, h, mask, pair, pitchX, pitchY, originX, originY, skip = null, within = null, lightDuty = 1 }) {
   const px = Math.max(2, Math.round(pitchX | 0));
   const py = Math.max(2, Math.round(pitchY | 0));
   const ox = ((originX | 0) % px + px) % px;
@@ -113,6 +113,9 @@ export function paintCells({ idx, w, h, mask, pair, pitchX, pitchY, originX, ori
       const col = Math.floor((x - ox) / px), row = Math.floor((y - oy) / py);
       // THE LIGHT PANEL IS A THIRD OF THE DARK ONE, as the accepted frame's own checker is (white 16% against dark
       // blue 38.5%). `lightDuty` is the ratio: 2 = every other parity cell (50/50), 3 = one light cell per three.
+      // DUTY 1 IS A TRUE CHECKER: every alternate cell is light. Measured with duty 2: the light cells only landed
+      // on even rows and the facade read as STRIPES (a 6x6 sample: DDDDDD / WDWDWD), which is not the accepted
+      // frame's checker - the accepted's light and dark alternate in BOTH axes.
       const isLight = ((col + row) & 1) === 0 && (col % lightDuty) === 0;
       const v = isLight ? pair[0] : pair[1];
       idx[p] = v;
