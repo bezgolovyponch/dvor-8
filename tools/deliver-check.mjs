@@ -57,8 +57,13 @@ if (dump) {
   // POLICY (docs/render-policy.md): the sky is DESIGNED, so the check is the one v9's own screen passes - one
   // BLUE plane - not "any bright tone", which is how a fidelity-grey sky slipped through this line for two rounds.
   const skyish = b > r + 20 && b > 120;
+  // THE CAPTURE MUST HAVE SETTLED (photo-shot writes `settled` into canvas.json now). A frame that never settled
+  // may be mid-scan: measuring it would be measuring the wipe.
+  const settled = !!(dump && dump.settled !== false);
   add('1 SKY (DESIGNED): one blue plane, one colour owning its band >= 35%',
-    share >= 0.35 && skyish, `${(100 * share).toFixed(0)}% of the band is rgb(${topColour}), skyish=${skyish}`);
+    settled && share >= 0.35 && skyish, settled
+      ? `${(100 * share).toFixed(0)}% of the band is rgb(${topColour}), skyish=${skyish}`
+      : 'the capture never settled - WITHHELD, not passed');
 
   // 2 BUILDINGS: window sprites exist (printed by the gate) and the facades are flat rather than blurred
   // THE COUNT IS THE NUMBER IN BRACKETS, NOT THE BAR IN THE LABEL. `(\d+) window sprites` matched the row's own
@@ -120,8 +125,10 @@ const noteText = String(steps.info?.note || '');
 add('5 INFO: a tap in info mode produces a fact', noteText.length > 20, noteText.slice(0, 70) || 'no note');
 
 // the instruments themselves must be honest, and the baseline must not regress
-add('6 NO PAGE ERRORS during the whole run', (steps.errors?.errors || []).length === 0,
-  JSON.stringify(steps.errors?.errors || []).slice(0, 90));
+// A MISSING STEP IS NOT A CLEAN CONSOLE. `(steps.errors?.errors || [])` read a run that died before printing the
+// last step as error-free - the same `?? 0` class the project has paid for before. The step must EXIST.
+add('6 NO PAGE ERRORS during the whole run', !!steps.errors && (steps.errors.errors || []).length === 0,
+  steps.errors ? JSON.stringify(steps.errors.errors || []).slice(0, 90) : 'the errors step never printed - WITHHELD, not passed');
 add('7 THE SUITE passes', /FAIL 0/.test(suite), (suite.match(/PASS \d+\s+FAIL \d+/) || ['no suite output'])[0]);
 add('8 THE BASELINE does not regress', /BASELINE \d+ OK/.test(base), (base.match(/BASELINE \d+ OK\s+\d+ FAIL\s+of \d+/) || ['no baseline output'])[0]);
 // LINE 10: THE TARGET. The creator's criteria are in one file, and the frame must be comparable to the reference

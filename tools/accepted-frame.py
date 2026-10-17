@@ -162,3 +162,44 @@ print("\nROBUSTNESS full-res vs 288-grid (white/mullion/blue/74):")
 for k in REG:
     print(f"  {k:8} " + "  ".join(f"{fs(a,k):.3f}/{shu(b,k):.3f}"
           for a, b in [(WH2, WHITE), (MU2, MULL), (BL2, BLUE), (N742, T74)]))
+
+# ---- OUR FRAME, MEASURED THE SAME WAY (the whole point of a referee: R1 must judge the frame, not only the table)
+# The cross-check above proves the EXTRACTION is faithful to the owner's numbers; THAT IS A PREMISE, NOT THE
+# CRITERION. R1's requirement is that OUR frame is comparable to the accepted one, so with a canvas dump as argv[1]
+# the SAME FAMILY CLASSIFIER runs over OUR pixels and the accepted extraction, over the whole frame inside the HUD
+# mask. Families (not exact colours) are what can be compared across two different palettes: our sky is
+# rgb(122,183,230) and the accepted's is rgb(77,156,232) - 52 apart, so an exact-colour predicate would say
+# "different" about the same designed blue. The per-region table above stays PRINTED as a diagnostic (it shows the
+# checker gap that match-check owns); it is not the acceptance.
+if len(sys.argv) > 1 and sys.argv[1].endswith('.json'):
+    dd = json.load(open(sys.argv[1]))
+    Wm, Hm = dd['w'], dd['h']
+    vals = [int(t) for t in dd['px'].split(',')]
+    def mpx(x, y):
+        i = (y * Wm + x) * 3
+        return (vals[i], vals[i + 1], vals[i + 2])
+    def mfam(c):
+        r, g, b = c
+        if r >= 195 and g >= 195 and b >= 195: return 'white'
+        if b > r + 25 and b >= 95: return 'blue'
+        if abs(r - g) <= 26 and abs(g - b) <= 30: return 'mullion'
+        return 'other'
+    def whole(at, w, h, skip):
+        hist = {}; n = 0
+        for y in range(h):
+            for x in range(w):
+                if skip(x, y): continue
+                k = mfam(at(x, y)); hist[k] = hist.get(k, 0) + 1; n += 1
+        return {k: hist.get(k, 0) / max(1, n) for k in ('white', 'mullion', 'blue', 'other')}
+    # the accepted side is the GRID-SAMPLED 288x512 art (raw), masked by the same HUD boxes the tool already built
+    ref_raw = raw.astype(np.uint8)
+    ref_whole = whole(lambda x, y: tuple(int(v) for v in ref_raw[y, x]), 288, 512, lambda x, y: bool(hud[y, x]))
+    my_whole = whole(mpx, Wm, Hm, lambda x, y: False)
+    print("\nWHOLE FRAME, inside the HUD mask (accepted extraction vs our dump):")
+    delta = {}
+    for k in ('white', 'mullion', 'blue', 'other'):
+        d2 = my_whole[k] - ref_whole[k]; delta[k] = round(d2, 3)
+        print(f"  {k:8} accepted {ref_whole[k]:.3f}  ours {my_whole[k]:.3f}  delta {d2:+.3f}")
+    worst = max(abs(v) for v in delta.values())
+    print(f"  worst |delta| {worst:.3f} (tolerance 0.05: the lossy re-encode and the rectangular HUD mask are the only stated uncertainties)")
+    print("OURS_JSON " + json.dumps({"worst": round(worst, 3), "delta": delta}))

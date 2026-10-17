@@ -111,6 +111,10 @@ await withPage(BASE, {}, async (page) => {
     const out = [];
     for (let y = 0; y < c.height; y += 1) for (let x = 0; x < c.width; x += 1) { const i = (y * c.width + x) * 4; out.push(d[i], d[i + 1], d[i + 2]); }
     return { w: c.width, h: c.height, px: out.join(','), clockPin: window.__clockPin, clock: window.__clock };`);
+  // THE SETTLED FLAG TRAVELS WITH THE DUMP. It used to go only to stdout, and no consumer read it - so a frame that
+  // never settled was still measured as if it had. Now it is in canvas.json and deliver-check withholds lines 1/2
+  // unless it is true.
+  if (dump) { dump.settled = settled; if (!dump.px) dump.px = ''; }
   if (dump && dump.px) (await import('node:fs')).writeFileSync(`${out}/canvas.json`, JSON.stringify(dump));
   results.push({ step: 'built', ...(await page.run(`return { left: document.getElementById('left').textContent, note: document.getElementById('note').textContent.slice(0, 90) }`)) });
   await page.shot(`${out}/1-yard.png`);

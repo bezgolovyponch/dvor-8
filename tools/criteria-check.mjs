@@ -73,10 +73,13 @@ const suiteReport = () => {
 const suiteNote = () => (suiteGreen() ? '' : `cannot be judged: ${suiteReport()} - see its own output`);
 
 // THE REGISTRY: one predicate per criterion id. A criterion whose id is absent here is NOT MET by definition.
+// A SOURCE GREP IS MADE ON CODE, NOT PROSE: `code()` strips // and /* */ comments first, because this project has
+// already had a criterion satisfied by a comment on the next line (docs/CROSS-AUDIT-FINDINGS.md, the PX incident).
+const code = (f) => readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/.*$/gm, '$1');
 const REGISTRY = {
   F1: () => (/^OK\s+the palette is the project own table/m.test(gate()) ? true
     : (frame() ? 'the gate does not report the palette table on ' + frame() : 'no frame supplied (set DUMP=<canvas.json>)')),
-  F2: () => /every outline|outline rule/i.test(readFileSync('src/render.js', 'utf8') + readFileSync('test.mjs', 'utf8')),
+  F2: () => /mayBeOutlined\(r\)/.test(code('src/render.js')) && /own\[p\]/.test(code('src/render.js')),
   // F3's measure lives in tools/reference-check.mjs (docs/CRITERIA.md). The old predicate asked the concept gate
   // for a `stray N.N%` line the gate does not print, and defaulted the missing number to 99 - a failure that
   // described the instrument, not the frame. Now the number comes from the tool that owns it, or the criterion
@@ -99,17 +102,21 @@ const REGISTRY = {
     : (frame() ? 'the gate does not report the photograph deciding the road on ' + frame() : 'no frame supplied (set DUMP=<canvas.json>)')),
   P2: () => readFileSync('src/criteria/RoadRule.js', 'utf8').includes('BLOCK = 5')
     && readFileSync('src/main.js', 'utf8').includes('photoLayer'),
-  P3: () => /owner map/.test(readFileSync('src/render.js', 'utf8')),
-  S1: () => /SKY \(DESIGNED\)/.test(delivery()),
+  P3: () => /const own = world\.owner/.test(code('src/render.js')) && /const list = silhouette\(r\)/.test(code('src/render.js')),
+  S1: () => /OK\s+1 SKY \(DESIGNED\)/.test(delivery()),
   B1: () => Number((delivery().match(/\[(\d+) window sprites\]/) || [])[1] || 0) >= 40,
-  B2: () => /WALL \(DESIGNED\)/.test(delivery()),
-  B3: () => /kind: 'window'|WINDOW/.test(readFileSync('src/main.js', 'utf8')),
+  B2: () => /OK\s+2b WALL \(DESIGNED\)/.test(delivery()),
+  B3: () => /kind: 'window'/.test(code('src/main.js')),
   B4: () => (suiteNote() ? suiteNote() : /support is gone FALLS/.test(suiteOnce())),
-  B5: () => /cellsOf/.test(readFileSync('src/world.js', 'utf8')),
-  O1: () => /OUTLINED KINDS/.test(readFileSync('src/render.js', 'utf8')) && /DESTROYABLE KINDS/.test(readFileSync('src/world.js', 'utf8')),
-  M1: () => /only buildings and cars are outlined|OUTLINED KINDS/.test(readFileSync('src/render.js', 'utf8')),
-  M2: () => /DESTROYABLE KINDS/.test(readFileSync('src/world.js', 'utf8')),
-  M3: () => /windows are destroyable but are NOT outlined|WINDOW/.test(readFileSync('docs/MECHANICS.md', 'utf8')),
+  B5: () => /cellsOf\(/.test(code('src/world.js')),
+  // O1 IS "ONE OUTLINE RULE (the darkest palette colour, 1 px)". The old predicate grepped a COMMENT heading
+  // ("OUTLINED KINDS, FROM docs/MECHANICS.md"); with comments stripped it vanishes, which is the honest outcome for a
+  // prose match. The rule is in force where the ink is drawn: the renderer uses the palette's own darkest entry
+  // (#0b0018 = OUTLINE_RGB), and the allowed kinds are decided by mayBeOutlined.
+  O1: () => /0b0018/.test(code('src/render.js')) && /OUTLINE_RGB/.test(code('src/palette.js')) && /mayBeOutlined\(r\)/.test(code('src/render.js')),
+  M1: () => /OUTLINED KINDS/.test(code('src/render.js')),
+  M2: () => /DESTROYABLE KINDS/.test(code('src/world.js')),
+  M3: () => /windows are destroyable but are NOT outlined/i.test(readFileSync('docs/MECHANICS.md', 'utf8')),
   // I1'S WITNESS IS THE SUITE'S OWN PRINTED NAMES. The old conjunct asked for `/breakCells/` in the suite's stdout -
   // a token test.mjs never prints (the report prints r.what only), which made I1 UNSATISFIABLE BY CONSTRUCTION: the
   // identifier appears only as executable statements, and a fatal throw there aborts before the PASS line, so the
@@ -154,17 +161,22 @@ const REGISTRY = {
   // (docs/DECISIONS.md D14): under the predicate that reproduces the checker's blues .21 and the mid-rise parity
   // .361, the tower facade measures .40-.42 blues and .34-.36 parity - and the accepted canvas itself gives .79/.48 -
   // so the owner's tower blues .30 and tower parity .047 came from different rects, not from this frame.
+  // R1 MUST MEASURE OUR FRAME (audited 2026-10-18: the previous predicate read the referee's agreement with the
+  // owner's table and never looked at our pixels - "R1 green certified the referee, not the frame"). The extraction
+  // (tools/accepted-frame.py) reproducing the owner's cross-check on 11 of 13 lines is the PREMISE, printed; the
+  // CRITERION is the whole-frame comparison: the same family classifier on our dump and on the accepted extraction,
+  // inside the HUD mask, every family within 0.05.
   R1: () => {
     const mine = mineJson();
     if (!mine) return 'no canvas dump supplied (set DUMP=<canvas.json>)';
-    const out = run('python3', ['tools/accepted-frame.py']);
-    const m = /R1_JSON (\{.*\})/.exec(out);
-    if (!m) return 'the accepted-frame extraction printed no cross-check: ' + (out.trim().split('\n').slice(-1)[0] || 'nothing').slice(0, 140);
-    const r = JSON.parse(m[1]);
-    const known = new Set(['tower blues 204-240', 'tower 2-D parity (facade)']);
-    const unexpected = (r.failed || []).filter((f) => !known.has(f));
-    if (r.within >= 11 && unexpected.length === 0) return { met: true, note: `${r.within} of ${r.total} of the owner's cross-check lines reproduce within 0.05 (the two tower lines are re-derived in D14); the extraction agrees with the full-resolution measurement to <=0.013` };
-    return `${r.within} of ${r.total} reproduce; unexpected misses: ${unexpected.join(', ') || 'none'} (known re-derived: ${[...known].join(', ')})`;
+    const out = run('python3', ['tools/accepted-frame.py', mine]);
+    const ref = /R1_JSON (\{.*\})/.exec(out), ours = /OURS_JSON (\{.*\})/.exec(out);
+    if (!ours) return 'the accepted-frame extraction printed no whole-frame comparison: ' + (out.trim().split('\n').slice(-1)[0] || 'nothing').slice(0, 140);
+    const o = JSON.parse(ours[1]);
+    const r = ref ? JSON.parse(ref[1]) : null;
+    const premise = r ? `referee ${r.within}/${r.total} of the owner's lines` : 'referee unverified';
+    if (o.worst <= 0.05) return { met: true, note: `${premise}; our frame is within ${o.worst} of the accepted frame on every family (tolerance 0.05)` };
+    return `not comparable to the accepted frame: worst family delta ${o.worst} (${Object.entries(o.delta).map(([k, v]) => k + ' ' + v).join(', ')}); ${premise}`;
   },
 };
 

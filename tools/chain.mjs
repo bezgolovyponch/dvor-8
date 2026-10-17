@@ -34,7 +34,11 @@ const steps = [
 {
   const out = process.env.PAGE_OUT || '/tmp/chain-page';
   const { out: pageOut } = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', out, process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'],
-    { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1' });
+        // CLEAN AND OFFLINE (docs/DETERMINISM.md R2): ?clean=1 removes overlays and grades, and ?news=0 removes the news
+    // flights - whose HEADLINE IS DRAWN INTO THE CANVAS (render.js plane()/ship() write it with the 5x7 font). Without
+    // news=0 the gate dumps carried a live headline across the top of the frame; measured on the same page: the
+    // ticker's paper was 16% of the sky band.
+    { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0' });
   // THE STEP LINES ARE JSON: READ THEM AS JSON. A regex over the harness's stdout reported `left 0, console DIRTY`
   // for a page that was in fact clean (`errors: []`), which is the fourth time one of my instruments described
   // itself instead of the thing it measured. Each line the harness prints IS a JSON object; the last one for a
@@ -45,9 +49,13 @@ const steps = [
     if (!t.startsWith('{')) continue;
     try { const o = JSON.parse(t); if (o && o.step) stepsOf.set(o.step, o); } catch { /* not a step line */ }
   }
-  const left = Number((stepsOf.get('built') || {}).left || 0);
-  const clean = ((stepsOf.get('errors') || {}).errors || []).length === 0;
-  const ok = left > 0 && clean;
+  // A MISSING STEP IS NOT A PASSING ZERO: `left ?? 0` and `errors ?? []` once turned a harness that could not start
+  // its browser into the reassuring line "left 0, console clean". The two steps must EXIST, and the left count is
+  // then read from the built step and the console from the errors step.
+  const builtStep = stepsOf.get('built'), errStep = stepsOf.get('errors');
+  const left = builtStep ? Number(builtStep.left) : NaN;
+  const clean = errStep ? (errStep.errors || []).length === 0 : false;
+  const ok = Number.isFinite(left) && left > 0 && clean;
   console.log(`${ok ? 'PASS' : 'FAIL'}  6 PAGE         a yard built from a real photograph: left ${left}, console ${clean ? 'clean' : 'DIRTY'}`);
   if (!ok) {
     console.log('\nTHE CHAIN STOPPED AT 6 PAGE. A page gate that cannot build a yard verifies nothing: the suite, the criteria and the composition all passed while the real path was broken.');
