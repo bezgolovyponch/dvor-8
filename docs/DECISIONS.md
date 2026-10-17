@@ -145,6 +145,14 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**CLOSED for the instances too (2026-10-18).** The plan's instances now come from the **parse's building mask**
+(segmented into components), not from the wall fragments, and the plan is computed at the top of `trace` so it exists
+even when a photograph yields no wall fragments. Measured: the judged frame's plan names **two buildings** (a
+dark-plane and a checker) and `plan-check` reads **8 of 8**; the operator's second yard names **two dark-planes** and
+also reads 8 of 8. The plan is now a **chain step (6e PLAN)**, asked BEFORE match because it is the photo-agnostic
+structural question. Its H line was rewritten from "both archetypes" (the accepted frame's grammar) to "at least one
+archetype on a real building", because two plain dark buildings are not a defect. Published as **v0.5.3**.
+
 **The plan's own gate is RED on the judged frame (2026-10-18), and it stays open.** `tools/plan-check.mjs` reads the
 plan from the dump now (photo-shot carries `window.__plan`), and on the judged photograph it reads **7 of 8**: line H -
 "the plan names both archetypes on separate instances" - fails because the plan's instances are WALL FRAGMENTS, not
