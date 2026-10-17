@@ -273,3 +273,19 @@ photograph's layout", "the photograph decides") while testing a proxy (a share, 
 those three lines require the STRUCTURE it names - an outline for match, something built under the sky for pairing, a
 photograph-derived tone set for P1 - and the counterexamples are the acceptance tests for that work.
 
+## D21 — A DARK BUILDING IS DRAWN AS A GLASS WALL: THE STYLE'S RULE, AND THE OPERATOR'S NOTE (2026-10-18)
+
+**The rule, from the accepted frame:** its tower is a dark plane carrying blue glass (dark ≥35% of the region AND blue
+≥10%), and the renderer's facade piece draws that as a curtain wall - the plan's `dark-plane` role. **Measured on the
+judged photograph:** the tower reaches dark 36.6% and blue 21.9%; the grid's mullions are the frame's own ink, which is
+why the drawing carries the accepted's 35%-dark-with-glass reading.
+
+**The operator's note it earns, recorded rather than argued away:** on a photograph whose dark building is NOT a glass
+tower (the operator's yard: a beige facade with dark balconies), the same role paints a blue curtain wall that the eye
+may read as a style mis-fit - the accepted grammar applied to a building the accepted frame does not contain. Two
+honest resolutions exist and only the operator can choose between them: (a) keep the rule (a dark building becomes the
+style's glass wall, as the accepted frame's own tower does), or (b) gate the grid on the PHOTOGRAPH's glass - which is
+not measurable on that yard, because its facade carries no blue at all, and the accepted's blue is the STYLE's colour
+rather than the photograph's. The loop's position: (a) is the documentable rule, and the observation is recorded here so
+that a future change to it is a DECISION, not a drift.
+
