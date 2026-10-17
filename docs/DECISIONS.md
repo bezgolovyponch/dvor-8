@@ -24,6 +24,23 @@ default. Any new decision must be added to this table BEFORE it is used in the p
 
 | D14 | R1's referee and the two owner lines it cannot reproduce | **tools/accepted-frame.py**: the approved frame extracted from `reference/v10a-accepted-frame-screenshot.png` (lossy VP8 WebP, art rect 360x640 = exactly 1.25x, HUD/rings/seams masked, snapped to the repo palette), cross-checked against the owner's table | 11 of 13 lines reproduce within 0.05 (all checker, road and sky shares, both tower tones, the mid-rise parity). The two that do not CANNOT: under the predicate that reproduces the checker's blues .21 and the mid-rise parity .361, the tower facade measures .40-.42 blues and .34-.36 parity, and the accepted 48-colour canvas gives .79/.48 - so the owner's tower blues .30 and tower parity .047 were measured on a different rect (the .047 matches a flat wall patch). They are re-derived, not used as bars | if the owner supplies the tower rect, those two lines return to the table |
 
+## THE OPERATOR'S LINES, AND THE DECISION EACH ONE PRODUCED (PART A)
+
+The operator's answers are the source of the rows above; this table is the index from the answer to the decision it
+created, so a reader can find the owner's word behind every bar. Nothing here is inferred: each line names the row
+that records the answer's consequence.
+
+| the operator's line | the decision it produced |
+|---|---|
+| the HUD's «осталось» is the win condition, and only declared-destroyable things may be counted | **D9** |
+| the accepted frame is the referee, not a rendering of it | **D14** (the extraction, and the two tower lines it cannot reproduce) |
+| a bar is the accepted frame's own measurement, never a round number | **D13** (delivery 2b's wall window) |
+| the composition is structure - bands, archetypes, one horizon line - not a palette | **D15** (the plan, and the fragment merge its instances needed) |
+| only a stable (chain-green) version is published, on the repository's own link | **D17**, and the release that used it (v0.5.0) |
+| the gate infrastructure is proven by determinism, not asserted | **D18** |
+| the news is a concept feature; the gates capture with `?news=0` because its headline is drawn into the canvas | **D12** (the news flag) and `docs/concept.md` |
+
+
 ## OPEN QUESTIONS (no open source decides these yet - they must not be defaulted silently)
 
   O1  What identifies a CHECKERED facade? Luminance distributions were measured and rejected (they fire on the
