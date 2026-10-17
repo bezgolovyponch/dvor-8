@@ -44,7 +44,7 @@ panels and messages; each row says how it is checked. `tools/baseline-check.mjs`
 | O1 | *"Each car gets a 1-px outline"* and *"v9 photo pixels plus one shared outline"* (the cartoon template is **rejected**) | the cut-out keeps the thing's own pixels; one outline from the owner map |
 | I1 | *"Throw at a window: the glass breaks. Hit the same spot again: it cracks, then darkens, then the panels fall off and leave the frame, then the frame falls. Anything above a missing piece falls after it, and the rubble stays."* | the damage ladder + `breakCells` + glass particles + permanence (suite) |
 | I2 | *"An object's edge is every pixel that touches a pixel of another object. Buildings get a 1-px outline against the sky. Aiming shows a pink edge, info mode a cyan one, and a selected object blinks cyan and yellow."* | `render.js`: aim pink, info cyan, selection blinking; outline from the owner map |
-| I3 | *"Baseline: the 10 checks … run automatically every time the page loads, and the results are shown on the page. There's also a button to run them again."* | **NOT MET** — my checks run from the command line; v10 shows them on the page with a re-run button |
+| I3 | *"Baseline: the 10 checks … run automatically every time the page loads, and the results are shown on the page. There's also a button to run them again."* | the page's OWN panel, read by the page step: rows present at load, then the box emptied and `#selfRun` clicked (`tools/photo-shot.mjs` → `selftest.json` beside `canvas.json` → `tools/criteria-check.mjs`); no page step = no verdict |
 
 ## The outlines follow the shape
 

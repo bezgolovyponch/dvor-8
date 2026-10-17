@@ -34,6 +34,11 @@ export const STYLE = {
     plane: 'one family, flat, no photographic texture inside the wall',   // the rule the piece asserts
     grid: 'regular, pitch measured from the photograph\'s own openings',
     windowRows: 'floor by floor', checkerboard: 'where the photograph shows alternating bays',
+    // MEASURED from the accepted frame (reference/v10a-art-canvas.png, 288x512, via reference/TARGET.json):
+    // its checkered mid-rise is white 22.9-23.1% / blue 46.3% / dark 2.8% of the region (the range is the two
+    // reference canvases: the antialiased original and the palette-exact derivation) - one bay in three carries
+    // the white panel. This is the DENSITY; the photograph decides WHICH bays.
+    checkerWhite: 0.231,
   },
 
   window: {

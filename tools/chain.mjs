@@ -14,10 +14,15 @@
 import { execFileSync } from 'node:child_process';
 const run = (cmd, args, env = {}) => { try { return { out: execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env } }), code: 0 }; } catch (e) { return { out: (e.stdout || '') + (e.stderr || ''), code: e.status ?? 1 }; } };
 
+// THE FRAME THE CRITERIA GATE MEASURES IS THE ONE THE PAGE BLOCK WROTE. Four of the creator's criteria are
+// measurements OF A FRAME (palette table, stray share, sky band, the photograph deciding the road), and the gate
+// used to be called with no frame at all - so it reported a failure of the picture when it had been handed nothing.
+// The PAGE block below runs before these steps and writes exactly this dump.
+const DUMP = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
 const steps = [
   ['0 PREFLIGHT', 'node', ['tools/preflight.mjs'], {}],
   ['0b IMPORTS', 'node', ['tools/undefined-check.mjs'], {}],
-  ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], {}],
+  ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],
   ['4 DELIVERY', 'node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/chain', process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'], {}],

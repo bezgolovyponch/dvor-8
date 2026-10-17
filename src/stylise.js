@@ -23,7 +23,7 @@
 // that size from the image, so a tall phone photograph makes a tall level.
 
 import { liftRegister } from './style/register.js';   // the style's own register, applied AFTER the conversion
-import { trace } from './vector.js';
+import { trace, entryFor } from './vector.js';
 import { render as renderFlat, RAMPS, STEPS, outlineOf, voidOf } from './flat.js';
 import { SKY, OTHER } from './surfaces.js';
 
@@ -122,9 +122,38 @@ export function styliseVector(rgba, w, h, opts = {}) {
   // (match-check: "dark plane dominates" 46% -> 3%) because in a tower's columns the skyline is row 0.
   const protectReg = st.windowsPx instanceof Set ? new Set(st.windowsPx) : new Set();
   if (st.buildings) for (let p2 = 0; p2 < st.buildings.length; p2 += 1) if (st.buildings[p2]) protectReg.add(p2);
+  // ---- THE OBJECTS KEEP THEIR OWN COLOUR (bounded experiment) -------------------------------------------
+  //
+  // The reduction paints a low-saturation object pixel with its SHAPE's mean colour (vector.js:607), so a white
+  // car's body comes out at the tone of the road it stands on, and the register lift below raises what is left of
+  // it. This restores, inside the ONE source-derived region that already exists - the scene parse's own `car`
+  // mask - each interior pixel's own colour, mapped through the quantiser this render path already uses
+  // (entryFor, vector.js:72), so the indices written are the active renderer's own and no second palette is
+  // involved.
+  //
+  // THE MASK IS AN INTERIOR MASK, NOT A SILHOUETTE: it is a nearest upsample of the model's low-resolution mask,
+  // so its border is stair-stepped and it leaks onto road pixels between and around vehicles. It is used exactly
+  // as it is - never widened, never thresholded - and it never decides geometry: the thing's pixels, its outline
+  // and its owner map are untouched. Outline and void entries are preserved, and every restored pixel is added to
+  // `protect` so the register lift cannot touch it. With no usable mask, the frame is left exactly as it was.
+  const carMask = opts.parse && opts.parse.masks ? opts.parse.masks.car : null;
+  if (carMask && carMask.length === n) {
+    const outlineIdx = st.palette.length - 2, voidIdx = st.palette.length - 1;
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      if (!carMask[p2]) continue;
+      const v = st.idx[p2];
+      if (v === outlineIdx || v === voidIdx) continue;       // the established outline and void stay
+      st.idx[p2] = entryFor(st.palette, rgba[p2 * 4], rgba[p2 * 4 + 1], rgba[p2 * 4 + 2]);
+      protectReg.add(p2);
+    }
+  }
   liftRegister(st.idx, {
     protect: protectReg,
     horizon: st.horizon || st.skyline || null, w: st.skyline ? st.skyline.length : 0,
+    // THE GROUND'S OWN LIFT, MEASURED AGAINST THE ACCEPTED FRAME. Reference road region: luma 90, 46.6% dark.
+    // Ours: luma 121, 6.1% dark - the ground climbed three tones (the ladder's default) and the accepted frame's
+    // asphalt sits at the bottom of its family. One tone, and the road lands where the reference measures it.
+    groundMaxTone: 2,
   });
   return {
     idx: st.idx, palette: st.palette, smooth: rgba,

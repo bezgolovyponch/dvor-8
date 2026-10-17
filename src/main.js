@@ -69,6 +69,9 @@ let filter = 'sober', mode = MODES.sober;          // filter/mode: how you SEE
 // where the sky is measured, and a tsunami grade tints the whole frame blue (restriction R6).
 const params = new URLSearchParams(location.search);
 const cleanFrame = params.get('clean') === '1';
+// The pinned animation clock, or -1 when the page runs its own. See the note in `frame`.
+const clockPin = params.has('clock') ? Number(params.get('clock')) : -1;
+if (typeof window !== 'undefined') window.__clockPin = clockPin;   // the pin's own readout, for G-DET-CLOCK
 // `?test=1` REVEALS THE FILE INPUTS so an automated browser can drive the real photo path. They are hidden by design
 // (a phone uses the native picker), and a hidden input cannot be filled by a test runner - which is why the page
 // gate had to inject a synthetic File and hung on it. This is a testing affordance, not a product change: it does
@@ -87,6 +90,16 @@ if (params.get('photo') && typeof document !== 'undefined') {
       nothingFound(`Не получилось: ${error.message}`);
     }
   }, 300);
+}
+// `?parse=1` arms G-DET-PARSE: a probe (tools/detgate-parse.mjs) runs `sceneParse` a SECOND time on the same
+// stored input and diffs the two masks, so the nondeterminism is localised to the parse boundary or excluded.
+// It is an instrument handle, not a product path: nothing runs unless the parameter is present.
+if (params.get('parse') === '1' && typeof window !== 'undefined') {
+  window.__parseAgain = async () => {
+    const src = window.__sceneIn;
+    if (!src || !src.source) return null;
+    return sceneParse(src.source, src.w, src.h, src.sw || src.source.width, src.sh || src.source.height);
+  };
 }
 if (params.get('test') === '1' && typeof document !== 'undefined') {
   setTimeout(() => {
@@ -115,7 +128,10 @@ let drink = makeDrink();
 let queue = [], like = null, grown = rnd, top = 0, ended = false, stomps = 0;   // the street still to come, and how it is made
 const pad = { x: 0, y: 0, jump: false, once: false }, keys = new Set();
 // The news over the yard: on unless the player turned it off. `wire` is today's headlines, once fetched.
-let newsOn = (() => { try { return localStorage.getItem(NEWS_ON) !== '0'; } catch { return true; } })(), wire = [], asked = false;
+// `?news=0` IS A GATE AFFORDANCE, not a product change: it does what the НОВОСТИ button does (the same switch the
+// player has), so a capture can be REPRODUCIBLE. Measured: two unpatched runs differed by 3237-3613 px, every one
+// of them concentrated in rows y=2..23 - the headline band, whose text comes from the network (fetch, line 467).
+let newsOn = (params.get('news') === '0' ? false : (() => { try { return localStorage.getItem(NEWS_ON) !== '0'; } catch { return true; } })()), wire = [], asked = false;
 const sky = makeSky();
 // The people passing through, and how close they are to having seen you. A water ball is all that is ever thrown at them.
 let folk = makeFolk();
@@ -323,11 +339,17 @@ async function build(rgba, w, h, dets, big = null) {
   // THE PARSE RUNS BEFORE THE CONVERSION. Its class masks decide the sky and the facades; without it the conversion
   // falls back to the old colour tests. A failure here is not fatal - it is reported, never guessed.
   const shot = photoCanvas(big);
+  // G-DET-PARSE (docs/DETERMINISM.md §5, level 2): the parse's own input and output are kept on the page so the
+  // SAME call can be made a second time and the two masks differenced. Diagnostics only: nothing in the build or
+  // the render ever reads these, and they are attached to `window`, never to the frame. `?parse=1` arms the probe.
+  if (typeof window !== 'undefined' && params.get('parse') === '1') window.__sceneIn = { source: shot, w, h, sw: big && big.w, sh: big && big.h };
   const parse = shot
     ? await sceneParse(shot, w, h, shot.width, shot.height).catch((e) => { if (typeof window !== 'undefined') window.__parseError = String(e && e.message || e); return null; })
     : null;
   if (typeof window !== 'undefined') window.__parse = parse ? { classes: parse.classes, sky: !!parse.masks.sky, building: !!parse.masks.building } : null;
+  if (typeof window !== 'undefined' && params.get('parse') === '1') window.__parseFirst = parse;
   const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse });
+  if (typeof window !== 'undefined') window.__spriteBays = (st.stats && st.stats.spriteBays) || null;   // DIAGNOSTIC
   // THE THINGS ARE CUT OUT OF THE REDUCED PICTURE, NOT OUT OF THE PHOTOGRAPH.
   //
   // The reduction (areas first, in vector.js) turns the frame into flat fields; cutting the objects out of the RAW
@@ -1086,9 +1108,20 @@ function finish() {
 
 // ---- the loop -------------------------------------------------------------------------------------
 function frame(now) {
-  const dt = Math.min(0.05, (now - last) / 1000);
+  // `?clock=<seconds>` PINS THE ANIMATION CLOCK **AND THE TIME STEP** (G-DET-CLOCK / G-DET-RENDER,
+  // docs/DETERMINISM.md §5 level 3). The build is deterministic (G-DET-PARSE, G-DET-DETECT, G-DET-WORLD all PASS),
+  // and drawing at one moment of the animation is deterministic too - but the moment is chosen by how long the
+  // build happened to take, so two captures of the same photograph land on different phases of a moving thing
+  // (measured: `particles` 49 -> 48 and fx.clock 30.13 -> 31.40 between two frames of one build, and that alone
+  // is the frame's variation). With the pin, both the clock and dt are constants, so the simulation is a pure
+  // function of the build and the frame at that clock is byte-identical.
+  // It is a gate affordance of the same kind as `?clean=1&news=0`: no product path reads it, and every gate that
+  // uses it prints the pin it used.
+  const raw = Math.min(0.05, (now - last) / 1000);
+  const dt = clockPin >= 0 ? 1 / 60 : raw;
   last = now;
-  clock += dt;
+  clock = clockPin >= 0 ? clockPin : clock + raw;
+  if (typeof window !== 'undefined') window.__clock = clock;   // the pin's own readout, for G-DET-CLOCK
   hideT = stepDuck(hideT, folk.hidden, dt);
   motion = viewMotion(filter, clock, calm, drink.drunk);
   // The lean and the jolt ride the same transform: the camera's trauma contributes a rotation as well as
@@ -1110,8 +1143,13 @@ function frame(now) {
       if (scanT >= SCAN_TIME) { stage = 'play'; scanY = null; foldForPlay(true); sfx.ready(); banner(`${world.regions.length} ${world.regions.length === 1 ? 'ЦЕЛЬ' : 'ЦЕЛЕЙ'}`); }
     }
     const frozen = fx.freeze > 0;
+    // A PINNED CLOCK PINS THE EFFECTS' OWN CLOCK TOO. `fx.clock` is a SECOND time (src/fx.js:106) and it drives
+    // both the camera's trauma noise and every particle's lifetime, so leaving it free left the frame moving with
+    // it (measured: 100 -> 99 particles between two frames of one build). Pinned, the whole drawn frame is a
+    // function of the build and the pin - which is what makes a capture an artefact rather than a moment.
+    if (clockPin >= 0) fx.clock = clockPin;
     for (const rock of stepFx(fx, world, dt)) resolve(rock);
-    if (stage === 'play' && !frozen) {
+    if (stage === 'play' && !frozen && clockPin < 0) {
       tick(world, dt);
       stepBlooms(world, dt);
       for (const ev of stepWeather(weather, world, fx, dt, rnd, { x: cam.x, y: cam.y, w: cam.w, h: cam.h })) weatherSays(ev);
@@ -1130,6 +1168,18 @@ function frame(now) {
     if (me?.down) { fx.hand.x = me.x; fx.hand.y = me.y - me.z - 8; fx.focus.tx = me.x; fx.focus.ty = me.y - 6; }
     else { fx.hand.x = cam.x + cam.w / 2; fx.hand.y = world.h + 4; }
     shake = shakeOffset(fx);
+    // G-DET-RENDER's readout: what the renderer is about to draw, so a frame that re-rolls is attributed to a
+    // named input instead of guessed at (it named the moving particle list and the free-running fx.clock, which
+    // were the whole of the frame's variation). Read-only, never drawn.
+    if (typeof window !== 'undefined') window.__drawState = () => ({
+      seconds: clock, fxClock: Math.round(fx.clock * 1e4) / 1e4, trauma: fx.trauma,
+      particles: fx.particles.length, rings: fx.rings.length, rocks: fx.rocks.length,
+      worldIdx: world.idx.join('').length, hits: world.regions.filter((r) => r.hits > 0).length,
+      motion: JSON.stringify(motion), shake: JSON.stringify(shake), cam: cam.x + ',' + cam.y + ',' + cam.w + ',' + cam.h,
+      stage, flier: sky.flier ? sky.flier.kind + ':' + Math.round(sky.flier.x * 100) : null, folk: folk.people.length,
+      hidden: folk.hidden, seen: folk.seen, done: world.done, scanY: scanY === null ? null : Math.round(scanY),
+      weather: cleanFrame ? null : weather?.kind, disaster: cleanFrame ? null : disaster?.kind, filter, clean: cleanFrame,
+    });
     draw(ctx, buf, world, fx, { filter, mode, seconds: clock, scanY, motion, shake, cam, me, weather,
       drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk,
       hideT, land: me?.land ?? 0, disaster: cleanFrame ? null : disaster, weather: cleanFrame ? null : weather,

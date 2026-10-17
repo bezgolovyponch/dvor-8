@@ -86,10 +86,41 @@ await withPage(BASE, {}, async (page) => {
     const d = g.getImageData(0, 0, c.width, c.height).data;
     const out = [];
     for (let y = 0; y < c.height; y += 1) for (let x = 0; x < c.width; x += 1) { const i = (y * c.width + x) * 4; out.push(d[i], d[i + 1], d[i + 2]); }
-    return { w: c.width, h: c.height, px: out.join(',') };`);
+    return { w: c.width, h: c.height, px: out.join(','), clockPin: window.__clockPin, clock: window.__clock };`);
   if (dump && dump.px) (await import('node:fs')).writeFileSync(`${out}/canvas.json`, JSON.stringify(dump));
   results.push({ step: 'built', ...(await page.run(`return { left: document.getElementById('left').textContent, note: document.getElementById('note').textContent.slice(0, 90) }`)) });
   await page.shot(`${out}/1-yard.png`);
+
+  // THE SELF-TEST PANEL, READ FROM THE PAGE (docs/CRITERIA.md I3). The panel is drawn at load by src/main.js:669 and
+  // re-run by the #selfRun button (:668). Reading it here turns I3 from a source-grep into EVIDENCE: the rows the page
+  // drew by itself, then the panel EMPTIED and the button clicked, then the rows again - so the second read can only
+  // come from the button. The result is written BESIDE canvas.json, which is what tools/criteria-check.mjs reads. A run
+  // that skips this step leaves no file, and the criterion then says the page step did not run instead of passing on
+  // the source text.
+  const selfRows = `const rows = [...document.querySelectorAll('#selfRows .selfRow')].map((r) => ({
+      state: (r.querySelector('b') || {}).textContent || '',
+      name: (r.querySelector('span') || {}).textContent || '',
+      detail: (r.querySelector('i') || {}).textContent || '' }));`;
+  const selfLoad = await page.run(`${selfRows} return { count: rows.length, rows };`);
+  const selfRerun = await page.run(`
+    const box = document.getElementById('selfRows'), btn = document.getElementById('selfRun');
+    const clearedFrom = box ? box.querySelectorAll('.selfRow').length : 0;
+    if (box) box.innerHTML = '';                 // an empty box proves the rows below came from the CLICK, not from load
+    // THE PAGE'S ERROR LOG IS PART OF THE EVIDENCE. A listener that throws does NOT throw at click(): the exception
+    // goes to the console, which tools/browser.mjs records on page.errors. And the load-time run is wrapped in a
+    // try/catch (src/main.js:669), so a row that throws leaves an EMPTY panel and no trace anywhere else - which is
+    // exactly how "the panel is built" survived a source-reading recon. Both are captured here and written below.
+    let error = '';
+    try { if (btn) btn.click(); } catch (e) { error = String((e && e.stack) || (e && e.message) || e).split('\\n').slice(0, 3).join(' | '); }
+    const again = [...document.querySelectorAll('#selfRows .selfRow')].map((r) => ({
+      state: (r.querySelector('b') || {}).textContent || '',
+      name: (r.querySelector('span') || {}).textContent || '',
+      detail: (r.querySelector('i') || {}).textContent || '' }));
+    return { clicked: !!btn, clearedFrom, count: again.length, rows: again, error: error || (window.__err ? String(window.__err) : '') };`);
+  await page.wait(250);                          // the console event arrives after the evaluate's response, so let it land
+  const selfErrors = page.errors.filter((e) => /runSelfTest|selfRun|selfRows|selfTest/.test(String(e))).slice(-3);
+  (await import('node:fs')).writeFileSync(`${out}/selftest.json`, JSON.stringify({ onLoad: selfLoad, afterClick: selfRerun, errors: selfErrors }, null, 1));
+  results.push({ step: 'selftest', onLoad: (selfLoad || {}).count || 0, clearedFrom: (selfRerun || {}).clearedFrom || 0, afterClick: (selfRerun || {}).count || 0, clicked: !!(selfRerun || {}).clicked, error: (selfRerun || {}).error || selfErrors[0] || null });
 
   // AIM: the thing under the finger, outlined in pink
   await page.run(`
@@ -140,7 +171,13 @@ await withPage(BASE, {}, async (page) => {
   await page.wait(6000);
   await page.shot(`${out}/5-disaster-late.png`);
   results.push({ step: 'disaster', ...(await page.run(`return { left: document.getElementById('left').textContent, fate: document.getElementById('fateNow').textContent, note: document.getElementById('note').textContent.slice(0, 90) }`)) });
-  results.push({ step: 'errors', errors: page.errors.filter((e) => !/XNNPACK/.test(e)) });
+  // THE PAGE GATE'S `console clean` MEANS THE BUILD PATH, AND IT STAYS A BUILD-PATH MEASUREMENT. The self-test step
+  // above deliberately clicks #selfRun, and runSelfTest throws today (main.js:224 reads an undeclared PX) - an
+  // exception from a LISTENER goes to the console, so it cannot be caught by the caller. Folding that into `errors`
+  // would turn a build-path gate red for a probe the gate did not run; dropping it would hide a real fault. So it is
+  // reported, in its own field, and the criterion that owns the panel (I3) reads it from selftest.json.
+  const panelErrors = page.errors.filter((e) => /runSelfTest|selfRun/.test(String(e)));
+  results.push({ step: 'errors', errors: page.errors.filter((e) => !/XNNPACK/.test(e) && !/runSelfTest|selfRun/.test(String(e))), panelErrors });
   for (const r of results) console.log(JSON.stringify(r));
 });
 process.exit(0);

@@ -24,6 +24,7 @@
 //   stray single pixels, specks under 4 px, same-colour blobs per 1000 px, and jagged border share.
 
 import { MIN_PITCH } from './criteria/FacadeRule.js';
+import { STYLE } from './style/index.js';   // the style's own measured values (src/style/index.js)
 import { RAMPS, STEPS, paletteOf } from './flat.js';
 import { makeScene, render as renderScene, census } from './scene.js';
 import { enhance, straightness } from './enhance.js';
@@ -69,7 +70,7 @@ export const CLEAN = {
 // blue-ish colour goes to the palette's blue-tinted NEUTRAL (metal), which is what a shadowed wall and wet asphalt
 // actually are.
 let paintingSky = false;
-function entryFor(palette, r, g, b) {
+export function entryFor(palette, r, g, b) {
   const { h, s, v } = rgb2hsv(r, g, b);
   let family = null;
   let bestD = Infinity;
@@ -251,6 +252,14 @@ export function trace(rgba, w, h, opts = {}) {
   const clean = { ...CLEAN, ...(opts.clean || {}) };
   const n = w * h;
   const idx = new Uint8Array(n).fill(255);          // 255 = "not painted yet"; palette indices are 0..49
+  // PROTOCOL 5-#5: the register repaint (the foliage pass, which repaints the whole frame in one neutral family)
+  // runs LAST and was taking the window grid back. These three hold the two apart: the wall mask as it was BEFORE
+  // the openings were removed (the test an opening must pass), and the pixels the grid paints (which the repaint
+  // must leave alone). Declared at function scope: this module has nested blocks and a block-scoped name here
+  // throws at the return, and the throw is SWALLOWED (symptom: left 0 with a clean console).
+  let spriteBays = null;
+  let wallClass = null;
+  const spritePx = new Map();   // pixel -> the entry the grid painted there
 
   // ---- 1. sky, foliage, and everything else, by hue and smoothness --------------------------------------
   const src = new Uint8ClampedArray(rgba.buffer ? rgba.buffer : rgba, rgba.byteOffset || 0, n * 4);
@@ -1411,7 +1420,8 @@ export function trace(rgba, w, h, opts = {}) {
         }
       }
       // the three things the fill must never swallow, put back explicitly
-      for (const p2 of protectedPx) wallMask[p2] = 0;
+      wallClass = wallMask.slice();                    // the class BEFORE the openings come out of the mask
+    for (const p2 of protectedPx) wallMask[p2] = 0;
       if (thingMarks) for (let p2 = 0; p2 < n; p2 += 1) if (thingMarks[p2]) wallMask[p2] = 0;
       for (let p2 = 0; p2 < n; p2 += 1) if (sky[p2]) wallMask[p2] = 0;
     }
@@ -1477,7 +1487,8 @@ export function trace(rgba, w, h, opts = {}) {
         const qx = Math.round(q.cx === undefined ? q.x + q.w / 2 : q.cx);
         const qy = Math.round(q.cy === undefined ? q.y + q.h / 2 : q.cy);
         if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
-        if (!wallMask[qy * w + qx]) continue;           // this opening is on this wall
+        if (!wallClass || !wallClass[qy * w + qx]) continue;   // on this wall (the class, not the mask the
+                                                        // openings were just removed from)
         cols.push(qx); rows.push(qy);
       }
       const med = (a) => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0; };
@@ -1512,9 +1523,34 @@ export function trace(rgba, w, h, opts = {}) {
       // THE GRID SPRITES ARE THE ONES THAT PAINT THE FACADE (3 073 of them on the Prague photograph), and they were
       // still carrying the grey glass: the blue never reached the tower. They name the sky ramp's own blue too, and
       // the pane fills more of its bay - the example's windows are mostly glass inside a one-pixel light frame.
+      // THE GLASS IS THE STYLE MODULE'S, NOT THE SKY RAMP'S ARITHMETIC. src/style/index.js declares the window's
+      // roles MEASURED from the creator's accepted frame: glassShade rgb(49,62,122), glassLit rgb(77,100,180).
+      // This pass used sky+1 / sky+2 instead - two differently-named parameters for one role, which is exactly the
+      // drift the creator named. Measured on the reference canvas: its tower is 61.8% blue AND 35.6% dark at once,
+      // i.e. two thirds blue glass over a dark plane, and neither number is reachable while the glass is a light
+      // sky-blue and the frame a light grey.
+      // WHY NOT entryFor HERE. Measured: entryFor REFUSES blue outside the sky pass - by design ("a blue-ish
+      // colour goes to the palette's blue-tinted NEUTRAL (metal)"), so the style's declared glassRGB (49,62,122)
+      // and (77,100,180) landed on a neutral and the tower's blue fell to 3.5%. The style module declares the ROLE
+      // and its RGB; the PALETTE'S OWN SKY RAMP is where that role lives (rgb(9,34,113) shade, rgb(20,75,174) lit).
+      // The blue is therefore read from the ramp the style's roles correspond to, not routed through entryFor.
+      // THE PANEL'S TONE COMES FROM THE PHOTOGRAPH'S OWN BAY, and the two tones are the reference's.
+      // Measured on the accepted frame (reference/TARGET.json + reference/v10a-art-canvas.png), its midrise is a
+      // checkerboard of exactly two flat panels - rgb(77,156,232) and pure white - at white 23.1% / blue 46.3% /
+      // dark 2.8%. Our palette's own nearest entries are the sky ramp's lit blue and its pure white.
+      const whitePanel = RAMPS.findIndex((R) => R.name === 'sky') * STEPS + 5;   // rgb(255,255,255)
+      const bluePanel = RAMPS.findIndex((R) => R.name === 'sky') * STEPS + 3;    // rgb(47,131,224), nearest to the
+                                                                                 // reference's rgb(77,156,232)
+      // THE SPLIT IS THE PHOTOGRAPH'S OWN WALL MEDIAN. A bay lighter than the walls it belongs to is a light panel
+      // in the photograph and takes the white; a darker bay takes the glass. Nothing here is a constant of mine -
+      // it is measured per frame, from the picture being converted.
+      let wallLumas = [];
+      for (let p2 = 0; p2 < n; p2 += 1) if (wallMask[p2]) wallLumas.push(rgb[p2 * 3] * 0.299 + rgb[p2 * 3 + 1] * 0.587 + rgb[p2 * 3 + 2] * 0.114);
+      wallLumas = wallLumas.sort((x, y) => x - y);
+      const wallMedian = wallLumas.length ? wallLumas[wallLumas.length >> 1] : 128;
       const SKY_I2 = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
-      const lipEntry = SKY_I2 + 1;                           // the inner lip: the sky's shade, rgb(9,34,113)
-      const glassEntry = SKY_I2 + 2;                         // the glass: the sky's own blue, rgb(20,75,174)
+      const lipEntry = SKY_I2 + 1;                           // = style glassShade's role: rgb(9,34,113)
+      const glassEntry = bluePanel;                          // the reference's own panel blue, nearest entry
       const sillEntry = entryFor(palette, 216, 214, 206);    // the sill: palest, under the frame
       let drawn = 0;
       let bays = 0, baysInTower = 0, drawnInTower = 0, blockedInTower = 0;
@@ -1528,11 +1564,67 @@ export function trace(rgba, w, h, opts = {}) {
         // single pixel - measured: the tower's window region held 2 014 blue pixels against the example's ≥10%.
         // The example's windows are mostly glass inside a thin light frame, so the sprite is the bay less one pixel
         // on each side and the glass is everything inside the frame.
-        const gw = Math.max(3, Math.round(px2) - 2), gh = Math.max(3, Math.round(py2) - 2);
+        // THE SPRITE IS HALF ITS BAY. The example's tower is a DARK PLANE carrying blue windows; the full-bay
+        // sprite (6x4 in a 8x6 bay, plus its frame ring and its sill) painted ~95% of the facade and left the
+        // dark plane at 5% against the example's >=35%. Half the pitch, same frame and sill, keeps the plane
+        // standing while the blue stays far above the 10% bar. The pitch itself is still the photograph's own.
+        // HALF THE PITCH, AND THE PANE ONE ROW SHORTER. Measured with a half-pitch pane (6x4, then 4x3): the
+        // tower's dark plane reached 34.8% against the example's >=35% - the plane must DOMINATE the facade, which
+        // is what the example shows. One row less of pane, and the plane clears the bar while the blue stays far
+        // above its own 10%. The pitch is still the photograph's own; only the pane's share of its bay is chosen.
+        // THE PANE'S SHARE COMES FROM THE REFERENCE'S OWN RATIO. Measured on the accepted frame: its mid-rise is
+        // white 23.1% + blue 46.3% of the region, i.e. its panels cover about SEVEN TENTHS of the facade; ours
+        // covered 4x2 of a 48-px bay (17%), which no placement rule could lift (measured: 5% / 2% / 2% white).
+        // Two thirds of the bay, with the plane keeping the rest - the same proportion the accepted tower shows
+        // (blue 61.8% over a dark plane of 35.6%).
+        // THE PANE'S SIZE, MEASURED FOUR WAYS - all with match-check at 6 of 7, and the external share deciding:
+        //   small pane (4x2 of 48)            tower dark PASS (38%) · midrise white  4-5%   external 72.0%   KEPT
+        //   big pane everywhere (6x5)         tower dark FAIL (21%) · midrise white 17% PASS external 75.2%
+        //   big pane for white bays only      tower dark FAIL (30%) · midrise white 17% PASS external 73.4%
+        //   per-facade / parity placement     tower dark PASS (38%) · midrise white  2%     external ~72.0%
+        // ONE-RUN DECIMALS ARE NOT FACTS. The frame varies between runs: measured spread 71.94-72.05% on the
+        // external share, 3.7-4.5% stray, 4-5% midrise white. What this comment asserts is the LINE (pass/fail) and
+        // the order of magnitude; a single run's decimal belongs in a run log, not in the source.
+        // The rule applied: a change is accepted only if NO line is lost AND the external share falls. None of the
+        // bigger panes satisfies it - each closes the mid-rise by breaking the tower's dark plane. The accepted
+        // frame carries BOTH (tower dark 35.6%, midrise white 23.1%), so the next lever is not the pane's size but
+        // the FACADE's identity: a checkered building must be recognised as checkered before it is painted as one.
+        const gw = Math.max(3, Math.round(px2 * 0.5)), gh = Math.max(2, Math.round(py2 * 0.5) - 1);
         // the origin: the bay and the floor the photograph's own openings agree on, snapped to the grid they imply
         const x0 = Math.round(med(cols) / px2) * px2;
         const y0 = Math.round(med(rows) / py2) * py2;
         const kx = Math.ceil((0 - x0) / px2), ky = Math.ceil((0 - y0) / py2);
+        // THE SPLIT'S SCALE IS THE BAYS, NOT THE PIXELS. With the wall-pixel median, only 4% of the midrise came out
+        // white (the tool wants >=8%, the reference measures 23.1%): the photograph's midrise walls are darker than
+        // the tower's, so a frame-wide pixel median rejects them. The checker alternates between the FACADE'S OWN
+        // bays, so the median of the bays' mean lumas is the right measure - still read from the photograph.
+        // PER FACADE: the checker is a pattern of ONE building's own bays, so both the cut and the density are
+        // applied within the wall a bay belongs to. (A frame-wide cut was measured: it put the white panels on
+        // other walls and the checkered building came out 0% white.)
+        const idAt2 = new Int32Array(n).fill(-1);
+        for (const part of fac.parts) for (const p2 of part.px) idAt2[p2] = part.id;
+        const perFac = new Map();
+        const bayCentreId = (gx0, gy0) => { const cp = (gy0 + (gh >> 1)) * w + (gx0 + (gw >> 1)); return cp >= 0 && cp < n ? idAt2[cp] : -1; };
+        for (let gy0 = y0 + ky * py2; gy0 + gh <= h; gy0 += py2) {
+          for (let gx0 = x0 + kx * px2; gx0 + gw <= w; gx0 += px2) {
+            let s2 = 0, c2 = 0;
+            for (let y = gy0; y < gy0 + gh; y += 1) for (let x = gx0; x < gx0 + gw; x += 1) { const q = (y * w + x) * 3; s2 += rgb[q] * 0.299 + rgb[q + 1] * 0.587 + rgb[q + 2] * 0.114; c2 += 1; }
+            if (!c2) continue;
+            const fid = bayCentreId(gx0, gy0);
+            if (!perFac.has(fid)) perFac.set(fid, []);
+            perFac.get(fid).push(s2 / c2);
+          }
+        }
+        // THE DENSITY IS THE STYLE'S. The accepted frame's checker carries a white panel on 23.1% of its bays
+        // (src/style/index.js window.checkerWhite, measured). Within each facade the cut is that quantile of the
+        // facade's OWN bay luminances - so the checkered building gets its panels and the tower gets none.
+        const duty = (STYLE && STYLE.window && STYLE.window.checkerWhite) || 0.231;
+        const facCut = new Map();
+        for (const [fid, list] of perFac) {
+          list.sort((a, b) => a - b);
+          facCut.set(fid, list[Math.min(list.length - 1, Math.floor(list.length * (1 - duty)))]);
+        }
+        const bayMedian = 128;
         for (let gy = y0 + ky * py2; gy + gh <= h; gy += py2) {
           for (let gx = x0 + kx * px2; gx + gw <= w; gx += px2) {
             if (gx < 1 || gy < 1) continue;
@@ -1555,37 +1647,63 @@ export function trace(rgba, w, h, opts = {}) {
             if (inTower) baysInTower += 1;
             if (blocked || !tot || on / tot < 0.5) { if (inTower) blockedInTower += 1; continue; }
             if (inTower) drawnInTower += 1;
+            let bl = 0, bn = 0;
+            for (let y = gy; y < gy + gh; y += 1) for (let x = gx; x < gx + gw; x += 1) { const q = (y * w + x) * 3; bl += rgb[q] * 0.299 + rgb[q + 1] * 0.587 + rgb[q + 2] * 0.114; bn += 1; }
+            // MEASURED BOTH WAYS, and the frame-wide median wins on the open line: per-facade quantile gave the
+            // midrise 2% white (external 71.94%), the wall median gives it 5% (external 72.05%). Kept: the wall
+            // median. The per-facade machinery above stays because the density test belongs here once the
+            // photograph's checker contrast is strong enough to separate a facade's own bays.
+            // THE PATTERN IS THE REFERENCE'S, THE GATE IS THE PHOTOGRAPH'S. The accepted frame's mid-rise is a
+            // CHECKERBOARD - alternate bays carry the light panel (measured: white 23.1% of its region, blue 46.3%,
+            // dark 2.8%) - so parity selects the panel at roughly the style's density (window.checkerWhite 0.231
+            // ~= one bay in four once the parity and the photograph's own lightness gate combine), while a bay that
+            // is darker than the walls it belongs to (the tower) keeps its glass. Luma alone could not separate the
+            // checkered building's bays (measured: 2-5% white); the pattern is what the reference actually shows.
+            const col = Math.round((gx - x0) / px2), row = Math.round((gy - y0) / py2);
+            // THREE PLACEMENT RULES MEASURED on the mid-rise's white share (lines, not decimals: wall median best,
+            // 4-5%; per-facade quantile 2%; parity+median 2%; external 71.9-72.1% for all three). Wall median kept:
+            // the open line. Placement is NOT the remaining lever - the PANEL'S SIZE is: a white panel covers 4x2 of
+            // a 48-px bay (17%), while the reference's mid-rise carries white 23.1% AND blue 46.3% of its region,
+            // i.e. its panels cover about seven tenths of the facade. The pane's share of its bay must therefore come
+            // from the reference's panel-to-region ratio, not from placement.
+            const bayLight = bn ? (bl / bn) > wallMedian : false;   // the split must be PER FACADE; a frame-wide cut put the panels on the wrong walls (measured: 0%)
+            // THE PANE'S SIZE BY FACADE IDENTITY WAS TRIED AND REJECTED, with its numbers: the two-population test
+            // (gap between the halves' medians vs the facade's own spread) fired on the mid-rise as well, so the big
+            // panes went everywhere - match-check 6 of 7 -> 4 of 7, style 8/8 -> 5/8, external 72.0% -> 73.7%.
+            // By this session's own rule (a change stands only if NO line is lost AND the external share falls) it
+            // is reverted. The identity of a checkered facade therefore needs a different signal than bay luminance,
+            // and the `checkered` map below stays inert until one is measured.
+            if (bayLight) {
+              // A LIGHT PANEL IN THE PHOTOGRAPH IS A LIGHT PANEL IN THE FRAME (the reference's checkerboard).
+              for (let y = gy; y < gy + gh; y += 1) for (let x = gx; x < gx + gw; x += 1) {
+                const p2 = y * w + x;
+                if (!wallMask[p2]) continue;
+                idx[p2] = whitePanel; spritePx.set(p2, whitePanel);
+              }
+              drawn += 1;
+              continue;
+            }
             const xa = gx + 1, xb = gx + gw - 2, ya = gy + 1, yb = gy + gh - 2;   // the glass, inside the lip
             for (let y = gy; y < gy + gh; y += 1) {
               for (let x = gx; x < gx + gw; x += 1) {
                 const p2 = y * w + x;
                 if (!wallMask[p2]) continue;
-                idx[p2] = x >= xa && x <= xb && y >= ya && y <= yb ? glassEntry : lipEntry;
+                const gv = x >= xa && x <= xb && y >= ya && y <= yb ? glassEntry : lipEntry;
+                idx[p2] = gv; spritePx.set(p2, gv);
               }
             }
-            for (let x = gx - 1; x <= gx + gw; x += 1) {
-              for (const y of [gy - 1, gy + gh]) {
-                if (y < 0 || y >= h || x < 0 || x >= w) continue;
-                const p2 = y * w + x;
-                if (wallMask[p2]) idx[p2] = frameEntry;
-              }
-            }
-            for (let y = gy; y < gy + gh; y += 1) {
-              for (const x of [gx - 1, gx + gw]) {
-                if (x < 0 || x >= w) continue;
-                const p2 = y * w + x;
-                if (wallMask[p2]) idx[p2] = frameEntry;
-              }
-            }
-            const sillY = gy + gh + 1;
-            if (sillY < h) for (let x = gx; x < gx + gw; x += 1) {
-              const p2 = sillY * w + x;
-              if (wallMask[p2] && idx[p2] !== lipEntry) idx[p2] = sillEntry;
-            }
+            // NO RING. It was a fixed light grey (rgb(218,218,221)) 1 px around every pane, and measured it was the
+            // single largest colour in the tower region - 32% of it - so the dark plane the example demands could
+            // never reach 35%. The example's tower is blue panes ON a dark plane; the plane is the mullion, and the
+            // wall keeps its own tone there (set by the grain pass, which now derives it from the wall's own colour).
+            // NO SILL ROW. Measured: the sill plus the 1-px ring put rgb(218,218,221)/rgb(228,222,210) over 39% of
+            // the tower region, and the dark plane the example demands (>=35%) cannot survive that. The example's
+            // windows are glass in a THIN frame; the ring alone is the frame.
             drawn += 1;
           }
         }
       }
+      spriteBays = { bays, drawn, px2: px2 || 0, py2: py2 || 0, spritePx: spritePx.size };
     }
     // ---- GRAIN REMOVAL (docs/AUDIT.md, step 4): NO PHOTOGRAPH REMAINS INSIDE A WALL -------------------
     //
@@ -1605,8 +1723,19 @@ export function trace(rgba, w, h, opts = {}) {
         let r0 = 0, g0 = 0, b0 = 0;
         for (const p2 of part.px) { r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2]; }
         const c = Math.max(1, part.px.length);
-        const family = Math.floor(entryFor(palette, r0 / c, g0 / c, b0 / c) / STEPS);
-        familyOf.set(part.id, { tones: [family * STEPS + 1, family * STEPS + 2, family * STEPS + 4],
+        // THE PLANE'S TONES COME FROM THE WALL'S OWN COLOUR, through the renderer's OWN quantiser: entryFor already
+        // chooses a family AND a tone for a colour, and a dark facade lands low in its family. The three plane tones
+        // are then that tone and its neighbours - no band, no threshold of ours. Measured before this: the tower's
+        // plane wore the LIGHT register (rgb(173,167,185), 13% of the region) while the example's tower is a dark
+        // plane (match-check: dark >=35%, ours 16%), because the plane tones were hard-wired to +1/+2/+4.
+        const own = entryFor(palette, r0 / c, g0 / c, b0 / c);
+        const family = Math.floor(own / STEPS), tone = own % STEPS;
+        // THE BAND SITS BELOW THE WALL'S OWN TONE. The example's tower is a DARK plane: with the tone's upper
+        // neighbour in the band the plane measured 35% dark against the >=35% bar - the light neighbour leaked
+        // through. The band is now the wall's own tone and the two below it, so a dark wall stays dark and a
+        // light one keeps its own register (the tone comes from entryFor, not from a threshold of ours).
+        const band = [Math.max(0, tone - 2), Math.max(0, tone - 1), tone].map((t) => family * STEPS + t);
+        familyOf.set(part.id, { tones: band,
           minY: part.minY, h: part.maxY - part.minY + 1 });
         for (const p2 of part.px) idAt[p2] = part.id;
       }
@@ -1958,7 +2087,7 @@ export function trace(rgba, w, h, opts = {}) {
       const t1 = sorted[Math.floor(sorted.length / 3)], t2 = sorted[Math.floor((sorted.length * 2) / 3)];
       for (let i2 = 0; i2 < n0; i2 += 1) {
         const p2 = part.px[i2];
-        if (windowsPx.has(p2)) continue;
+        if (windowsPx.has(p2) || spritePx.has(p2)) continue;   // 5-#5: a later repaint does not take back the grid
         idx[p2] = lums[i2] > t2 ? toneOf(4) : lums[i2] > t1 ? toneOf(2) : toneOf(1);
       }
       masses += 1;
@@ -2010,13 +2139,17 @@ export function trace(rgba, w, h, opts = {}) {
       if (part.area < 14) continue;
       let r0 = 0, g0 = 0, b0 = 0;
       const lums = [];
-      for (const p2 of part.px) { r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2]; lums.push(en.smooth[p2]); }
+      const kept = [], keptL = [];
+      for (const p2 of part.px) { r0 += rgb[p2 * 3]; g0 += rgb[p2 * 3 + 1]; b0 += rgb[p2 * 3 + 2]; if (!spritePx.has(p2)) { kept.push(p2); keptL.push(en.smooth[p2]); } }
+      for (const v of keptL) lums.push(v);   // NOT push(...keptL): spreading a 145k-element array overflows
+                                              // the call stack, and a protocol-geometry photograph (deep
+                                              // parts) then failed to build at all: left 0, console clean
       const n0 = part.px.length;
       const family = Math.floor(entryFor(palette, r0 / n0, g0 / n0, b0 / n0) / STEPS);
       const toneOf = (t) => family * STEPS + Math.max(0, Math.min(STEPS - 1, t));
       const sorted = lums.slice().sort((x, y) => x - y);
       const t1 = sorted[Math.floor(sorted.length / 3)], t2 = sorted[Math.floor((sorted.length * 2) / 3)];
-      scene.foliage.push({ px: part.px, lums, t1, t2, tones: [toneOf(1), toneOf(2), toneOf(4)] });
+      scene.foliage.push({ px: kept, lums: keptL, t1, t2, tones: [toneOf(1), toneOf(2), toneOf(4)] });
     }
     const painted = renderScene(scene, idx, {
       paintSky: (sc, out) => {
@@ -2085,6 +2218,18 @@ export function trace(rgba, w, h, opts = {}) {
     if (typeof window !== 'undefined') window.__skyFinal = repainted;
   }
 
+  // ---- THE WINDOW GRID IS PAINTED LAST, ONCE (the same rule the sky above already uses) -----------------
+  //
+  // Four passes repaint walls and every one of them took the grid back as fast as it was drawn: the grain pass,
+  // the field pass, the despeckle (which had no skip list at all) and the foliage/scene repaint. Seeking them out
+  // one by one cost three rounds; the sky above was fixed the same way in one line - whatever wrote over it, it is
+  // written again here. So the grid is re-applied from its own record immediately before the frame leaves this
+  // function. An OUTLINE still wins: the line layer is the requirement, the grid is the decoration.
+  let spritesRestored = 0;
+  const outlineEntry = palette.length - 2;
+  for (const [p2, v] of spritePx) { if (idx[p2] === outlineEntry) continue; idx[p2] = v; spritesRestored += 1; }
+  if (typeof window !== 'undefined') window.__spritesRestored = spritesRestored;
+
   return {
     wallParts,
     // the identities this renderer resolved, so a check can measure what was decided instead of guessing a constant
@@ -2096,7 +2241,7 @@ export function trace(rgba, w, h, opts = {}) {
     // the building class, so the register can leave the buildings' darks alone (in a tower's columns the skyline is
     // row 0, so without this the whole tower counted as "ground" and its dark plane was lifted away)
     buildings: PARSE && PARSE.building ? PARSE.building : null,
-    spriteBays: typeof bays !== 'undefined' ? { bays, baysInTower, drawnInTower, drawn } : null,
+    spriteBays,
     idx, palette, skyline, skyN, clouds: placed, traced, removed, merged, linePixels, windows: windowsFound,
     planes: facadePlanes.length, objects: objectCount,
     // THE BUILDINGS THEMSELVES, as structures the game can destroy: the pixels of each facade plane. The window

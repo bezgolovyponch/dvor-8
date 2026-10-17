@@ -33,7 +33,12 @@ import { makeDecals, stamp, pixelsOf, lay, clear as clearDecals, PAINTS, DECAL_M
 import { spawn, fling, PRESETS, MAX_LIVE } from './src/parts.js';
 import { SKY as SKY_SURFACE, SURFACES } from './src/surfaces.js';
 import { solid } from './src/walk.js';
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, writeSync } from 'node:fs';
+// THE GAME'S OWN RULE, ASKED BY THE FIXTURE (docs/CRITERIA.md O1/B4; src/criteria/DestructionRule.js:11). The
+// fixture used to strike a chair, a potted plant and a bicycle - kinds the game itself refuses (src/world.js:429
+// returns null), so the strike measured a refusal and the suite died reading `.kind` off the null. The fixture now
+// asks the game which things can be hit; no assertion text and no bar changed.
+import { mayBeDestroyed } from './src/criteria/DestructionRule.js';
 
 let pass = 0, fail = 0;
 const rows = [];
@@ -288,11 +293,37 @@ check('a near miss still counts: a finger is not a pixel', pick(w, bench.x - 4, 
 check('each thing has a dark line round it, like a sprite',
   w.regions.every((r) => [...r.pixels].some((p) => w.idx[p] === w.palette.length - 2)),
   `outline index ${w.palette.length - 2}`);
+// ---- DIAGNOSTIC INSTRUMENTATION (temporary, test.mjs only) ---------------------------------------------
+// The suite hangs with no output, and the stack sample names the hot work (RegExp.test on concatenated
+// strings) but not which loop. These two helpers print a unique entry marker the moment a destruction loop
+// starts - written with writeSync so the marker reaches the log even if stdout is buffered - and cap the
+// strikes at the TARGET'S OWN hit points: strike() adds damage 1 per call and breaks at hits >= hp
+// (src/world.js:434,442), so `hp` strikes is the fixture's own semantic bound, not a new threshold. A target
+// that is still standing after its own hp is a NAMED FAILURE, not a hang.
+//
+// Nothing about the game changes: no `gone` flag is set, no target is skipped, no assertion is weakened, and
+// no strike is logged. If a single strike() call itself never returns, this guard cannot help - the external
+// process deadline is what ends that run.
+const marker = (tag, region) => writeSync(1, `[diag] ${tag} enter id=${region.id} kind=${region.kind} hp=${region.hp} hits=${region.hits} gone=${!!region.gone}\n`);
+const wreckLoop = (world, region, tag) => {
+  marker(tag, region);
+  const cap = Math.max(1, region.hp | 0);          // fixture semantics: one hit point per strike
+  let strikes = 0, res = null;
+  while (!region.gone && strikes < cap) { res = strike(world, region, region.cx, region.cy); strikes += 1; }
+  if (!region.gone) {
+    const last = res === null ? 'null (refused: not destroyable)' : res.kind;
+    writeSync(1, `[diag] ${tag} EXHAUSTED id=${region.id} kind=${region.kind} hp=${region.hp} hits=${region.hits} strikes=${strikes} last=${last}\n`);
+    check(`${tag}: the target falls within its own hit points`, false,
+      `id ${region.id} kind ${region.kind} hp ${region.hp} hits ${region.hits} strikes ${strikes} last ${last} done ${!!world.done} left ${left(world)}`);
+  }
+  return res;
+};
 const c1 = byKind(w, 'car');
 const before = w.idx.join();
 let res = strike(w, c1, c1.cx, c1.cy);
 check('a first hit on a car dents and cracks it: the picture changes, the car stands', res.kind === 'crack' && !c1.gone && w.idx.join() !== before);
-while (!c1.gone) res = strike(w, c1, c1.cx, c1.cy);
+const carFirst = wreckLoop(w, c1, 'car-first');
+if (carFirst) res = carFirst;
 // A wreck is a DENT AND A HOLE, not a black silhouette: what is left of the car is the car, one tone down,
 // with the impact torn out of it. So the test looks at both layers — the picture it left behind, and the
 // rubble that is drawn over it — because the hole is what makes it a wreck rather than a repaint.
@@ -311,7 +342,7 @@ check('hits in quick succession build a combo, and a combo multiplies the points
 tick(w, 2.51);
 check('a combo runs out on its own; nothing is taken away when it does', w.combo === 0 && w.score === a1.points + a2.points, `score kept: ${w.score}`);
 w = yard();
-for (const r of w.regions) while (!r.gone) strike(w, r, r.cx, r.cy);
+for (const r of w.regions) { if (!mayBeDestroyed(r)) continue; wreckLoop(w, r, 'wreck-everything'); if (!r.gone) break; }
 check('wrecking everything ends the yard', w.done && left(w) === 0 && w.score > 0, `score ${w.score}`);
 check('«ещё раз» is a clean yard: same things, nothing broken, no score', (() => { const n = yard(); return n.regions.length === w.regions.length && n.regions.every((r) => !r.gone && r.hits === 0) && n.score === 0; })());
 
@@ -352,7 +383,7 @@ check('alcohol: a bottle bursts over everything near where it lands', splashTarg
   splashTargets(w, mx, my, MODES.alcohol.splash).map((r) => r.label).join(' + '));
 const hop = chainNext(w, plant, new Set([plant.id]));
 check('weed: the slipper skips on to the nearest standing thing it has not touched', hop && hop !== plant && !chainNext(w, plant, new Set(w.regions.map((r) => r.id))), hop ? `${plant.label} → ${hop.label}` : 'nothing in reach');
-check('weed: a combo forgives a pause twice as long', MODES.weed.combo >= MODES.sober.combo * 2 && (() => { strike(w, plant, plant.cx, plant.cy, { combo: MODES.weed.combo }); tick(w, 4); return w.combo === 1; })());
+check('weed: a combo forgives a pause twice as long', MODES.weed.combo >= MODES.sober.combo * 2 && (() => { const hittable = w.regions.find(mayBeDestroyed); strike(w, hittable, hittable.cx, hittable.cy, { combo: MODES.weed.combo }); tick(w, 4); return w.combo === 1; })());
 w = yard();
 const cc = byKind(w, 'car');
 check('depression: a brick wrecks a car in one throw', strike(w, cc, cc.cx, cc.cy, { damage: MODES.depression.damage }).kind === 'break');
@@ -408,8 +439,8 @@ check('a tap is answered in the same frame, before anything lands', fx.rings.len
 let landed = 0, steps = 0;
 while (fx.rocks.length && steps < 100) { landed += stepFx(fx, w, 1 / 60).length; steps += 1; }
 check('the throw lands once, on time', landed === 1 && steps <= Math.ceil(MODES.sober.flight * 60) + 1, `${steps} frames`);
-const t1 = byKind(w, 'chair');
-res = strike(w, t1, t1.cx, t1.cy);
+const t1 = w.regions.find((r) => mayBeDestroyed(r) && !r.gone);       // a chair is not a target: DestructionRule.js:11, world.js:429
+res = strike(w, t1, t1.cx, t1.cy, { damage: t1.hp });                 // one blow with the force the thing needs: this check is about the PAUSE a wreck causes
 impact(fx, res.kind);
 burst(fx, res.debris, t1.cx, t1.cy, mulberry32(1), 150);
 const frozenAt = fx.particles.map((p) => p.x + p.y).join();
@@ -574,8 +605,9 @@ check('a made yard continues the edge it joins, over many seeds rather than one'
 })());
 check('the street grows by a yard and what was there stays: score, dents, things', extend(w, joined) && w.w === W * 2 && w.yards.length === 2 && w.score === scoreBefore && w.idx.slice(0, W).join() === firstRow
   && w.regions[c0.id].hits === 1 && w.regions.every((r) => r.pixels.every((p) => w.owner[p] === r.id)), `${w.regions.length} things on ${w.w} px`);
-check('a thing on the new stretch can be picked and wrecked like any other', (() => { const r = w.regions[w.regions.length - 1]; if (pick(w, r.cx, r.cy) === null && pick(w, r.pixels[0] % w.w, (r.pixels[0] / w.w) | 0) !== r) return false; let res2; while (!r.gone) res2 = strike(w, r, r.cx, r.cy); return res2.kind === 'break' && r.x >= W; })());
-for (const r of w.regions) while (!r.gone) strike(w, r, r.cx, r.cy);
+check('a thing on the new stretch can be picked and wrecked like any other', (() => { const r = [...w.regions].reverse().find((q) => q.x >= W && mayBeDestroyed(q)); if (!r) return false; if (pick(w, r.cx, r.cy) === null && pick(w, r.pixels[0] % w.w, (r.pixels[0] / w.w) | 0) !== r) return false; const res2 = wreckLoop(w, r, 'new-stretch'); return res2 !== null && res2.kind === 'break' && r.x >= W; })(),
+  `${w.regions.filter((q) => q.x >= W).map((q) => `${q.kind}${mayBeDestroyed(q) ? '' : '(not a target)'}`).join(',')} on the new stretch`);
+for (const r of w.regions) { if (!mayBeDestroyed(r)) continue; wreckLoop(w, r, 'more-street'); if (!r.gone) break; }
 check('more street means the yard is not finished', w.done && extend(w, grow(HOME, mulberry32(9), edgeOf(w, 0))) && !w.done);
 const other = styliseFlat(DEMO.rgba.map((v, i) => (i % 4 === 0 ? 255 - v : v)), W, H);
 const second = yardFrom({ w: W, h: H, idx: other.idx, palette: other.palette, ...toRegions(DEMO.dets, DEMO.rgba, W, H) });
@@ -1347,7 +1379,7 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
   check('and once there is more paint than flowers, it is a painted yard',
     painted.kind === 'paint' && painted.paint === 9, `${painted.kind} ${painted.words}`);
   const car3 = byKind(w2, 'car');
-  while (!car3.gone) strike(w2, car3, car3.cx, car3.cy);
+  wreckLoop(w2, car3, 'car-ruins');
   w2.broken = 40;
   const ruins = imprint(w2);
   check('a yard broken open is a yard in ruins, and the count of holes is what decides it',
@@ -1616,12 +1648,13 @@ let peak = 0, airFrames = 0, ev = stepWalker(w, me, go(0, 0, true), 1 / 60, { to
 const jumpedAtOnce = ev.jumped;
 while ((me.z > 0 || me.vz !== 0) && airFrames < 200) { ev = stepWalker(w, me, still, 1 / 60, { top: TOP }); peak = Math.max(peak, me.z); airFrames += 1; }
 check('a jump leaves the ground in the same frame, clears a thing, and is over in under a second', jumpedAtOnce && peak > CLEAR * 3 && Math.abs(peak - (JUMP * JUMP) / (2 * FALL)) < 3 && airFrames < 60 && ev.landed, `${peak.toFixed(0)} px high, ${(airFrames / 60).toFixed(2)} s`);
-me = makeWalker(w, benchW.x - 6, benchW.cy, TOP);
+const stompW = byKind(w, 'car');                                       // a stomp must land on a thing the rules let a hit touch (DestructionRule.js:11)
+me = makeWalker(w, stompW.x - 6, stompW.cy, TOP);
 let stomped = null;
 stepWalker(w, me, go(1, 0, true), 1 / 60, { top: TOP });
 for (let i = 0; i < 80 && !stomped; i += 1) stomped = stepWalker(w, me, go(1, 0), 1 / 60, { top: TOP }).stomped;
-check('to land ON a thing is to stomp it, and the walker is thrown up again', stomped === benchW && me.vz > 0, stomped ? stomped.label : 'landed on nothing');
-check('a stomp is a hit like any other: the same rules, the same score', strike(w, stomped, me.x, me.y).points > 0 && w.score > 0 && w.combo === 1);
+check('to land ON a thing is to stomp it, and the walker is thrown up again', stomped === stompW && me.vz > 0, stomped ? stomped.label : 'landed on nothing');
+check('a stomp is a hit like any other: the same rules, the same score', strike(w, stomped, me.x, me.y)?.points > 0 && w.score > 0 && w.combo === 1);
 me = makeWalker(w, 40, TOP + 30, TOP);
 for (let i = 0; i < 400; i += 1) stepWalker(w, me, go(-1, -1), 1 / 60, { top: TOP });
 check('the walker cannot leave the street or climb into the sky', me.x >= 2 && me.y >= TOP);
