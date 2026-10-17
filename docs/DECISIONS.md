@@ -145,6 +145,17 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**Fifth finding, and the one the pairing gate needed (2026-10-18).** The glass pass was rewritten to paint the
+instance's OWN PIXELS (the fix the fourth finding named) and the plan now carries those pixels with the role. On the
+judged photograph that change surfaced a DIFFERENT fault in a gate: our glass panes are the same blue as the sky, so
+`tools/pairing-check.mjs`'s plain colour test counted facade glass as sky and read the frame at 65% sky against the
+photograph's 49% (IoU 0.57, NOT PAIRED). **A sky is the TOP RUN of a column** - it starts at the top and continues
+until something else - so the tool now builds each image's top run per column and compares those runs (IoU **0.85** on
+the judged frame, **0.86** on the shipped one). That is a gate correction, not a bar moved: the frame's glass below the
+skyline is not sky by definition, in both images. The glass rewrite itself still over-paints on the judged photograph
+(the cars' neutral share fell to 27% against the >=30% bar, because the merged dark instance includes unrelated dark
+areas), so it was REVERTED; the pairing correction is committed and the chain is green on it.
+
 **The null-plan lead, read to the end (2026-10-18).** Four findings, each measured:
 1. the plan sat INSIDE the pitch guard (`if (px2 >= MIN_PITCH && py2 >= MIN_PITCH)`), so a photograph with no measured
    pitch had NO plan at all — the second yard measures `px2 = py2 = 0` and **0 bays**;

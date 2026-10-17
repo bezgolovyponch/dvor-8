@@ -36,11 +36,27 @@ const frame = px.split(',').map(Number);
 const W = 288, H = 512, N = W * H;
 
 const skyish = (r, g, b) => (b > r + 25) || (Math.max(r, g, b) > 150 && (Math.max(r, g, b) - Math.min(r, g, b)) / Math.max(r, g, b) < 0.20);
+// THE SKY IS THE TOP RUN OF EACH COLUMN, NOT EVERY BLUE PIXEL. Measured (D19): the tower's glass panes are the same
+// blue as the sky, and a plain colour test counted them as sky - the frame read 65% sky against the photograph's 49%.
+// A sky is what starts at the top of a column and continues until something else: so each frame and the photograph
+// contribute their own TOP RUN per column, and those runs are compared. The glass below the run's end is not sky, by
+// definition, in both images.
+const topRun = (get, x) => {
+  let y = 0;
+  while (y < H && get(x, y)) y += 1;
+  return y;   // the number of rows of the column that are sky
+};
+const photoRun = new Array(W), frameRun = new Array(W);
+for (let x = 0; x < W; x += 1) {
+  photoRun[x] = topRun((xx, yy) => { const q = (yy * W + xx); return skyish(png[q][0], png[q][1], png[q][2]); }, x);
+  frameRun[x] = topRun((xx, yy) => { const q = (yy * W + xx) * 3; return skyish(frame[q], frame[q + 1], frame[q + 2]); }, x);
+}
 let photoSky = 0, frameSky = 0, both = 0, either = 0, dark = 0, darkBoth = 0;
 for (let i = 0; i < N; i += 1) {
   const p = i * 3;
-  const ps = skyish(png[i][0], png[i][1], png[i][2]);
-  const fs = skyish(frame[p], frame[p + 1], frame[p + 2]);
+  const x = i % W, y = (i / W) | 0;
+  const ps = y < photoRun[x];
+  const fs = y < frameRun[x];
   if (ps) photoSky += 1;
   if (fs) frameSky += 1;
   if (ps && fs) both += 1;
