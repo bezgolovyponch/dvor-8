@@ -2,3 +2,6 @@ __*
 .DS_Store
 *.log
 photos-test/
+
+# gate dependencies are installed, not vendored
+gates/node_modules/

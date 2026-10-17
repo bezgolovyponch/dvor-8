@@ -64,17 +64,24 @@ improvement in this project came from that loop; every wasted hour came from rep
 | 9 | **Claiming progress** | "done", "fixed", "matches" from runs that never compared to the example | the only admissible claim is a gate's line |
 | 10 | **Losing the yardstick** | the creator's frame was in front of me for weeks and never became a target | the example is `reference/TARGET.json` and `match-check` is binding |
 
-## 6. THE EXACT NEXT ACTIONS, in order — the four failing lines and nothing else
+## 6. THE EXACT NEXT ACTIONS, in order — the failing lines and nothing else
+
+RE-MEASURED 2026-10-16 with `node tools/match-check.mjs <canvas dump of the live page on photos-test/v10a.jpg>`:
+**4 of 7 lines match.** The clouds line of the previous edition is CLOSED — `6d REFERENCE` in the chain and
+`tools/style-check.mjs` ("clouds pure white") both pass it. The road line has MOVED the other way: our road is now
+too LIGHT, not too dark. This list replaces the previous edition, as §5-#6 requires (a doc that contradicts the
+frame is a bug).
 
 ```
-FAIL  sky     white clouds        example ≥3% white     ours 0%     → cloud piece: paint cloudColour = the sky
-                                                                       ramp's pure white, flat-bottomed puffs,
-                                                                       4–9 of them, inset ≥3 px from the horizon
 FAIL  tower   blue-glass windows  example ≥10% blue     ours 4%     → facade sprite: glass rgb(77,100,180) lit,
                                                                        rgb(49,62,122) shaded; light frame
-FAIL  midrise checkerboard        white+blue ≥8% each   white 0%    → facade checker mode: alternate bays where the
-                                                                       photograph alternates
-FAIL  road    the asphalt tone    rgb(98,94,105) L0.39  L0.24       → register pass: lift the converted ground one tone
+FAIL  midrise checkerboard        white+dark-blue       white 0%    → facade checker mode: alternate bays where the
+                                  ≥8% each              blue 17%      photograph alternates
+CLOSED road   the asphalt tone    rgb(98,94,105) L0.39  L0.38       → closed 2026-10-16: the ground's register ladder
+                                  warmth -7             warmth -11    now climbs ONE rung (stylise.js groundMaxTone),
+                                                                      measured against the accepted frame's road
+                                                                      (its own region: luma 90, 46.6% dark). The
+                                                                      road line PASSES in tools/match-check.mjs
 ```
 
 Each is one change in one module, each is judged by `match-check` and `pairing-check`, and **the job is finished when

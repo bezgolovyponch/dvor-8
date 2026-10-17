@@ -398,5 +398,35 @@
     0.1
    ]
   }
- ]
+ ],
+ "shares": {
+  "tower": {
+   "blue": 61.762,
+   "dark": 35.603,
+   "white": 3.571,
+   "grey": 6.069,
+   "source": "measured from reference/v10a-art.png (288x512, the clean accepted canvas) with tools/match-check.mjs boxes and predicates, 2026-10-16"
+  },
+  "midrise": {
+   "blue": 46.261,
+   "dark": 2.76,
+   "white": 23.085,
+   "grey": 41.112,
+   "source": "measured from reference/v10a-art.png (288x512, the clean accepted canvas) with tools/match-check.mjs boxes and predicates, 2026-10-16"
+  },
+  "road": {
+   "blue": 17.99,
+   "dark": 46.626,
+   "white": 3.663,
+   "grey": 44.808,
+   "source": "measured from reference/v10a-art.png (288x512, the clean accepted canvas) with tools/match-check.mjs boxes and predicates, 2026-10-16"
+  },
+  "cars": {
+   "blue": 30.808,
+   "dark": 34.384,
+   "white": 9.391,
+   "grey": 30.106,
+   "source": "measured from reference/v10a-art.png (288x512, the clean accepted canvas) with tools/match-check.mjs boxes and predicates, 2026-10-16"
+  }
+ }
 }

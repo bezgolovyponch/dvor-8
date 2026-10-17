@@ -28,13 +28,17 @@ page: 65 targets · console clean · 116 tones, largest 31% (no collapse)
 Buildings exist as things because **COCO has no building class**: they are the world's own `structures` (6 on the
 creator's photograph), turned into regions.
 
-## Where the product stands (two unseen photographs, both measured)
+## Where the product stands (the creator's four photographs, re-measured 2026-10-16)
 
 ```
-photo 1  Prague street      64 targets · sky 31% · 85 tones · largest non-sky entry 27% · console clean
-photo 2  balcony car park   93 targets · sky 38% · 22 tones · largest non-sky entry 28% · console clean
-gates    preflight OK · imports clean · tones no collapse (sky exempt) · page builds
-proven   each gate REFUSES a mutation: a deleted import, a synthetic wash, an altered load-bearing statement
+file                          targets  pairing (art vs that photo)        concept
+photos-test/v10a.jpg (=5.jpg)      38  PAIRED   IoU 0.66 · dark 83%        7 OK 1 FAIL (sky band)
+photos-test/sunset.jpg             24  NOT PAIRED IoU 0.58 · dark 41%      7 OK 1 FAIL
+photos-test/2026-10-12 23.06.55.jpg 18 PAIRED   IoU 0.94 · dark 63%        8 OK 0 FAIL
+photos-test/2026-10-12 23.06.59.jpg 27  (not yet swept)                   (not yet swept)
+gates    preflight OK · imports clean · page builds, console clean on all four
+stale    the previous edition of this block recorded "64 / 93 targets" — those numbers no longer reproduce on
+         this code (measured: 38 / 24 / 18 / 27). A number in this file without a fresh gate line is not a fact.
 ```
 
 ## The next action, exactly

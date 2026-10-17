@@ -1,0 +1,7 @@
+{
+  "name": "dvor8-gates",
+  "private": true,
+  "type": "module",
+  "description": "EXTERNAL gates: published third-party checkers only. Never imported by the game or its render path.",
+  "dependencies": { "pixelmatch": "^6.0.0", "pngjs": "^7.0.0" }
+}

@@ -7,6 +7,23 @@
 | **INPUT** | `photos-test/v10a.jpg` (`2026-10-13 15.20.34.jpg`, 1440×2560) | the creator's photograph: a Prague street seen from a balcony — a dark tower filling the left, a checkered mid-rise at the centre, a white BMW and a dark estate on the road, the cycle-lane symbol painted on the asphalt, tram wires across the sky |
 | **EXPECTED OUTPUT** | `reference/v10a-target.webp` → `docs/shots/target-v10a.webp`, cropped canvas in `reference/v10a-art-canvas.png` | the accepted frame of the same street: `10a УЛИЦА · Прага · 288×512 · PX = 2` |
 
+## Every photograph of the creator's, and what each one is
+
+Checked in by checksum on 2026-10-16 — identity is a hash, not a filename.
+
+| file | md5 | what it is | role |
+|---|---|---|---|
+| `photos-test/v10a.jpg` = `photos-test/5.jpg` (byte-identical) | `70fdff62519414af68af04d5e5bc1112` | Prague street from a balcony, `2026-10-13 15.20.34.jpg`, 1440×2560 | **the judged pair's INPUT** |
+| `reference/v10a-target.webp` + `reference/TARGET.json` | `d1b5ff3b…` / `76bbc3cc…` | the accepted frame `10a УЛИЦА · Прага · 288×512 · PX = 2` | **the example**: every frame is measured against it |
+| `reference/v10a-accepted-frame-screenshot.png` | `ce8321b4e7eeae9fc31bb7a154ae377f` | the accepted frame as it appears on the page, HUD included | evidence for the EYE only — a screenshot of a screen is a third kind, never a measurement input |
+| `reference/v10a-source-photo-screenshot.png` | `cc6bfd50965c56c9868da6e8bb9790f2` | the same photograph as the page shows it, header `ИСХОДНОЕ ФОТО · 1440×2560 → 288×512` | evidence for the EYE only |
+| `photos-test/sunset.jpg` = `2026-10-12 23.06.50.jpg` | `8d48668684e97750d4b9b370c62f2194` | bridge and car park at sunset, a bus on the road, 1440×2560 | a creator photograph |
+| `photos-test/2026-10-12 23.06.55.jpg` | `447f35327d38d388e06c065f947d6191` | balcony view: church with golden domes, parking rows, railway, 1440×2560 | a creator photograph |
+| `photos-test/2026-10-12 23.06.59.jpg` | `74a4f7895bb3fcbc383fbf4d74c59f08` | narrow street, parked cars, a smoke plume, 1440×2560 | a creator photograph |
+
+All seven are 1440×2560, aspect 0.56250 — the geometry `BLOCK = 5` describes. Photographs of any other shape
+(`a.jpg`, `b.jpg`, `web1.jpg`, `web2.jpg`) are supplementary: they may be run, but no acceptance line may rest on them.
+
 ## The mapping, verified by arithmetic — not by eye
 
 ```
