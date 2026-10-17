@@ -125,6 +125,15 @@ once looked like "left 0, console clean" is now impossible: a missing step is WI
 2. **The sky over-extends.** The frame paints 60% sky where the parse says 49% (IoU 0.43): the skyline/fill takes
    building pixels for sky on this layout.
 
+**Second attempt, measured (2026-10-18):** the grid gated PER BAY by the plan's dark-plane instances (the plan
+computed before the bay loop, `scenePlan` over the parts, `inDark(bay centre)` deciding the form). Measured on the
+judged photograph: **R1 0.023** (the best the frame has ever read) and match 6/7 - the tower's dark fell to **8.4%**
+because the grid now fills the building's bays (blue 41%) and the mullion cannot supply the 35% dark the accepted
+curtain wall has. So the per-bay identity works, and what is left is the RATIO INSIDE THE INSTANCE: the plane's share
+(a glass wall is not all glass - the accepted's dark is 35% of the region) must come from the mullion's WIDTH and the
+recessed shadow rows, solved together with the plane's own tone. Reverted to the green commit; the numbers are here so
+the next attempt starts from them.
+
 **Attempted and reverted:** making the ring form the default and leaving the glass to the late plan-box pass broke
 the judged photograph (pairing IoU 0.58 just under 0.60, the mid-rise's white 4% because the checker's cells no
 longer fire). Reverted to the green commit: the shipped 0.5.0 is the judged photograph's build, and this row is the
