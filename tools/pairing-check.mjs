@@ -65,13 +65,24 @@ for (let i = 0; i < N; i += 1) {
   const lumFrame = 0.299 * frame[p] + 0.587 * frame[p + 1] + 0.114 * frame[p + 2];
   if (!ps && lumPhoto < 110) { dark += 1; if (lumFrame < 130) darkBoth += 1; }
 }
+// SOMETHING IS BUILT UNDER THE SKY. The audit's counterexample (the photograph's sky with BLACK below, D20) scored
+// IoU 1.00 and 100% dark kept. A ground band is the photograph's own tones, not a void: measured, the real frame's
+// lower third carries 26 distinct colours, the black-below one carries 1.
+const groundTones = new Set();
+for (let y = Math.round(H * 0.70); y < H; y += 1) for (let x = 0; x < W; x += 1) {
+  const q = (y * W + x) * 3; groundTones.add(frame[q] + ',' + frame[q + 1] + ',' + frame[q + 2]);
+}
+const groundBuilt = groundTones.size >= 12;
 const iou = either ? both / either : 0;
 const darkKeep = dark ? darkBoth / dark : 0;
 console.log(`PREMISES: photo ${photoPath} reduced 5x5 to ${W}x${H} (ratio must be 5.00) · ${N} pixels · sky test: blue or bright-neutral`);
 console.log(`sky   photograph ${(100 * photoSky / N).toFixed(0)}%  ·  frame ${(100 * frameSky / N).toFixed(0)}%  ·  IoU ${iou.toFixed(2)}`);
 console.log(`dark structures kept dark in the frame: ${(100 * darkKeep).toFixed(0)}% of ${dark} pixels`);
-const ok = iou >= 0.60 && darkKeep >= 0.60;
+console.log(`ground band: ${groundTones.size} distinct colours (a photographed ground: 20+)`);
+// THREE THINGS, NOT TWO: the sky where it belongs, the darks kept, AND something built under the sky (D20's black-below
+// counterexample scored IoU 1.00 and 100% dark kept with a single colour below).
+const ok = iou >= 0.60 && darkKeep >= 0.60 && groundBuilt;
 console.log(ok
-  ? `\nPAIRED: the drawn sky sits where the photograph's sky is (IoU ${iou.toFixed(2)}), and the dark structures stay dark (${(100 * darkKeep).toFixed(0)}%).`
-  : `\nNOT PAIRED: sky IoU ${iou.toFixed(2)} (needs 0.60) · dark structures kept ${(100 * darkKeep).toFixed(0)}% (needs 60%). The frame is not built on the photograph's own layout.`);
+  ? `\nPAIRED: the drawn sky sits where the photograph's sky is (IoU ${iou.toFixed(2)}), the dark structures stay dark (${(100 * darkKeep).toFixed(0)}%), and the ground carries the photograph's own colours (${groundTones.size} tones).`
+  : `\nNOT PAIRED: sky IoU ${iou.toFixed(2)} (needs 0.60) · dark structures kept ${(100 * darkKeep).toFixed(0)}% (needs 60%) · ground ${groundTones.size} tones (needs 12). The frame is not built on the photograph's own layout.`);
 process.exit(ok ? 0 : 1);

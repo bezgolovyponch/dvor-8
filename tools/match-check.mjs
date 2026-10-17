@@ -96,6 +96,14 @@ const line = (ok, region, what, want, got) => {
   const grey = s.rows.filter((r) => { const q = hsl(...r.rgb); return q.s < 0.15; }).reduce((n, r) => n + r.share, 0);
   line(grey >= 0.30, 'cars', 'photo-kept surfaces', '≥30% neutral', `${(100 * grey).toFixed(0)}%`);
 }
+// A DRAWN PICTURE USES THE TABLE'S TONES. Measured (D20): the real frame uses 36 distinct entries, while the audit's
+// flat-rectangle counterexample uses 7 and still passed every region-share line. A share is not a picture: a reduced
+// photograph sprays across the palette, a handful of rectangles does not. Bar 24, the gap between 36 and 7.
+{
+  const toneSet = new Set();
+  for (let i = 0; i < W * H; i += 1) toneSet.add(a[i * 3] + ',' + a[i * 3 + 1] + ',' + a[i * 3 + 2]);
+  line(toneSet.size >= 24, 'frame', 'a DRAWN picture', 'the frame uses 24+ tones', `${toneSet.size} tones (a photographed yard: 30+)`);
+}
 console.log(`\n${passes} of ${passes + fails} lines match the example frame.`);
 console.log(fails ? 'NOT THE EXAMPLE: build nothing on top of this until every line passes.' : 'MATCHES THE EXAMPLE FRAME, region by region.');
 process.exit(fails ? 1 : 0);

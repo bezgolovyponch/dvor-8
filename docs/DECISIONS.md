@@ -199,6 +199,19 @@ audit measured the working tree, not the commit). **Its false-pass findings stan
 | 6c PAIRING "PAIRED IoU 1.00" | `/tmp/audit-fake-pair-skylack.json` — the photo's sky with BLACK below | the top-run definition tests WHERE the sky is, not that anything was built under it (dark kept 100% passes on black) |
 | 1 P1 "the PHOTOGRAPH decides the road" | `/tmp/audit-fake-p1.json` — 8 palette stripes | the line counts palette ENTRIES on the road, not that they came from a photograph |
 
+**CLOSED (2026-10-18), with the counterexamples as the acceptance tests:**
+
+| gate | before | after |
+|---|---|---|
+| match-check | the flat-rectangle frame printed **7 of 7 · MATCHES** | prints **7 of 8 · NOT THE EXAMPLE**; the real frame **8 of 8** |
+| pairing-check | the sky-with-black-below frame printed **PAIRED, IoU 1.00, dark 100%** | prints **NOT PAIRED · ground 1 tone (needs 12)**; the real frame **PAIRED, IoU 0.85, 26 tones** |
+| concept P1 | the eight-stripe frame printed **OK · 8 palette entries on the road** | prints **FAIL · 8 entries, 8 in the frame (needs 8 and 24+)**; the real frame **OK · 29 and 36** |
+
+Each bar sits in a MEASURED gap: the frame's own tones 36 (real) against 7 / 2 / 8 (the three counterexamples), and
+the ground's tones 26 against 1-8. The lines now require the STRUCTURE they name: a drawn picture sprays across the
+table, a built ground carries the photograph's colours, the road's tones come from a frame that uses the palette. The
+chain stays green on the real frame with all three strengthened (match is now **8** lines, not 7).
+
 **The class is the project's oldest one:** a measurement that names a property ("matches the example", "built on the
 photograph's layout", "the photograph decides") while testing a proxy (a share, a count). The fix is to make each of
 those three lines require the STRUCTURE it names - an outline for match, something built under the sky for pairing, a

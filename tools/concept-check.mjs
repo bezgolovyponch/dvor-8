@@ -152,7 +152,13 @@ const ROWS = [
   // with 49.9% in one tone, which IS a plane.
   ['the SKY is a plane: at most 10 distinct colours in its band', skyColours <= 10, `${skyColours} colours in the sky band`],
   ['and one tone owns it: the largest single colour is at least 40% of the band', skyTop >= 0.40, `largest ${(100 * skyTop).toFixed(0)}% of the sky band`],
-  ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp', roadTones.size >= 8, `${roadTones.size} palette entries on the road`],
+  // THE ROAD'S TONES MUST COME FROM A FRAME THAT USES THE TABLE. Measured (D20): the audit's counterexample - eight
+  // palette stripes and nothing else - passed this row at "8 palette entries on the road". A reduced photograph uses
+  // 30+ entries; the stripes used 8. The row now asks for both: its own tones on the road AND a frame that sprays
+  // across the palette, which a handful of stripes cannot.
+  ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp, in a frame that uses the table',
+    roadTones.size >= 8 && paletteSeen.size >= 24,
+    `${roadTones.size} palette entries on the road, ${paletteSeen.size} in the frame (needs 8 and 24+)`],
   ['the sky is a plane, not a gradient (its own band: at most 12 palette entries)', palSky.size <= 12, `${palSky.size} entries in the sky band`],
   ['facades are built with windows (at least 8 window sprites)', windows >= 8, `${windows} window sprites`],
   // THE PALETTE ROW WAS THE LITERAL `true` (audited 2026-10-18: an unfalsifiable row inside "19 of 19"). It now
