@@ -145,6 +145,19 @@ row is waiting for: unify the plan's input (the built wall parts), have the bay 
 THE SAME plan, and only then the grid's per-bay gating can be judged. Until then the global grid ships, which is right
 for the judged photograph and wrong for the second one.
 
+**The null-plan lead, read to the end (2026-10-18).** Four findings, each measured:
+1. the plan sat INSIDE the pitch guard (`if (px2 >= MIN_PITCH && py2 >= MIN_PITCH)`), so a photograph with no measured
+   pitch had NO plan at all — the second yard measures `px2 = py2 = 0` and **0 bays**;
+2. the merge over-joins unless it requires the SAME TONE: joining a dark fragment with a light one made ONE instance
+   whose box covers the frame on BOTH photographs (v10a's plan went from 8 facades to 1);
+3. the frame-share guard must be on the BOX, because the glass pass paints a BOX — but then a SCATTERED dark instance
+   (the tower's shadowed pixels, whose box is the frame) is classified 'grid' and loses its role;
+4. **the glass pass paints within the instance's BOX, and should paint within the instance's own PIXELS** — that is the
+   single fix behind all four: a box spreads glass over everything between the fragments, a pixel set does not. Then
+   the role can be decided on the instance's real shape, the box guard becomes unnecessary, and the second yard's
+   whole-frame instance cannot exist.
+Reverted to the green commit after each attempt; the chain is green on the judged photograph.
+
 **The refactor that followed (committed, green):** the plan is now computed ONCE, inside `trace()`, from the same wall
 parts every consumer gets (area >= 400), BEFORE the bay loop. The bay loop asks it per bay, the checker pass reads the
 same plan instead of computing its own, and main shows it as `window.__plan` instead of building a second one. Verified
