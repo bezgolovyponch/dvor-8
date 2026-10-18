@@ -81,7 +81,7 @@ from the picture as dark openings in a brighter wall, and that is a guess (see b
 
 ## Test
 
-    node test.mjs                                                  # 221 checks, no browser
+    node test.mjs                                                  # the suite; it prints its own PASS/FAIL count (321 checks, no browser today)
     node --experimental-websocket tools/check.mjs out/ a.jpg       # plays the real page in headless Chrome
     node --experimental-websocket tools/walk-check.mjs out/ a.jpg  # the same for walking, the street, the bottle, the album
     node --experimental-websocket tools/news-check.mjs out/        # the plane, the airship, a throw at each; needs the network
