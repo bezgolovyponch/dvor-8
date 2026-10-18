@@ -67,6 +67,13 @@ export function styliseFlat(rgba, w, h, opts = {}) {
   // THE BUILDINGS ARE PROTECTED FROM THE GROUND'S LIFT. Without this the tower's own dark plane was lifted away
   // (match-check: "dark plane dominates" 46% -> 3%) because in a tower's columns the skyline is row 0.
   const protectReg = st.windowsPx instanceof Set ? new Set(st.windowsPx) : new Set();
+  // THE GROUND KEEPS ITS OWN TWO PLANES. The register lift below exists so a converted frame's asphalt does not land
+  // one rung too low; it lifts tones 0..1 below the horizon, which flattens the road pass's dark plane onto its light
+  // one (measured at T+127 on the dark split: 82.5% of the ground box in ONE tone). The operator's reference frame's
+  // own ground is two planes - 45.6% at rgb(98,94,104) and 30.9% at rgb(74,70,80), luma 73, BELOW the accepted
+  // frame's register - so the lift is the accepted frame's style here, not the desired frame's (D24's class). The
+  // road pass's decision travels in `st.ground` and is protected from the lift.
+  if (st.ground) for (let p2 = 0; p2 < n; p2 += 1) if (st.ground[p2] >= 0) protectReg.add(p2);
   if (st.buildings) for (let p2 = 0; p2 < st.buildings.length; p2 += 1) if (st.buildings[p2]) protectReg.add(p2);
   liftRegister(st.idx, {
     protect: protectReg,
@@ -121,6 +128,13 @@ export function styliseVector(rgba, w, h, opts = {}) {
   // THE BUILDINGS ARE PROTECTED FROM THE GROUND'S LIFT. Without this the tower's own dark plane was lifted away
   // (match-check: "dark plane dominates" 46% -> 3%) because in a tower's columns the skyline is row 0.
   const protectReg = st.windowsPx instanceof Set ? new Set(st.windowsPx) : new Set();
+  // THE GROUND KEEPS ITS OWN TWO PLANES. The register lift below exists so a converted frame's asphalt does not land
+  // one rung too low; it lifts tones 0..1 below the horizon, which flattens the road pass's dark plane onto its light
+  // one (measured at T+127 on the dark split: 82.5% of the ground box in ONE tone). The operator's reference frame's
+  // own ground is two planes - 45.6% at rgb(98,94,104) and 30.9% at rgb(74,70,80), luma 73, BELOW the accepted
+  // frame's register - so the lift is the accepted frame's style here, not the desired frame's (D24's class). The
+  // road pass's decision travels in `st.ground` and is protected from the lift.
+  if (st.ground) for (let p2 = 0; p2 < n; p2 += 1) if (st.ground[p2] >= 0) protectReg.add(p2);
   if (st.buildings) for (let p2 = 0; p2 < st.buildings.length; p2 += 1) if (st.buildings[p2]) protectReg.add(p2);
   // ---- THE OBJECTS KEEP THEIR OWN COLOUR (bounded experiment) -------------------------------------------
   //

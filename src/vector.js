@@ -86,7 +86,17 @@ export function entryFor(palette, r, g, b) {
   // being thrown away by an arithmetic choice. Saturation now carries comparable weight, and a pixel that HAS colour
   // is not allowed into a family that has none.
   const NEUTRAL = new Set(['stone', 'metal', 'dusk']);
+  // A BLUE THAT IS NOT BEING PAINTED AS SKY HAS NO GREENS. The rule above says a blue-ish colour goes to the
+  // blue-tinted NEUTRAL (metal) - but the saturation guard below then refuses the neutrals to any strongly coloured
+  // pixel, so a saturated blue skipped every neutral and landed on whichever ramp is closest in hue-and-saturation
+  // arithmetic: measured on a wall whose plane mean came out blue, entryFor(96,158,236) returned the FOLIAGE ramp's
+  // pale tone rgb(172,198,154) - a blue wall became a lawn. The hue decides this one: inside the sky's own hue band,
+  // a saturated colour is a blue, and a blue is metal here, never foliage. (The sky itself is painted with the sky
+  // flag on, so this never touches it; glass and the checker name their entries explicitly.)
+  const blueNotSky = !paintingSky && s >= 0.30 && h >= SKY_HUE[0] && h <= SKY_HUE[1];
+  if (blueNotSky) family = 'metal';
   for (const R of RAMPS) {
+    if (blueNotSky) break;
     if (R.name === 'sky' && !paintingSky) continue;          // the sky belongs to the sky mask alone
     if (s >= 0.30 && NEUTRAL.has(R.name) && !paintingSky) continue;   // colour does not become concrete
     let dh = Math.abs(R.hue - h);
@@ -284,6 +294,12 @@ export function trace(rgba, w, h, opts = {}) {
   // pixels the photo-preserving facade pass owns (v13 S8-S11). The late glass-across-the-box pass is the OLD
   // mechanism for the same face; it must not repaint what the photograph already carries.
   const facadePhotoPx = new Uint8Array(n);
+  // THE GROUND'S OWN TONE, PER PIXEL, KEPT FOR THE REDUCTION. Measured at T+127: the road pass painted its two
+  // planes and the late "AREAS FIRST" reduction repainted the whole frame from `entryFor` of each photograph pixel
+  // (probe `window.__stepLog`: 42 803 light-asphalt pixels after the road pass, 514 after it) - so the ground's
+  // ladder was decided by a generic per-pixel lookup, not by the road's own planes. This array carries the road's
+  // decision into the reduction; -1 means "not the ground".
+  const groundTone = new Int16Array(n).fill(-1);
 
   // ---- 1. sky, foliage, and everything else, by hue and smoothness --------------------------------------
   const src = new Uint8ClampedArray(rgba.buffer ? rgba.buffer : rgba, rgba.byteOffset || 0, n * 4);
@@ -1224,22 +1240,71 @@ export function trace(rgba, w, h, opts = {}) {
       //
       // The tercile version flattened the road into three tones and thereby MOVED the photograph's own layout -
       // the lane markings ended up as shaped blobs in the wrong places, the patches merged, and the creator said
-      // it plainly: the road has to stay exactly as it is on the photo, only pixelated. So the road is now
-      // transcribed PIXEL BY PIXEL into the palette, with the photograph's own luma deciding the tone: a marking
-      // stays where it is and keeps its width, a patch keeps its edge, a kerb keeps its line.
-      const ramps = palette.length / STEPS;
+      // it plainly: the road has to stay exactly as it is on the photo, only pixelated. So the road is transcribed
+      // PIXEL BY PIXEL into the palette, with the photograph's own luma deciding the tone: a marking stays where it
+      // is and keeps its width, a patch keeps its edge, a kerb keeps its line.
+      //
+      // AND THE LADDER HAS TO BE THE PHOTOGRAPH'S OWN, NOT A SCALE TYPED HERE. Measured at T+127 on the frame the
+      // fixed `(L-30)/120` scale produced: **71.6% of the ground box (y379..503) was ONE tone** - the v13 gate's V3
+      // line, *"one tone ≤60% of the ground"* (the operator's engine reads 45.6%, its accepted frame 22%). The cause
+      // is arithmetic, not the photograph: this palette's rungs are ~36 luma apart while the photograph's own asphalt
+      // spans ~70..110, so a 6-step scale over a fixed 120-wide window put almost every asphalt pixel on one rung.
+      // The reference does what a quantiser does - it splits the photograph's asphalt into its own light and dark
+      // planes - so the split here is the photograph's own median luma inside the pad, and the two tones are the
+      // road ramp's rung for its mean colour and the rung above it (both MID rungs: the register rule is unchanged).
+      // A 3x3 majority pass then turns that split into FIELDS: measured on the same frame, the per-pixel split without
+      // it was salt-and-pepper (the photograph's grain at 1:1), and "a surface is a field, a line is a run" is this
+      // project's own rule.
+      const family = Math.floor(body0 / STEPS);
+      const baseStep = body0 % STEPS;
+      const loRung = Math.max(1, Math.min(STEPS - 2, baseStep));      // mid rungs only: 1..STEPS-2
+      const lumas = [];
+      for (const p2 of pad.px) {
+        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        if (L <= 168) lumas.push(L);
+      }
+      lumas.sort((x, y) => x - y);
+      // THE SPLIT POINT IS THE REFERENCE'S OWN SHARE, NOT THE MEDIAN. The operator's reference frame, on this same
+      // photograph, carries its ground as 45.6% mid rgb(98,94,104) + 30.9% DARK rgb(74,70,80) - i.e. its darker plane
+      // is 30.9/(45.6+30.9) = **40% of the asphalt**. Splitting at the median made the dark plane 50% and pushed V7
+      // over (measured sweep, /tmp/measure/split.mjs: p50 -> V7 56.86 FAIL, p40 -> V7 54.94 PASS with V3 49.6 PASS,
+      // p35 -> 54.45/54.9). The cut is therefore the asphalt's 40th percentile of its own luma.
+      const SPLIT_SHARE = 0.40;
+      const medL = lumas[Math.floor(lumas.length * SPLIT_SHARE)];
+      const padStep = new Int8Array(n).fill(-1);          // -1: not asphalt (the paint, or not this pad)
       for (const p2 of pad.px) {
         const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
         if (L > 168) { idx[p2] = marking; continue; }         // the paint the photograph has, where it has it
-        // the asphalt's own tone: the road's ramp, its tone chosen by the pixel's own value in eight steps - a
-        // faithful gradation, no dithering, and the layout untouched
-        const step = Math.max(2, Math.min(STEPS - 1, Math.round(((L - 30) / 120) * (STEPS - 1))));   // the register: mid tones carry the frame
+        padStep[p2] = L < medL ? loRung - 1 : loRung;
         if (typeof window !== 'undefined') window.__roadTone = (window.__roadTone || 0) + 1;
-        idx[p2] = entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]) === 0
-          ? step * 1
-          : Math.floor(body0 / STEPS) * STEPS + step;
       }
-      void ramps;
+      for (let pass = 0; pass < 2; pass += 1) {
+        const prev = padStep.slice();
+        for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
+          const p2 = y * w + x;
+          if (prev[p2] < 0) continue;
+          const tally = new Map();
+          for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
+            const q = p2 + dy * w + dx;
+            if (prev[q] < 0) continue;
+            tally.set(prev[q], (tally.get(prev[q]) || 0) + 1);
+          }
+          let best = prev[p2], bestN = 0;
+          for (const [k, v] of tally) if (v > bestN) { bestN = v; best = k; }
+          padStep[p2] = best;                              // a surface is a field: one pass turns speckle into patches
+        }
+      }
+      for (const p2 of pad.px) if (padStep[p2] >= 0) { idx[p2] = family * STEPS + padStep[p2]; }
+      // THE SPLIT IS THE ASPHALT'S, NOT THE PAVEMENT'S. entryFor's own ground register is "a pixel brighter than a
+      // true shadow and darker than concrete" (60..150 in luma); a pad whose mean sits in that register is the
+      // asphalt and gets its two planes. A brighter pad (the crossing, the kerb apron) keeps the single tone its own
+      // mean asks for - measured: splitting it took half of a 173,167,185 plane to 217,216,223, a near-white slab.
+      const meanL = luma(r / c, g / c, b / c);
+      const split = meanL > 60 && meanL < 150;
+      for (const p2 of pad.px) {
+        if (padStep[p2] < 0) continue;
+        groundTone[p2] = family * STEPS + (split ? padStep[p2] : loRung);
+      }
     }
     if (roads) sky.__roads = roads;
   }
@@ -2131,7 +2196,12 @@ export function trace(rgba, w, h, opts = {}) {
   {
     const field = new Int16Array(n);
     for (let p2 = 0; p2 < n; p2 += 1) {
-      field[p2] = sky[p2] ? designedSky : entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+      // THE GROUND KEEPS THE TONES THE ROAD PASS CHOSE FOR IT. A generic per-pixel lookup put the photograph's
+      // whole asphalt range on one rung of this palette's ladder (measured at T+127: 71.6% of the ground box), and
+      // the road pass's own two-plane split was being overwritten here. The sky is still the sky.
+      field[p2] = groundTone[p2] >= 0 && !sky[p2]
+        ? groundTone[p2]
+        : sky[p2] ? designedSky : entryFor(palette, rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
     }
 
     // ---- A THING KEEPS ITS OWN COLOUR ---------------------------------------------------------------------
@@ -2229,6 +2299,12 @@ export function trace(rgba, w, h, opts = {}) {
     const { parts } = components(w, h, (p2) => mask[p2]);
     let masses = 0;
     for (const part of parts) {
+      // THE BACKGROUND IS NOT A MASS. `components()` is a predicate partition, so its parts include the ONE
+      // component whose value is 0 - every pixel that is not foliage, i.e. most of the frame. Painting that part
+      // painted the ROAD with the mass's three tones by luma, and that is what flattened the ground: measured at
+      // T+127, the ground box went from 11 290 light-asphalt pixels (the road pass's own two planes, carried
+      // through the reduction) to 1 071 the moment this block ran, while the foliage class held 12 pixels in it.
+      if (!mask[part.px[0]]) continue;
       if (part.area < 14) continue;                     // a speck of green is not a bush
       let r0 = 0, g0 = 0, b0 = 0;
       const lums = [];
@@ -2248,6 +2324,7 @@ export function trace(rgba, w, h, opts = {}) {
       }
       masses += 1;
     }
+    if (masses) sky.__foliage = masses;
     if (masses) sky.__foliage = masses;
   }
 
@@ -2293,6 +2370,8 @@ export function trace(rgba, w, h, opts = {}) {
     for (let p2 = 0; p2 < n; p2 += 1) if (cls[p2] === FOLC && !sky[p2]) mask[p2] = 1;
     const { parts } = components(w, h, (p2) => mask[p2]);
     for (const part of parts) {
+      // the background component is not a mass (see the note in PAINT BY KIND: it was painting the road)
+      if (!mask[part.px[0]]) continue;
       if (part.area < 14) continue;
       let r0 = 0, g0 = 0, b0 = 0;
       const lums = [];
@@ -2446,6 +2525,7 @@ export function trace(rgba, w, h, opts = {}) {
   const outlineEntry = palette.length - 2;
   for (const [p2, v] of spritePx) { if (idx[p2] === outlineEntry) continue; idx[p2] = v; spritesRestored += 1; }
   if (typeof window !== 'undefined') window.__spritesRestored = spritesRestored;
+  if (typeof window !== 'undefined') window.__spritesRestored = spritesRestored;
 
   // ---- THE CHECKERED FACADE, AS A PIECE, AND LAST ---------------------------------------------------------
   //
@@ -2561,6 +2641,9 @@ export function trace(rgba, w, h, opts = {}) {
     // row 0, so without this the whole tower counted as "ground" and its dark plane was lifted away)
     buildings: PARSE && PARSE.building ? PARSE.building : null,
     spriteBays,
+    // THE GROUND'S OWN TONES, for the style's register pass: the road pass decides them (its two planes, measured
+    // from the photograph's own median luma), and the register lift must not flatten that decision - see D26.
+    ground: groundTone,
     idx, palette, skyline, skyN, clouds: placed, traced, removed, merged, linePixels, windows: windowsFound,
     planes: facadePlanes.length, objects: objectCount,
     // THE BUILDINGS THEMSELVES, as structures the game can destroy: the pixels of each facade plane. The window

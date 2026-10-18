@@ -399,3 +399,52 @@ the drawn cloudscape, with the gates that measure it. The reject-line *"a gradie
 shapes"* would now reject the operator's own v13 reference, so it was replaced by *"traced photographic clouds, or a
 hard horizontal band"*. This alters what the operator is asked to accept: if the flat sky is the wanted sky, the
 change is to be reverted and V2 stays red — the two cannot both hold.
+
+## D26 — THE GROUND'S TWO PLANES, AND THE THREE WRITERS THAT FLATTENED THEM (2026-10-18, the V3 and V7 lines)
+
+**What the frame said.** The ground box (full width, y379..503) was **71.6% one tone** - the v13 gate's V3 line is
+*"one tone ≤60% of the ground"*, and the operator's reference reads 45.6% there with a second asphalt plane at
+**30.9%** (rgb(74,70,80), luma 73). Ours was one violet plane plus a bright crossing.
+
+**The split is the photograph's own, at the reference's own share.** The road pass already transcribed the asphalt
+per pixel, but on a fixed `(L-30)/120` ladder whose rungs are ~36 luma apart while the photograph's asphalt spans
+70..110 - so nearly every asphalt pixel landed on one rung. The tone is now chosen by the pad's own luma against the
+ramp's rung for its mean colour and the rung below it, split at the asphalt's **40th percentile**, and two 3x3
+majority passes make it fields instead of salt-and-pepper. 40% is not a round number: the reference's darker plane is
+**30.9 / (45.6 + 30.9) = 40% of its asphalt**. The sweep is recorded (`/tmp/measure/split.mjs`): p35 → V3 54.9 /
+V7 54.45 · p40 → 54.9→49.6 / 54.94 · p45 → 44.8 / 55.82 · **p50 (the median) → V7 56.86, over the bar**.
+
+**Three writers were flattening it, and each was found by instrumenting the frame, not by guessing** (`__stepLog`
+counted the light-asphalt tone at every stage):
+
+1. **The reduction repainted the ground.** The late "AREAS FIRST" step rebuilds the whole frame from `entryFor` of each
+   photograph pixel (42 803 light-asphalt pixels after the road pass, 514 after it). The road pass's own tones now
+   travel into that step (`groundTone`) instead of being overwritten by a generic lookup.
+2. **The background component was painted as a bush.** `components(w, h, maskFn)` is a predicate partition, so its
+   parts include the ONE component whose value is 0 - every pixel that is not foliage, i.e. most of the frame. The
+   "paint by kind: foliage" block painted that part with the mass's three tones by luma, so the road became a
+   three-tone "terrace": the ground box's light-asphalt pixels fell 11 290 → 1 071 the moment that block ran, while
+   the foliage class held **12** pixels in that whole band. Both call sites (this block and the scene's foliage
+   masses) now skip the part whose own mask value is 0. **This was a real painting defect, not only a V3 cause**: it
+   repainted every non-green pixel of the frame with the terrace's tones.
+3. **The register lift flattened the two planes back into one.** `liftRegister(..., groundMaxTone: 2)` lifts tones
+   0..1 below the horizon one rung, which turns the dark asphalt plane (rung 1) into the light one (rung 2):
+   measured **82.5% of the ground box in one tone** - the V3 fail, exactly. The lift's reason is the ACCEPTED frame's
+   register (its road luma 90); the DESIRED frame's own ground carries 30.9% at luma 73, i.e. below that register -
+   so the lift is the accepted frame's style here, D24's class again. The road pass's decision travels in
+   `st.ground` and is protected from the lift.
+
+**A fourth bug was exposed by the fix and is closed at its rule.** With the background mass no longer painted over
+everything, a wall whose plane mean came out blue showed **pale-green** pixels: `entryFor` refuses the sky family
+outside the sky pass (correct), and then its own saturation guard refuses the neutrals to a strongly coloured pixel
+(correct on its own), so a saturated blue fell through to the nearest ramp by hue-and-saturation arithmetic - the
+FOLIAGE ramp: `entryFor(96,158,236)` returned rgb(172,198,154). The rule the file already stated ("a blue-ish colour
+goes to the blue-tinted NEUTRAL, metal") is now enforced by the hue: inside the sky's own hue band a saturated colour
+is metal, never foliage. The suite's own "nothing is invented: no green without green" check is what caught it
+(1804 invented pixels on a fixture with no green, 0 after the rule).
+
+**Measured, before → after (same photograph, same clock pin).** V3 **71.6% → 53.0%** (bar ≤60, PASS) · V7 **59.67% →
+56.32%** (bar 56.66, PASS - the first time this line is green) · V4 cars 33.2% → **19.1%** · V5 25 tones / 17.3% /
+44.9% (PASS) · V2 64.2% (PASS) · V6 513 (PASS) · **V1 39 → 43 tones (≤24) - the one line still red** · pairing IoU
+0.85 → **0.90** · R1 worst 0.076 → **0.063** · the concept gate's nine lines all pass (largest colour below the sky 32% → 21%). The v13
+gate now reads **6 of 7 lines green**.
