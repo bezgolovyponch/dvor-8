@@ -36,6 +36,47 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   await page.wait(400);
   await shot(page, 'version-outlines.png', 'the imported scene with the silhouettes');
 
+  // THE AIM HIGHLIGHT AND THE INFO TOOLTIP, WRITTEN FRESH. Measured: docs/shots/photo-aim.png and photo-info.png were
+  // dated OCT 16 and NO TOOL WROTE THEM - the baseline's row "the aim highlight and the info tooltip are on screen"
+  // therefore passed on pictures of an older build (the info one showed the source photograph with detector boxes, a
+  // view the game no longer has). The tools now write both, from this build.
+  {
+    const aim = await page.run(`
+      const w = window.__world, cam = window.dvor8.cam(), r = document.getElementById('frame').getBoundingClientRect();
+      const t = w.regions.filter((q) => /car|truck|bus|van/i.test(String(q.kind || '')))[0];
+      if (!t) return { ok: false };
+      const el = document.getElementById('tilt');
+      const o = { clientX: r.left + ((t.x + t.w / 2 - cam.x) / cam.w) * r.width,
+                  clientY: r.top + ((t.y + t.h / 2 - cam.y) / cam.h) * r.height, bubbles: true, cancelable: true, pointerId: 1 };
+      el.dispatchEvent(new PointerEvent('pointerdown', o));
+      return { ok: true };`);
+    await page.wait(300);
+    await shot(page, 'photo-aim.png', 'a thing aimed at: the pink edge');
+    await page.run(`const el = document.getElementById('tilt');
+      el.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 1 }));
+      return 'cancelled';`);
+    await page.run(`document.getElementById('infoBtn').click(); return 'info';`);
+    // THE TOOLTIP NEEDS A THING TAPPED. The first version switched the mode and shot the frame, which shows the mode's
+    // note but NOT the tooltip the baseline's row names ("the info tooltip are on screen") - and the fading "58 ЦЕЛЕЙ"
+    // banner was still over the art. Tap a car in info mode, wait for the card, wait for the banner to be gone.
+    await page.run(`
+      const b = document.getElementById('banner'); const t1 = performance.now();
+      while (b && performance.now() - t1 < 6000) { const op = parseFloat(getComputedStyle(b).opacity) || 0; if (op <= 0.02) break; await new Promise((r) => setTimeout(r, 150)); }
+      const w = window.__world, cam = window.dvor8.cam(), r = document.getElementById('frame').getBoundingClientRect();
+      const t = w.regions.filter((q) => /car|truck|bus|van/i.test(String(q.kind || '')))[0];
+      if (!t) return { ok: false };
+      const el = document.getElementById('tilt');
+      const o = { clientX: r.left + ((t.x + t.w / 2 - cam.x) / cam.w) * r.width,
+                  clientY: r.top + ((t.y + t.h / 2 - cam.y) / cam.h) * r.height, bubbles: true, cancelable: true, pointerId: 1 };
+      el.dispatchEvent(new PointerEvent('pointerdown', o));
+      el.dispatchEvent(new PointerEvent('pointerup', o));
+      return { ok: true };`);
+    await page.wait(700);
+    await shot(page, 'photo-info.png', 'info mode: the cyan edge and the tooltip');
+    await page.run(`document.getElementById('infoBtn').click(); return 'closed';`);
+    await page.wait(200);
+  }
+
   // THE TOOLBAR'S OWN PICTURE: the chip row with its four tools, as the phone shows it. The baseline row "the toolbar
   // LOOKS like a toolbar" asks for a picture, and no tool wrote one - so the row failed on absence, not on the product.
   {

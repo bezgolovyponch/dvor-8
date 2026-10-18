@@ -1587,10 +1587,12 @@ tiltEl.addEventListener('pointerdown', (e) => {
     }
     const f = factFor(lastTheme, rnd);
     lastTheme = f.theme;
-    const what = t ? t.label : 'этот двор';
-    pop(`${what.toUpperCase()}: ${f.theme}`, at.x, at.y - 10, 'tag');
+    // THE FACT IS ABOUT THE YARD, AND IT SAYS SO. Measured on the info capture: the pop read "МАШИНА: plants" - the
+    // internal theme KEY in English, leaked into the player's screen - and the note prefixed the tapped thing's name to a
+    // fact about something else entirely ("машина: Дерево в городе живёт меньше..."), which reads as a false claim about
+    // the car. The thing's own name is already its pop; the fact is now shown as what it is, a fact about the yard.
     pop(f.line, at.x, at.y + 6);
-    note(`${what}: ${f.line}`);
+    note(`про двор: ${f.line}`);
     sfx.paper();
     e.preventDefault();
     e.stopPropagation();
