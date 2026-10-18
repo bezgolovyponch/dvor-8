@@ -226,7 +226,20 @@ function pop(text, x, y, kind = '') {
   const lo = w / 2 + pad, hi = Math.max(lo, vw - w / 2 - pad);
   el.style.left = `${(Math.max(lo, Math.min(hi, wantX)) / vw) * 100}%`;
   const tlo = h / 2 + pad, thi = Math.max(tlo, vh - h / 2 - pad);
-  el.style.top = `${(Math.max(tlo, Math.min(thi, wantY)) / vh) * 100}%`;
+  // A WORD DOES NOT LAND ON ANOTHER WORD. Measured on the hurricane shot after the repeat-folding: two separate
+  // "СТЕНА ОБРУШИЛАСЬ" events landed 40 px apart and still overlapped. A new pop that falls within one word-height plus
+  // a pad of an existing one is nudged DOWN by that height, until it finds a free line - so a burst of events reads as a
+  // column, not a smear.
+  let ty = Math.max(tlo, Math.min(thi, wantY));
+  for (let guard = 0; guard < 6; guard += 1) {
+    const clash = [...pops.children].some((c) => {
+      const r2 = c.getBoundingClientRect();
+      return Math.abs((r2.top + r2.height / 2 - box.top) - ty) < h * 0.85;
+    });
+    if (!clash) break;
+    ty = Math.min(thi, ty + h * 0.85);
+  }
+  el.style.top = `${(ty / vh) * 100}%`;
   el.addEventListener('animationend', () => el.remove());
 }
 
