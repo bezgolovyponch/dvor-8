@@ -1,5 +1,13 @@
 # THE ACCEPTANCE MINIMUM — defined BEFORE the work, exact, and checkable by one command each
 
+> **VERDICT AT T+132 (`2100f68c…`, HEAD `f8aeb61`): MET as scoped below.** The chain passes 14 of 14; the judged
+> photograph passes **all seven** v13 lines; the style's three detector-independent laws (V1 palette, V2 sky,
+> V3 ground) pass on **all four** of the operator's scenes; determinism is 0 px and the baseline is 49/0. Two
+> annotation-geometry rows are shown-not-binding outside the judged photograph (the church's V4 and the sunset's V4/V6 -
+> boxes the operator drew by hand around objects our detector cannot see on those scenes), and they are recorded with
+> their measured causes rather than widened. One operator decision is still open and it is not an engineering one: the
+> owner sheet's sky line (D25).
+
 This page is the standard the loop is held to. It was written **before** the round it governs (T+129), so a row
 cannot be moved to fit what was achieved. Every row is a **predicate**, the command that prints it, the bar and the
 number it read on the shipped build **2100f68c…** (`29c44fe`, T+129). **This page was written before the round it
