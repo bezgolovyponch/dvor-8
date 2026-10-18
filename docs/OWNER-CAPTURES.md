@@ -15,19 +15,21 @@ of the height); everything outside it is the app's chrome (HUD, tool chips, butt
 
 ### judged photograph (v10a)
 
+### judged photograph (v10a)
+
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `/tmp/oc4-v10a/1-imported-scene.png` | 263 415 | `293c4f5afa29272e8eab98d91ef7cd961ab9958dd03d5e2bab5eeefb3f11ad53` | the yard as first built |
-| 2 | `/tmp/oc4-v10a/2-drawer-open.png` | 245 977 | `80be50dfac5bb27c4aea9de3c9fdc08f28f5c0243e8f86880e51c82759bd484e` | the drawer a thumb opens |
-| 3 | `/tmp/oc4-v10a/3-after-damage.png` | 265 547 | `706654a6027435c95bf507eea2e39de804b4b07fc4bc98864fdd644fd40d0460` | after the scripted hits |
+| 1 | `/tmp/oc5-v10a/1-imported-scene.png` | 263 500 | `f98d3103de029e25b396c2c4e62ac871fad363a04098db7e6bab4293310a6952` | the yard as first built |
+| 2 | `/tmp/oc5-v10a/2-drawer-open.png` | 262 628 | `92c1b2d1da8e89999d9b3c87023804f29ea413414711d5e8303b7935b0a95e46` | the drawer a thumb opens |
+| 3 | `/tmp/oc5-v10a/3-after-damage.png` | 355 175 | `680e717a27cf49b2ceb599600ada41269de77c462e2c3bbe23bddfb91dd2852b` | after the scripted hits: the frame darkens  the score and the combo move |
 
 ### the operator's second yard (yard2-new)
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `/tmp/oc4-yard2/1-imported-scene.png` | 265 867 | `6ed8665053e87b6ee7141a19e84643e79ca8e8fa27dc386152c53f25823d2475` | the yard as first built |
-| 2 | `/tmp/oc4-yard2/2-drawer-open.png` | 266 204 | `ac2e64b4d81786518f60b1daca73757ab0170bc471c4a179ae4b7b79c918bd20` | the drawer a thumb opens |
-| 3 | `/tmp/oc4-yard2/3-after-damage.png` | 265 230 | `38d218b3deb2ed896dda2a481c0b7e1f24ba4d69a0f1d412698846de044e34e8` | after the scripted hits |
+| 1 | `/tmp/oc5-yard2/1-imported-scene.png` | 269 958 | `8d47166eb0a2d94730d681f584ad9147c8b776ee1b83371981f59858c9495394` | the yard as first built |
+| 2 | `/tmp/oc5-yard2/2-drawer-open.png` | 264 305 | `ff0ee7d6c71763ce19cf3ef3e2a3b33bd72dcf3152cb292146b2487adb9cf988` | the drawer a thumb opens |
+| 3 | `/tmp/oc5-yard2/3-after-damage.png` | 294 263 | `31b8795b1958af500bdaa074f769911a41dfe50211e4591ba0e175b05fe08bb8` | after the scripted hits: the frame darkens  the score and the combo move |
 
 **Copies live in the repository** - `reference/owner/` (the judged photograph) and `reference/owner-yard2/` (the operator's yard), byte-identical to the tables above - so the sheet and the pictures travel together.
 

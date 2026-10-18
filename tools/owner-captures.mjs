@@ -63,24 +63,35 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   await page.wait(400);
   await shot(page, '1-imported-scene');
 
-  // DAMAGE: three taps with the stone through the page's own mapping, then a beat for the debris and the
-  // permanent state to settle. A hit that changes nothing would be a false capture, so the score is read.
+  // DAMAGE, ON WHAT BREAKS VISIBLY. The first version aimed at a car and the capture moved the counter while the PICTURE
+  // showed nothing - the car was small and half behind the toolbar. Aiming at ONE window gave one small hole. The three
+  // largest targets now take two throws each (windows first: a pane empties; cars as the fallback), so the picture
+  // carries the damage the counter claims. The score is still read: a hit that changes nothing is a false capture.
   const hit = await page.run(`
     const cam = window.dvor8.cam(), r = document.getElementById('frame').getBoundingClientRect();
     const w = window.__world;
-    const t = w.regions.find((q) => /car|truck|bus|van/i.test(String(q.kind || '')));
-    if (!t) return { hit: false, why: 'no car on this photograph' };
+    // AND ONLY IN THE BUILDINGS. Measured: the largest "windows" on this photograph are FALSE OPENINGS IN THE SKY (the
+    // clouds' bright shapes survive the ring filter where the parse calls the sky a building), so the first version's
+    // three throws emptied the sky and faded its clouds - damage shown on the wrong thing. A target must sit BELOW the
+    // skyline (y > 42% of the frame) to be a window in a wall.
+    const targets = w.regions.filter((q) => /window|car|truck|bus|van/i.test(String(q.kind || '')) && q.cy > w.h * 0.42)
+      .sort((a, b) => (b.w * b.h) - (a.w * a.h)).slice(0, 3);
+    if (!targets.length) return { hit: false, why: 'nothing to aim at' };
     const el = document.getElementById('tilt');
-    const o = { clientX: r.left + ((t.x + t.w / 2 - cam.x) / cam.w) * r.width,
-                clientY: r.top + ((t.y + t.h / 2 - cam.y) / cam.h) * r.height, bubbles: true, cancelable: true, pointerId: 1 };
     const before = w.score;
-    for (let k = 0; k < 3; k += 1) {
-      el.dispatchEvent(new PointerEvent('pointerdown', o));
-      el.dispatchEvent(new PointerEvent('pointerup', o));
-      await new Promise((res) => setTimeout(res, 420));
+    let thrown = 0;
+    for (const t of targets) {
+      const o = { clientX: r.left + ((t.x + t.w / 2 - cam.x) / cam.w) * r.width,
+                  clientY: r.top + ((t.y + t.h / 2 - cam.y) / cam.h) * r.height, bubbles: true, cancelable: true, pointerId: 1 };
+      for (let k = 0; k < 2; k += 1) {
+        el.dispatchEvent(new PointerEvent('pointerdown', o));
+        el.dispatchEvent(new PointerEvent('pointerup', o));
+        await new Promise((res) => setTimeout(res, 380));
+        thrown += 1;
+      }
     }
     await new Promise((res) => setTimeout(res, 900));
-    return { hit: true, scoreBefore: before, scoreAfter: w.score, left: document.getElementById('left').textContent };`);
+    return { hit: true, thrown, targets: targets.length, scoreBefore: before, scoreAfter: w.score, left: document.getElementById('left').textContent };`);
   console.log(JSON.stringify({ step: 'damage', ...hit }));
   if (!hit.hit || hit.scoreAfter <= hit.scoreBefore) { fails += 1; console.log(JSON.stringify({ step: 'damage', ok: false, why: 'no measurable hit' })); }
   await shot(page, '3-after-damage');
