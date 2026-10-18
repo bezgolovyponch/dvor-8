@@ -188,7 +188,20 @@ function paintAlbum() {
 // checked against style.css by the test suite so the two cannot drift apart silently.
 const POP_MAX_SCALE = 1.7;
 
+let popLast = { text: '', at: 0, n: 0 };
 function pop(text, x, y, kind = '') {
+  // A REPEATED EVENT IS ONE WORD, NOT A STACK. Measured on the hurricane shot: five identical "ОКНО ВЫБИЛО" labels
+  // landed on the same window within a second and their blocks stacked illegibly over each other (the picture read as
+  // a wall of pink text). A word that repeats inside 700 ms is folded into the one already on screen - the count is
+  // kept beside it, the way a HUD counts hits - instead of covering the frame with copies.
+  const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  if (text === popLast.text && now - popLast.at < 700) {
+    popLast.n += 1; popLast.at = now;
+    const first = pops.lastChild;
+    if (first) first.textContent = `${text} ×${popLast.n}`;
+    return;
+  }
+  popLast = { text, at: now, n: 1 };
   while (pops.children.length > 14) pops.firstChild.remove();
   const el = document.createElement('div');
   el.className = `pop ${kind}`;
