@@ -221,22 +221,39 @@ function fillPolygon(mask, w, h, poly, id) {
 }
 
 /**
- * The designed cloud: evenly spaced symmetric puffs on a flat base with one shaded row along the bottom.
+ * The designed cloud: a bank of lobes on a flat base, its underside shaded along its own silhouette.
  * "Designed" is the whole point - the photograph's clouds are not traced, because traced clouds are what made
  * the sky look like weather rather than like a picture.
+ *
+ * WHY LOBES AND NOT A HALF-DISC. Measured in the frame (T+127): the old silhouette - one symmetric half-disc with a
+ * flat base row of shade - read as a stamped semi-circle once the value-noise field was beside it; three of them
+ * sat in the upper sky and the eye immediately saw "shapes", not clouds. A real cloud is a bank of two or three
+ * overlapping lobes, and its shading FOLLOWS its own outline (the reference frame's clouds are exactly that). So the
+ * silhouette is the union of four circles rising from a base line, and the shade is derived from the silhouette
+ * itself (a cloud pixel whose two rows below are not cloud), never from a fixed row.
  */
 function cloud(mask, w, h, cx, cy, size, colour, shade) {
-  const rows = Math.max(3, Math.round(size * 0.55));
-  const halfBase = Math.max(3, Math.round(size * 0.5));
-  for (let r = 0; r < rows; r += 1) {
-    const t = r / (rows - 1);                       // 0 at the base, 1 at the top
-    const half = Math.round(halfBase * (1 - 0.72 * t * t));
-    const y = cy + (rows - 1 - r);
-    if (y < 0 || y >= h) continue;
-    for (let x = cx - half; x <= cx + half; x += 1) {
-      if (x < 0 || x >= w) continue;
-      mask[y * w + x] = r === 0 ? shade : colour;    // the flat base row is the shaded one
+  const R = Math.max(3, Math.round(size * 0.34));           // the base lobe's radius
+  const baseY = cy + Math.max(2, Math.round(size * 0.30));  // the line the bank sits on
+  const lobes = [[0, 0, 1.0], [-0.62, -0.34, 0.66], [0.58, -0.30, 0.60], [0.02, -0.72, 0.46]];
+  const filled = new Set();
+  for (const [ox, oy, k] of lobes) {
+    const rr = R * k, ccx = cx + ox * R, ccy = baseY + oy * R, rr2 = rr * rr;
+    for (let dy = -Math.round(rr); dy <= 0; dy += 1) {      // the upper half of each lobe: the base stays flat
+      const y = Math.round(ccy + dy);
+      if (y < 0 || y >= h) continue;
+      const half = Math.round(Math.sqrt(Math.max(0, rr2 - dy * dy)));
+      for (let x = Math.round(ccx - half); x <= Math.round(ccx + half); x += 1) {
+        if (x < 0 || x >= w) continue;
+        filled.add(y * w + x);
+      }
     }
+  }
+  for (const p of filled) mask[p] = colour;
+  // the underside: a cloud pixel with no cloud one or two rows below it is the shaded part of the bank
+  for (const p of filled) {
+    const y = (p / w) | 0;
+    if ((y + 1 < h && !filled.has(p + w)) || (y + 2 < h && !filled.has(p + 2 * w))) mask[p] = shade;
   }
 }
 
@@ -1942,7 +1959,11 @@ export function trace(rgba, w, h, opts = {}) {
   // go wrong: the entries are named, not computed.
   const SKY_RAMP = RAMPS.findIndex((R) => R.name === 'sky');
   const cloudColour = SKY_RAMP * STEPS + 5;      // the palest tone of the sky's own ramp
-  const cloudShade = SKY_RAMP * STEPS + 4;       // one step down: the shaded row of the puff
+  // THE SHADE WAS THE BASE TONE, SO IT WAS INVISIBLE. +4 IS the sky's plane (rgb(122,183,230)), so every puff's
+  // "shaded" underside was painted while the sky was blue underneath it and the puffs read as flat white discs -
+  // part of why they looked stamped. The shade is the ramp's +3 (rgb(47,131,224)), the same tone the field's
+  // cloud rims now use, so a puff's underside and a field cloud's rim are the same shade of the same sky.
+  const cloudShade = SKY_RAMP * STEPS + 3;       // one step down: the shaded underside of the puff
   void skys;
   let cloudMaskFinal = null;
   const cloudMask = new Int32Array(n).fill(-1);
@@ -2344,6 +2365,65 @@ export function trace(rgba, w, h, opts = {}) {
     paintingSky = false;
     let repainted = 0;
     for (let p2 = 0; p2 < n; p2 += 1) if (skyMaskFinal[p2]) { idx[p2] = skyEntry; repainted += 1; }
+    // ---- THE SKY'S OWN STYLE: v13's S6, PORTED (value-noise clouds, two tones + a shade) ----------------
+    //
+    // WHY. Measured on the frame this block replaced: one tone owned **85.7%** of the sky box (x158..288, y8..272).
+    // The operator's own v13 engine reads 50.1% on that box, its accepted frame 24% - a sky that is 86% one flat
+    // plane is exactly the fault the v13 gate's V2 line names, and its bar is ≤70%.
+    //
+    // WHAT IS PORTED. `skyStyle` in tools/v13/engine-v13.txt line 85: two-octave value noise, thresholded, shade
+    // sampled from the same field 2.5 px higher (Perlin-lineage value noise with smoothstep). v13 also dithered a band
+    // toward the horizon; this port omits it and says so - the band's tone in this palette is either pure white
+    // (which spends the R1 white/blue budget measured below) or a grey (which spends the mullion budget already at
+    // +0.076 of its 0.09), so the cloud field is the mechanism that carries V2 and the band stays an open row.
+    //
+    // WHAT IS NOT COPIED. v13 subtracts `(ys-150)/60*0.2` above y=150, i.e. it PILES clouds at the top of the frame.
+    // That one part cannot be copied: this project's delivery rule (tools/deliver-check.mjs S1) reads the top 8% band
+    // and requires its most common colour to be the blue plane at ≥35%, and the concept gate wants the largest single
+    // colour of that band at ≥40%. A top-heavy field makes a cloud tone the band's most common colour - measured at
+    // T+125: S1 failed and R1 went to 0.096 against its 0.09 tolerance, so that change was reverted. The field here
+    // runs the other way: its threshold RISES toward the zenith (the top stays a blue plane) and the deck sits over
+    // the yard toward the horizon - the shape T+126 named as the reconciliation.
+    //
+    // THE TONES ARE THE SKY RAMP'S OWN, so no palette entry is added and the family mix R1 measures is preserved: the
+    // lit top is the ramp's white (+5), the shaded underside its +3 blue (blue family in R1's classifier), the plane
+    // +4 - the tone this sky has always been painted with. The shade is one step DARKER than the base because the
+    // palette has no pale blue between +4 and white, and inventing one would be a palette change.
+    //
+    // THE CONSTANTS ARE A SWEEP, NOT A GUESS. Every (threshold, zenith lift, horizon push) triple in
+    // /tmp/measure/sim5.mjs was scored on the three lines that pull on this axis; the chosen one is a triple whose
+    // three margins are positive at once: V2 59.1% (bar ≤70) · S1 band blue 41.1% (bar ≥35) · R1 blue −0.064 and
+    // white −0.016 (bars 0.09), worst family unchanged at the mullion's 0.076.
+    const SKY_RAMP_I = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
+    const SKY_LIT = SKY_RAMP_I + 5;          // rgb(255,255,255) - the cloud's lit top
+    const SKY_SHADE = SKY_RAMP_I + 3;        // rgb(47,131,224) - its shaded underside
+    const skyClamp = (v) => Math.max(0, Math.min(1, v));
+    // a stateless hash, so the field is a function of the pixel and nothing else: two runs of one photograph agree
+    const skyHash = (x, y) => {
+      let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;
+      h = Math.imul(h ^ (h >>> 13), 1274126177);
+      return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    };
+    const skyNoise = (x, y) => {
+      const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);   // smoothstep, as v13's `vn`
+      const A = skyHash(ix, iy), B = skyHash(ix + 1, iy), C = skyHash(ix, iy + 1), D2 = skyHash(ix + 1, iy + 1);
+      return A + (B - A) * sx + (C - A) * sy + (A - B - C + D2) * sx * sy;
+    };
+    let fieldPx = 0, litPx = 0, shadePx = 0;
+    for (let p2 = 0; p2 < n; p2 += 1) {
+      if (!skyMaskFinal[p2]) continue;
+      const x = p2 % w, y = (p2 / w) | 0;
+      const v = skyNoise(x / 31 + 3, y / 11) * 0.65 + skyNoise(x / 11 + 9, y / 5 + 2) * 0.35 - 0.5
+        + 0.10 * skyClamp((y - 40) / 160);                       // the horizon push: the deck sits over the yard
+      const thr = 0.12 + 0.06 * skyClamp((100 - y) / 100);        // the zenith lift: the top of the frame keeps its blue
+      if (v <= thr) continue;
+      // the lit top is the field's own core, the shaded underside its rim - v13's 2.5-px shade rule as a band,
+      // because on this palette the rim is what has to read as a cloud's underside
+      if (v > thr + 0.08) { idx[p2] = SKY_LIT; litPx += 1; } else { idx[p2] = SKY_SHADE; shadePx += 1; }
+      fieldPx += 1;
+    }
+    if (typeof window !== 'undefined') window.__skyField = { fieldPx, litPx, shadePx };
     // AND THEN ITS CLOUDS. The designed puffs were drawn BEFORE this repaint, so the flat blue wiped them - the
     // same "painted last wipes the earlier work" pattern that hid the sky itself. The sky goes down first, the
     // clouds on top of it, and the frame is finished in that order.
