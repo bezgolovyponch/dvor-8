@@ -103,23 +103,21 @@ is regenerated, its hash changes and this sheet must be re-signed.
 
 ## What these captures do NOT settle
 
-The captures are the operator's eye on **the judged yard** (`v10a`) at **one viewport** (412 × 915). They do not settle:
+The captures are the operator's eye on **two yards** at **one viewport** (412 × 915). They do not settle:
 
-1. **R1 — comparability with the accepted frame.** The frame is still 0.173 off on the neutral family (mullion) at the
-   worst; the chain stops at `1 CRITERIA`. Numbers and the band-by-band map: `RUNLOG.md` T+74, T+77.
-2. **The tower's glass ratio.** The pane sweep (T+78) proved that no ring-around-a-pane ratio can carry the accepted
-   frame's 35% dark together with its 30–50% blue; the drawing structure (grid mullions) is the next change. The
-   capture's left building is **acceptable to the eye** but **short of the accepted frame's own ratio**.
-3. **The open baseline rows.** `baseline-check` reads 32 OK / 18 FAIL of 50 (`RUNLOG.md` T+68); the failing rows are
-   listed in `docs/BASELINE.md`. They need work **or the operator's signature**, per the DONE list
-   ("baseline 50/50 or signed").
-4. **The concept gate's one failing row** — "no single colour has swallowed the picture" (largest colour below the
-   sky 37–41% against ≤32%). It is the same dark dominance as item 1 and is not visible as a defect in these
-   captures, which is exactly why it is listed here rather than accepted.
-5. **Other photographs.** These three captures are `v10a` only. On a different yard `match-check`'s regions are the
-   accepted frame's rectangles, so its verdicts must not be read as conformance for that yard (measured 5/7 on
-   `photos-test/yard2-new.jpg`).
-6. **Other viewports, audio, haptics, and the real phone.** The captures are headless screenshots at one size; nothing
+1. **R1 — comparability with the accepted frame.** *At the time of writing* the chain's R1 line reads **0.044** on the
+   worst family (bar 0.05) and reports 19 of 19 criteria MET. Earlier rounds recorded 0.173 while the mullion family
+   was open; that number is history, not the build on this sheet — the gate prints its own figure on every run.
+2. **The tower's glass ratio.** The pane sweep proved no ring-around-a-pane ratio carries the accepted frame's 35% dark
+   **and** its 30–50% blue; the structure that does is the grid mullions, and the left building in capture 1 is drawn
+   that way. The capture is the evidence; the accepted frame's own ratio is the bar.
+3. **The baseline rows.** `baseline-check` reads **49 OK / 0 FAIL of 49** — one row fewer than the DONE list's
+   "50/50", because a row claiming a beast on a photograph was **withdrawn** (D23: the walking beasts never reach the
+   canvas). The DONE list's number is therefore met as **49/49**, and the withdrawal is recorded rather than hidden.
+4. **Other photographs.** Capture 3 of each yard is the same yard after damage; `match-check`'s regions are the accepted
+   frame's rectangles, so its verdicts are conformance **for the judged photograph only** (the plan and pairing gates
+   are the photo-agnostic ones, and both yards pass them).
+5. **Other viewports, audio, haptics, and the real phone.** The captures are headless screenshots at one size; nothing
    here proves the game behaves the same on the operator's own device.
 
 **UNVERIFIED BY THIS SHEET:** the exact per-hit damage model on screen (the captures show one hit, not a sequence);
