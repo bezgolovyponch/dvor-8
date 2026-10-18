@@ -448,3 +448,32 @@ is metal, never foliage. The suite's own "nothing is invented: no green without 
 44.9% (PASS) · V2 64.2% (PASS) · V6 513 (PASS) · **V1 39 → 43 tones (≤24) - the one line still red** · pairing IoU
 0.85 → **0.90** · R1 worst 0.076 → **0.063** · the concept gate's nine lines all pass (largest colour below the sky 32% → 21%). The v13
 gate now reads **6 of 7 lines green**.
+## D27 — TWO BARS THE DESIRED REFERENCE ITSELF FAILED, RE-DERIVED FROM IT (2026-10-18, the working-palette round)
+
+**What happened.** The working palette (v13 S2, `src/style/working-palette.js`) took the judged frame from 43 tones
+to **17** and closed V1 on all four of the operator's scenes (17 / 19 / 21 / 18 ≤ 24). Two OTHER gates then went red
+on the same frame — and both of them, run on the operator's own reference frames, read the same failure:
+
+```
+                              the product   the operator's reference frames
+match-check  "a DRAWN picture"   17 tones    16 / 16 / 20 / 21 tones   (bar was 24)
+concept F5   "…in a frame that
+             uses the table"     17 entries  16 / 16 / 20 / 21 entries (bar was 24)
+```
+
+**The class, again.** Both bars were written at T+95 (D20) to refuse the audit's flat counterexample, which used
+**7** tones: "the real frame uses 36, the counterexample 7, so the bar is 24". That 36 belonged to the previous,
+40-tone renderer. The desired reference draws with a working palette and never reaches 24 — so a bar of 24 rejects
+every frame the operator wants. This is D24's class exactly: *a bar that the artefact AND its target fail is not a
+criterion about the target.*
+
+**The decision.** Both lines become **≥12 tones**, which is above the counterexample's 7 and below every reference
+frame's 16, and both print all three numbers with the verdict (the frame's count, the reference's, the
+counterexample's). The bars were re-derived, not widened for convenience: 12 is the midpoint of the measured gap
+7..16, and the counterexample still fails (re-generated and re-run: `match-check` exits 1 with the sky and tower lines
+ABSENT, `concept-check` exits 1 with "7 palette entries on the road, 8 in the frame (needs 8 and ≥12)").
+
+**What this does NOT change.** The region-share lines, the sky/ground/car/facade bars, and the delivery rule are
+untouched; the frame's tonality is now controlled by V1's own bar (≤24) rather than by a floor on how many tones a
+frame may use. A frame can no longer be a handful of flat blocks (that is what the counterexamples prove) and it can
+no longer be a 43-tone table spray either (V1).

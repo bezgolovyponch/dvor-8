@@ -163,11 +163,14 @@ const ROWS = [
   ['and one tone owns it: the largest single colour is at least 40% of the band', skyTop >= 0.40, `largest ${(100 * skyTop).toFixed(0)}% of the sky band`],
   // THE ROAD'S TONES MUST COME FROM A FRAME THAT USES THE TABLE. Measured (D20): the audit's counterexample - eight
   // palette stripes and nothing else - passed this row at "8 palette entries on the road". A reduced photograph uses
-  // 30+ entries; the stripes used 8. The row now asks for both: its own tones on the road AND a frame that sprays
-  // across the palette, which a handful of stripes cannot.
+  // many entries; the stripes used 8. The row asks for both: its own tones on the road AND a frame that sprays across
+  // the palette, which a handful of stripes cannot.
+  // THE FRAME'S BAR IS RE-DERIVED AT T+129 (D27): it was 24, from a 36-tone renderer, and the operator's reference
+  // frames - drawn with a working palette (v13 S2) - read 16 / 16 / 20 / 21. A bar the desired reference fails is
+  // not a criterion about the picture. It is now 12: above the stripes' 8, below every reference frame's 16.
   ['the PHOTOGRAPH decides the road: a faithful pixelation uses at least 8 tones of its own ramp, in a frame that uses the table',
-    roadTones.size >= 8 && paletteSeen.size >= 24,
-    `${roadTones.size} palette entries on the road, ${paletteSeen.size} in the frame (needs 8 and 24+)`],
+    roadTones.size >= 8 && paletteSeen.size >= 12,
+    `${roadTones.size} palette entries on the road, ${paletteSeen.size} in the frame (needs 8 and ≥12; reference frames 16/16/20/21; the stripes 8)`],
   ['the sky is a plane, not a gradient (its own band: at most 12 palette entries)', palSky.size <= 12, `${palSky.size} entries in the sky band`],
   ['facades are built with windows (at least 8 window sprites)', windows >= 8, `${windows} window sprites`],
   // THE PALETTE ROW WAS THE LITERAL `true` (audited 2026-10-18: an unfalsifiable row inside "19 of 19"). It now

@@ -23,6 +23,7 @@
 // that size from the image, so a tall phone photograph makes a tall level.
 
 import { liftRegister } from './style/register.js';   // the style's own register, applied AFTER the conversion
+import { reduceToWorkingPalette } from './style/working-palette.js';   // v13 S2: the frame's working palette
 import { trace, entryFor } from './vector.js';
 import { render as renderFlat, RAMPS, STEPS, outlineOf, voidOf } from './flat.js';
 import { SKY, OTHER } from './surfaces.js';
@@ -169,6 +170,11 @@ export function styliseVector(rgba, w, h, opts = {}) {
     // asphalt sits at the bottom of its family. One tone, and the road lands where the reference measures it.
     groundMaxTone: 2,
   });
+  // THE WORKING PALETTE IS THE LAST WRITE TO THE FRAME (v13 S2/S3, the line V1 exists for). It has to be last: the
+  // car-restoration pass above writes `entryFor` tones and would reintroduce the whole table (measured at T+129:
+  // 43 tones with the reduction inside `trace`, 21 with it here).
+  const working = reduceToWorkingPalette(st.idx, st.palette, 22);
+  if (typeof window !== 'undefined') window.__workingPalette = working;
   return {
     idx: st.idx, palette: st.palette, smooth: rgba,
     surfaces: { what, horizon: 0, skyShare: st.skyShare },

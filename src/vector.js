@@ -2489,13 +2489,22 @@ export function trace(rgba, w, h, opts = {}) {
       const A = skyHash(ix, iy), B = skyHash(ix + 1, iy), C = skyHash(ix, iy + 1), D2 = skyHash(ix + 1, iy + 1);
       return A + (B - A) * sx + (C - A) * sy + (A - B - C + D2) * sx * sy;
     };
+    // THE HEIGHT PROFILE IS THE SKY'S OWN, NOT A FIXED ROW COUNT. Measured at T+129 on the operator's sunset scene: its
+    // horizon sits at row 270, so the gate's sky box is only y8..200 and the four absolute row constants above (40, 100,
+    // 160 - tuned on the tower's 334-row sky) suppressed the deck over most of it: V2 read 74% against the bar 70 while
+    // the same code read 64% on the tower. The three constants are therefore FRACTIONS OF THE MEASURED HORIZON:
+    // 100/334 = 0.30 for the zenith's clear band, 40/334 = 0.12 where the deck starts, 160/334 = 0.48 where the push
+    // is full. On the tower's sky they reproduce the tuned numbers exactly; on a shorter sky the deck follows it down.
+    let skyH = 0, skyCols = 0;
+    for (let x = 0; x < w; x += 1) if (skyline[x] > 0 && skyline[x] <= h) { skyH += skyline[x]; skyCols += 1; }
+    skyH = skyCols ? skyH / skyCols : h * 0.65;
     let fieldPx = 0, litPx = 0, shadePx = 0;
     for (let p2 = 0; p2 < n; p2 += 1) {
       if (!skyMaskFinal[p2]) continue;
       const x = p2 % w, y = (p2 / w) | 0;
       const v = skyNoise(x / 31 + 3, y / 11) * 0.65 + skyNoise(x / 11 + 9, y / 5 + 2) * 0.35 - 0.5
-        + 0.10 * skyClamp((y - 40) / 160);                       // the horizon push: the deck sits over the yard
-      const thr = 0.12 + 0.06 * skyClamp((100 - y) / 100);        // the zenith lift: the top of the frame keeps its blue
+        + 0.10 * skyClamp((y - 0.12 * skyH) / (0.48 * skyH));    // the horizon push: the deck sits over the yard
+      const thr = 0.12 + 0.06 * skyClamp((0.30 * skyH - y) / (0.30 * skyH));   // the zenith stays a blue plane
       if (v <= thr) continue;
       // the lit top is the field's own core, the shaded underside its rim - v13's 2.5-px shade rule as a band,
       // because on this palette the rim is what has to read as a cloud's underside
