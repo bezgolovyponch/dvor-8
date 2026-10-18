@@ -316,6 +316,19 @@ function setSize(w, h) {
   canvas.width = w; canvas.height = h;
   document.documentElement.style.setProperty('--aspect', String(w / h));
   buf = makeBuffer(w, h);
+  // THE TOOLBAR DOES NOT SIT ON THE PICTURE. Measured: the art occupied y 113-680 and the chip bar y 640-680, so the
+  // toolbar covered the picture's last 40 rows. The frame's aspect is the ART's, and the bar is absolutely positioned
+  // at its bottom - so the bar always eats into the art. The frame is therefore given the art's height PLUS the bar's
+  // own strip, and the bar keeps its place at the bottom of the frame, below the picture: nothing of the art is
+  // covered, and the aspect the art is drawn with is untouched.
+  const bar = document.getElementById('bar');
+  if (bar) {
+    const bh = Math.ceil(bar.getBoundingClientRect().height) || 44;
+    const ratio = w / h;
+    document.documentElement.style.setProperty('--aspect', String(w / (h + bh)));
+    document.documentElement.style.setProperty('--barh', `${bh}px`);
+    void ratio;
+  }
 }
 // The windows in the walls, added to the things the detector found. `big` is the same crop at several
 // picture-pixels to one of the game's, where a window still has a shape; a drawn yard has none and is
@@ -401,6 +414,8 @@ async function build(rgba, w, h, dets, big = null) {
     window.__PANE = params.get('pane') ? params.get('pane').split(',').map(Number) : null;
     window.__RING = params.get('ring') === '1';
     window.__NOCHECK = params.get('nocheck') === '1';
+    window.__baysProbe = params.get('bays') === '1';
+    window.__passes = params.get('passes') === '1' ? [] : null;
     window.__MULL = params.get('mull') ? Number(params.get('mull')) : 3;   // the accepted curtain wall's mullion
     window.__COVER = params.get('cover') ? Number(params.get('cover')) : 0.5;
     window.__SHADOW = params.get("shadow") ? Number(params.get("shadow")) : 1;

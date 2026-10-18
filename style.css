@@ -37,7 +37,9 @@ h1 { margin: 0; font: italic 900 34px/1 var(--display); letter-spacing: .04em; c
 main { display: flex; flex-direction: column; gap: 10px; align-items: center; }
 /* The frame holds its place; the tilt inside it leans. A tap is carried back through the same lean. */
 .frame { position: relative; width: min(100%, calc(62vh * var(--aspect))); aspect-ratio: var(--aspect); margin: 6px 0; }
-.tilt { position: absolute; inset: 0; border: 3px solid var(--cyan); box-shadow: 7px 7px 0 var(--pink), -4px -4px 0 var(--ink);
+/* THE TOOLBAR'S STRIP IS RESERVED: the tilt (the art's window) stops above the bar, so no part of the picture is
+   covered by the chip row. --barh is set by main.js when the yard is sized. */
+.tilt { position: absolute; inset: 0 0 var(--barh, 0) 0; border: 3px solid var(--cyan); box-shadow: 7px 7px 0 var(--pink), -4px -4px 0 var(--ink);
   background: var(--ink); overflow: hidden; touch-action: none; will-change: transform; }
 .tilt::after { content: ""; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(11, 0, 24, .22) 2px 3px); }
