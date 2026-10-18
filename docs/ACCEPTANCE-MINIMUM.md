@@ -2,7 +2,7 @@
 
 This page is the standard the loop is held to. It was written **before** the round it governs (T+129), so a row
 cannot be moved to fit what was achieved. Every row is a **predicate**, the command that prints it, the bar and the
-number it read on the shipped build **8ea9fc9a…** (`d6ad551`, T+128). **This page was written before the round it
+number it read on the shipped build **2100f68c…** (`29c44fe`, T+129). **This page was written before the round it
 governs (T+129); the states it now carries were filled in AS THE ROUND MEASURED THEM, and every "RED" is left visible
 with the number that closed it.** A row with no predicate is NOT MET by definition, and a missing number is NOT a
 passing zero.
