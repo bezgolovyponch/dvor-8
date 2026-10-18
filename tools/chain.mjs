@@ -26,6 +26,10 @@ const steps = [
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],
   ['4 DELIVERY', 'node', ['tools/deliver-check.mjs', process.env.OUT || '/tmp/chain', process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'], {}],
+  // THE OWNER'S SHEET IS PART OF THE CHAIN, not something to remember to run. Two captures were recorded as failed by
+  // the tool and shipped in the sheet anyway in this session; the gate that compares the sheet with the files it
+  // describes must therefore be a step, so a sheet that lies stops the chain like any other lie.
+  ['5 SHEET', 'node', ['tools/sheet-check.mjs'], {}],
 ];
 // STEP 6 - THE PAGE GATE. Every other gate tests code in isolation from the page: the suite calls trace() and
 // makeWorld() in Node, so it never touches the file input, the decode, the detector, the build or the HUD. That is
