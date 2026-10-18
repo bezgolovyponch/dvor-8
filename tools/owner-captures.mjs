@@ -47,11 +47,25 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   // THE DRAWERS OPEN ON LOAD, so the DRAWER capture comes first and the SCENE capture after closing them. That
   // order is deliberate: the drawer's own header toggles reliably open->closed but the reopen path depends on the
   // bar's state, and a capture that fights the UI would photograph the harness, not the game.
+  // THE DRAWER IS OPENED BY ITS OWN HEADER, AND THAT IS VERIFIED. Measured: the page now loads with the drawers CLOSED
+  // (they were open on load when this step was written), so this capture had been photographing collapsed accordions
+  // for a whole release - the tool recorded `open: false` and the sheet still shipped the picture. The step clicks the
+  // drawer's header, READS THE CLASS BACK, and only then shoots; a drawer that will not open is a failed capture.
   const drawer = await page.run(`
-    return { open: document.getElementById('paletteBox').classList.contains('open'),
+    const box = document.getElementById('paletteBox');
+    if (!box.classList.contains('open')) {
+      // THE CARET OPENS THE LIST. The pill cycles the weapon and a HOLD opens the drawer; the arrow inside the pill is
+      // the path to the whole list (its own handler calls openList). Measured: clicking the pill alone left the box
+      // closed, so the capture photographed collapsed accordions for a release.
+      const arrow = document.getElementById('paletteMore');
+      const target = arrow || box.querySelector('[role="button"]') || box;
+      target.click();
+      await new Promise((r) => setTimeout(r, 450));
+    }
+    return { open: box.classList.contains('open'),
       hands: document.getElementById('palette').children.length };`);
   console.log(JSON.stringify({ step: 'drawer', ...drawer }));
-  if (!drawer.open) { fails += 1; console.log(JSON.stringify({ step: 'drawer', ok: false, why: 'the drawer was not open on load' })); }
+  if (!drawer.open) { fails += 1; console.log(JSON.stringify({ step: 'drawer', ok: false, why: 'the drawer did not open when its header was clicked' })); }
   await page.wait(250);
   await shot(page, '2-drawer-open');
 
