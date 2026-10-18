@@ -4,6 +4,10 @@ One page, for sign-off. Each row is a thing the operator asked for, the exact co
 that command printed on the shipped tree (`v0.5.4`, commit `3c39fa5`). If a command does not print the line, the item is
 not met — that is the whole point of the page.
 
+**Every command on this page was re-run against the shipped tree and printed the line given** (T+118): match `MATCHES
+THE EXAMPLE FRAME`, style `IN THE STYLE`, palette `MATCHES THE ACCEPTED FRAME`, pairing `PAIRED … IoU 0.85`, reference
+`worst 0.044`, plan `PLAN ACCEPTED: 8 of 8`, quality `MEETS THE ACCEPTED BAR`, baseline `49 OK`, sheet `SHEET OK`.
+
 Environment: the page server is `python3 serve.py 4312` from `dvor-style-lab` (it maps `/game/` to this repo), and the
 browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start inside the harness).
 
