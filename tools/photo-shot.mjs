@@ -91,15 +91,19 @@ await withPage(BASE, {}, async (page) => {
   // 7 tones in the left facade window, a dump taken mid-scan has 38 - and delivery line 2b (at most 8 tones) failed
   // on the transient. The dump now waits until two reads 350 ms apart have the same hash, and RECORDS whether that
   // happened: a frame that never settles is reported as unverified instead of measured.
-  let settled = false, lastHash = null;
-  for (let tries = 0; tries < 20 && !settled; tries += 1) {
+  // THREE EQUAL READS, NOT TWO. A single matching pair can still catch a frame whose last write has not landed: measured
+  // once in eight runs, two "settled" dumps differed by 1766 px (1.2% of the frame) while the parse itself was
+  // bit-reproducible (detgate-parse: 0 px, identical hashes) - i.e. the difference was the render's transient, caught
+  // by a two-read settle. Three consecutive equal reads make that transient impossible to miss.
+  let settled = false, lastHash = null, same = 0;
+  for (let tries = 0; tries < 24 && !settled; tries += 1) {
     const h = await page.run(`
       const c = document.getElementById('yard') || document.getElementById('view');
       const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
       let hsh = 2166136261;
       for (let i = 0; i < d.length; i += 5) { hsh ^= d[i]; hsh = Math.imul(hsh, 16777619) >>> 0; }
       return hsh;`);
-    if (lastHash !== null && h === lastHash) { settled = true; break; }
+    if (lastHash !== null && h === lastHash) { same += 1; if (same >= 2) { settled = true; break; } } else same = 0;
     lastHash = h;
     await new Promise((r) => setTimeout(r, 350));
   }
