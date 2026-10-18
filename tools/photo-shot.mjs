@@ -118,7 +118,12 @@ await withPage(BASE, {}, async (page) => {
     // carrying it lets the chain ask a STRUCTURAL question about any photograph - tools/plan-check.mjs reads it from
     // here instead of from a separate probe.
     const pl = window.__plan || null;
+    // THE WORLD'S TARGETS TRAVEL WITH THE DUMP. A gate that asks "are the windows breakable / is there one on every
+    // facade?" must know WHICH objects the build made - a pixel histogram cannot answer it. Read-only; boxes only.
+    const ww = window.__world || null;
+    const targets = ww ? ww.regions.map((r) => ({ kind: r.kind, id: r.id, box: [r.x, r.y, r.w, r.h], area: r.area || (r.pixels ? r.pixels.length : 0) })) : null;
     return { w: c.width, h: c.height, px: out.join(','), clockPin: window.__clockPin, clock: window.__clock,
+      targets,
       plan: pl ? { bands: pl.bands, facades: (pl.facades || []).map((f) => ({ role: f.role, box: f.box, mean: f.mean, dark: f.dark, blue: f.blue })) } : null };`);
   // THE SETTLED FLAG TRAVELS WITH THE DUMP. It used to go only to stdout, and no consumer read it - so a frame that
   // never settled was still measured as if it had. Now it is in canvas.json and deliver-check withholds lines 1/2

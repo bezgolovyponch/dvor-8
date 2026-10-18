@@ -11,11 +11,15 @@ The captures are phone-frame screenshots (412 × 915) of **two yards** - the jud
 the operator's own (`photos-test/yard2-new.jpg`) - produced by `tools/owner-captures.mjs` from the SHIPPED tree. The framed picture inside them starts at roughly **x 50, y 113** and runs down to the chip row (about two thirds
 of the height); everything outside it is the app's chrome (HUD, tool chips, buttons, panels).
 
-### judged photograph (v10a)
+### the build these captures describe
 
-### judged photograph (v10a)
+build: `5251d642c133b8af598b322ba112dc83b5363d54268b53ca6658373f150a574c`
 
-### judged photograph (v10a)
+That hash is sha256 over the sorted paths and bytes of every file that can change the frame (`src/**`, `index.html`,
+`style.css`; 51 files, printed by `node tools/build-hash.mjs`). `tools/sheet-check.mjs` recomputes it and fails when
+the tree has moved, so these pictures cannot describe a build that changed. A timestamp is not evidence: restoring
+unchanged files moves their mtime while the build stays byte-identical, and `touch` moves a timestamp without changing
+a byte.
 
 ### judged photograph (v10a)
 

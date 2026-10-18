@@ -199,7 +199,13 @@ a new capability lands WITH its checker:
 
 ---
 
-## 9. CURRENT STATE (a session updates this block at the end of every iteration)
+## 9. THE 2026-10-16 STATE — HISTORY, NOT CURRENT
+
+> **This block is the session's own record of 2026-10-16 and is kept as history.** It is NOT the current state: today
+> the chain reaches 6f MATCH and measures 19/19 criteria, 321/0 suite, match 8/8, pairing IoU 0.85 (see RUNLOG.md,
+> which is the append-only record, and START-HERE.md for the one-screen brief). Do not read the lines below as
+> instructions about the present; read RUNLOG.md's last entries for that.
+
 
 ```
 iteration:            1 (2026-10-16) - NEGATIVE RESULT, REVERTED

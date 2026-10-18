@@ -1,0 +1,81 @@
+{
+ "html": "/Users/m/Downloads/DVOR-8 Photo2Pixel v13.dc.html",
+ "htmlSha256": "c5715724621be34e7779e9f11367277fd096442b72d885fd1808778bfae0c451",
+ "engineSha256": "ea0273fee448126ec074c9f69c8833834a5710bd9afc4d2da0a0fd19e1886279",
+ "engineChars": 115511,
+ "palette": [
+  "#1d2b53",
+  "#323f7a",
+  "#4d65b4",
+  "#4d9be6",
+  "#8fd3ff",
+  "#d6f1ff",
+  "#0e3b30",
+  "#165a4c",
+  "#239063",
+  "#1ebc73",
+  "#30e1b9",
+  "#91db69",
+  "#2e1f1a",
+  "#4c2f22",
+  "#6e4a36",
+  "#9e6b47",
+  "#bf8f63",
+  "#e3bd8f",
+  "#1f1d22",
+  "#34313a",
+  "#4a4650",
+  "#625e68",
+  "#7e7a84",
+  "#a39fa8",
+  "#1e2230",
+  "#323a4c",
+  "#56627a",
+  "#8a98ad",
+  "#c4d0dc",
+  "#ffffff",
+  "#4a1414",
+  "#6e2727",
+  "#b33831",
+  "#e83b3b",
+  "#e6904e",
+  "#fbb954",
+  "#2e1a3a",
+  "#5a2a5e",
+  "#a24b6f",
+  "#c32454",
+  "#f04f78",
+  "#fca790",
+  "#5e4a22",
+  "#8a6f30",
+  "#c09a3e",
+  "#f9c22b",
+  "#fbe17a",
+  "#fff6c2",
+  "#1a1220",
+  "#0b0018"
+ ],
+ "scenes": [
+  {
+   "i": 0,
+   "scene": "prague-tower",
+   "photo": "/game/photos-test/v10a.jpg"
+  },
+  {
+   "i": 1,
+   "scene": "prague-street",
+   "photo": "/game/photos-test/2026-10-12%2023.06.59.jpg"
+  },
+  {
+   "i": 2,
+   "scene": "aerial-church",
+   "photo": "/game/photos-test/2026-10-12%2023.06.55.jpg"
+  },
+  {
+   "i": 3,
+   "scene": "sunset-bus",
+   "photo": "/game/photos-test/sunset.jpg"
+  }
+ ],
+ "builtAt": "2026-10-18T14:43:31.997Z"
+}

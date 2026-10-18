@@ -11,7 +11,8 @@
 //
 // Usage: CHROME=... node --experimental-websocket tools/shots.mjs [outdir] [photo]
 import { withPage } from './browser.mjs';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { buildHash } from './build-hash.mjs';
 
 const OUT = process.argv[2] || 'docs/shots';
 const PHOTO = process.argv[3] || 'photos-test/v10a.jpg';
@@ -130,5 +131,12 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   console.log(JSON.stringify({ step: 'errors', errors }));
   if (errors.length) fails += 1;
 });
+// THE PICTURES RECORD THE BUILD THEY SHOW. tools/baseline-check.mjs compares this hash with the tree's own, so a
+// picture of a build that changed fails the row - by content, not by a timestamp that a checkout moves.
+{
+  const { hash, files } = buildHash();
+  writeFileSync(`${OUT}/BUILD`, `${hash}  ${files} files (src/, index.html, style.css)\n`);
+  console.log(JSON.stringify({ step: 'build', hash, files, out: OUT }));
+}
 console.log(fails ? `\nSHOTS INCOMPLETE: ${fails} problem(s).` : `\nSHOTS READY in ${OUT}.`);
 process.exit(fails ? 1 : 0);

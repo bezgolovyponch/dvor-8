@@ -28,42 +28,29 @@ page: 65 targets · console clean · 116 tones, largest 31% (no collapse)
 Buildings exist as things because **COCO has no building class**: they are the world's own `structures` (6 on the
 creator's photograph), turned into regions.
 
-## Where the product stands (the creator's four photographs, re-measured 2026-10-16)
+## Where the product stands (measured 2026-10-18, the judged photograph)
 
 ```
-file                          targets  pairing (art vs that photo)        concept
-photos-test/v10a.jpg (=5.jpg)      38  PAIRED   IoU 0.66 · dark 83%        7 OK 1 FAIL (sky band)
-photos-test/sunset.jpg             24  NOT PAIRED IoU 0.58 · dark 41%      7 OK 1 FAIL
-photos-test/2026-10-12 23.06.55.jpg 18 PAIRED   IoU 0.94 · dark 63%        8 OK 0 FAIL
-photos-test/2026-10-12 23.06.59.jpg 27  (not yet swept)                   (not yet swept)
-gates    preflight OK · imports clean · page builds, console clean on all four
-stale    the previous edition of this block recorded "64 / 93 targets" — those numbers no longer reproduce on
-         this code (measured: 38 / 24 / 18 / 27). A number in this file without a fresh gate line is not a fact.
+chain     0 PREFLIGHT 19 criteria rows · 0b IMPORTS 48 modules · 1 CRITERIA 19/19 (R1 0.044) · 2 COMPOSITION 10/10
+          3 SUITE 321 pass 0 fail · 4 DELIVERY 12/12 · 5 SHEET OK (build hash) · 5b DOCS OK
+          6 PAGE left 58, console clean · 6b FAMILIES 37 entries, largest 26% · 6c PAIRING PAIRED IoU 0.85
+          6d REFERENCE MATCHES · 6e PLAN 8/8 · 6f MATCH 8 of 8
+v13       the operator's engine on the same photo: reference/v13/prague-tower.png
+          node tools/v13-check.mjs prague-tower /tmp/v13chk/canvas.json -> 6 of 7 lines FAIL (see docs/AUDIT-V13.md)
 ```
+
+The other photographs are not in the chain: only the judged photograph builds end-to-end. `tools/v13-check.mjs`
+accepts the four reference scenes (prague-tower, prague-street, aerial-church, sunset-bus) and is the gate that will
+make the chain universal; it is red today, on purpose, and its lines are the work list.
+
 
 ## The next action, exactly
 
-**The cut-out's colour, and it must be done inside `styliseVector`.** A car keeps its pixels but not its colour: the
-areas-first reduction averages a whole region into the wall's tones, so a red car, a white van and a dark estate all
-come out neutral. It was attempted as a post-pass over `world.idx` in `main.js` and it BROKE the build (an empty yard
-with a clean console, because the throw was swallowed by the build's own try/catch) - the reason is recorded in the
-source where the attempt was. The fix belongs at the point the region's pixels are REDUCED: give each region its own
-family (saturation >= 0.30 never resolves to concrete) and choose tones inside it.
-
-Then: the checkered facade (every second bay one tone up, only where the photograph shows it), and the last typed
-constants (cloud inset, pitch floors, the smoothness bound) derived from the picture.
-
-## The next action, exactly
-
-**The clouds do not reach the frame: cloud-white measures 0% of pixels.** Measured progress on the sky this round:
-blue **3% → 34%** of the frame, by making the sky region the class map's own sky candidates and painting it, then its
-clouds, LAST. What remains is one cause, identified: **`cls[]` is REUSED** — the wall pass writes `cls[p] = 1` for
-walls, so by the time the cloud block asks `cls[p] === 1` to mean "sky", the map no longer says sky. The fix is to
-**snapshot the sky-candidate set into its own array at the moment the sky analysis computes it** (`skyCand = cls.slice()`
-there), and use that snapshot for the sky region, the skyline and the cloud placement. One line of snapshot, three uses.
-
-**After that: the frame is neutral where the accepted frame is blue** — the facades carry the photograph's grey-blue
-in three tones instead of drawn planes under a designed sky (`docs/V10A.md` is the target, element by element).
+**Read `docs/AUDIT-V13.md` and take its work list, first line first.** The operator's v13 design file is the reference
+now (`docs/V13-ANALYSIS.md` is its line-by-line analysis; `reference/v13/` holds its frames for the four scenes;
+`tools/v13-check.mjs` measures the product against them). The first work item is the facade mechanism (V5/V7): the
+photograph itself in the working palette with its detected panes recoloured — not a drawn bay grid. The second is the
+panes as window objects (V6). Each item is closed only by the gate lines moving, then the whole chain re-runs.
 
 ## The rules that cost the most to learn (all recorded in `docs/`)
 
