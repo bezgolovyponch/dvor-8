@@ -67,5 +67,5 @@ for (const [label, c] of [['criteria', criteria], ['composition', composition]])
   if (c.n !== EXPECT[label]) { console.log(`PREFLIGHT FAILED: ${label} has ${c.n} rows; the project states ${EXPECT[label]}. The chain's step is written against that count.`); process.exit(1); }
 }
 console.log(`PREFLIGHT OK — ${REQUIRED.length} parts present, the preamble carries all ${must.length} load-bearing statements.`);
-console.log(`  criteria: ${criteria.n} rows · composition: ${composition.n} elements · the chain: preflight -> criteria -> composition -> suite -> delivery -> sheet -> reference`);
+console.log(`  criteria: ${criteria.n} rows · composition: ${composition.n} elements · the chain: preflight -> criteria -> composition -> suite -> delivery -> sheet -> docs -> reference`);
 console.log('  read: docs/PREAMBLE.md (task, definition of done, critical findings, chain, protocol)');

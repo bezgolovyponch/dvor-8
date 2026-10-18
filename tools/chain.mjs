@@ -30,6 +30,8 @@ const steps = [
   // the tool and shipped in the sheet anyway in this session; the gate that compares the sheet with the files it
   // describes must therefore be a step, so a sheet that lies stops the chain like any other lie.
   ['5 SHEET', 'node', ['tools/sheet-check.mjs'], {}],
+  // THE PROSE QUOTES THE TOOLS: the current documents' numbers must equal what the suite and the baseline print.
+  ['5b DOCS', 'node', ['tools/docs-check.mjs'], {}],
 ];
 // STEP 6 - THE PAGE GATE. Every other gate tests code in isolation from the page: the suite calls trace() and
 // makeWorld() in Node, so it never touches the file input, the decode, the detector, the build or the HUD. That is
