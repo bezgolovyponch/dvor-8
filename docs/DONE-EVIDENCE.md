@@ -9,7 +9,7 @@ browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start insid
 
 | # | the operator's item | the command | the last measured line |
 |---|---|---|---|
-| 1 | **chain exits 0** | `CHROME=/tmp/chrome-nosandbox.sh PAGE_OUT=/tmp/ev node tools/chain.mjs` | `THE CHAIN PASSED — every criterion, every binding, the suite and the rule.` (12 of 12 steps PASS, twice, identical frames — FNV `1519920291` both runs) |
+| 1 | **chain exits 0** | `CHROME=/tmp/chrome-nosandbox.sh PAGE_OUT=/tmp/ev node tools/chain.mjs` | `THE CHAIN PASSED — every criterion, every binding, the suite and the rule.` (**13 of 13 steps** PASS — the 12 original plus `5 SHEET`, which compares the owner's sheet with the committed pictures) |
 | 2 | **criteria 19/19** | the same run, step `1 CRITERIA` | `MET R1 referee 11/13 of the owner's lines; our frame is within 0.045 of the accepted frame on every family (tolerance 0.05)` — and `19 of 19 criteria MET` |
 | 3 | **suite 320/0 or signed** | `node test.mjs` | `PASS 321   FAIL 0   of 321 checks` |
 | 4 | **match 7/7** | `node tools/match-check.mjs /tmp/ev/canvas.json` | `8 of 8 lines match the example frame.` (the gate has eight lines since D20 added *a DRAWN picture*; seven of them are the original) |
@@ -22,7 +22,8 @@ browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start insid
 | 11 | **G-INFRA proven** | the same two runs (D18) | the determinism pair above; the clock pin is read back from both pages (`7.5@7.5`) |
 | 12 | **DECISIONS carries the owner lines** | read `docs/DECISIONS.md` — the table *THE OPERATOR'S LINES, AND THE DECISION EACH ONE PRODUCED* | every PART A answer has a row pointing at the decision it created (D9, D12, D13, D14, D15, D17, D18) |
 | 13 | **the composition is structure, not a palette** | `node tools/plan-check.mjs /tmp/ev/canvas.json` | `PLAN ACCEPTED: 8 of 8 structural lines.` — and it is chain step `6e PLAN`, passing on **both** yards |
-| 14 | **the owner's three captures accepted** | `docs/OWNER-CAPTURES.md` — read it, look at the PNGs in `reference/owner/` and `reference/owner-yard2/` | **prepared, not yet accepted: this is the operator's act** |
+| 14 | **the owner's captures are true of the files** | `node tools/sheet-check.mjs` (chain step `5 SHEET`) | `SHEET OK: 6 rows, every hash, size and freshness true` — every row's path, sha256, byte count and freshness checked |
+| 15 | **the owner's three captures accepted** | `docs/OWNER-CAPTURES.md` — read it, look at the PNGs in `reference/owner/` and `reference/owner-yard2/` | **prepared, not yet accepted: this is the operator's act** |
 
 ## What the page does NOT claim
 
