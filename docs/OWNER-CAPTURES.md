@@ -16,7 +16,7 @@ of the height); everything outside it is the app's chrome (HUD, tool chips, butt
 build: `2100f68ccee2fb154599b96a2ef1f78338cc9519de0d48e457658b5f21e78e97`
 
 That hash is sha256 over the sorted paths and bytes of every file that can change the frame (`src/**`, `index.html`,
-`style.css`; 52 files, printed by `node tools/build-hash.mjs`). `tools/sheet-check.mjs` recomputes it and fails when
+`style.css`; 53 files, printed by `node tools/build-hash.mjs`). `tools/sheet-check.mjs` recomputes it and fails when
 the tree has moved, so these pictures cannot describe a build that changed. A timestamp is not evidence: restoring
 unchanged files moves their mtime while the build stays byte-identical, and `touch` moves a timestamp without changing
 a byte.
