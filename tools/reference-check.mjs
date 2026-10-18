@@ -112,7 +112,13 @@ function measure(img) {
   for (let y = 0; y < band; y += 1) for (let x = 0; x < w; x += 1) { const k = key(x, y); skyHist.set(k, (skyHist.get(k) || 0) + 1); }
   const skyTop = [...skyHist.entries()].sort((a, b) => b[1] - a[1])[0];
   const [sr, sg, sb] = skyTop[0].split(',').map(Number);
+  // SHANNON ENTROPY OF THE COLOUR DISTRIBUTION (Shannon 1948), base 2: H = -sum p log2 p. It is the measure the
+  // external pixel gate compares (gates/external.sh names the reference's 5.349 bits); a drawn frame can never exceed
+  // log2(N) for an N-colour table, so that bound is a HARD premise, not a tolerance.
+  let H = 0;
+  for (const c of colours.values()) { const p2 = c / (w * h); H -= p2 * Math.log2(p2); }
   return {
+    entropy: H,
     size: `${w}x${h}`,
     colours: colours.size,
     flat: flat / tot,
@@ -232,6 +238,8 @@ ref = measure({
 console.log(`reference frame found: margin ${(100 * found.m).toFixed(0)}% · pitch ${found.p} · ${found.w}x${found.h}`);
 }
 
+// THE TABLE'S OWN SIZE, from the code that owns the palette (src/flat.js), never a typed number here.
+const PALETTE_SIZE = (await import('../src/flat.js')).paletteOf().length;
 const TOL = { colours: 2.5, flat: 0.18, strays: 0.05, largest: 0.15, skyShare: 0.25 };
 const rows = [
   ['distinct colours', mine.colours, ref.colours, Math.abs(Math.log2(Math.max(2, mine.colours) / Math.max(2, ref.colours))), TOL.colours, 'log2 ratio'],
@@ -239,10 +247,14 @@ const rows = [
   ['stray share', (100 * mine.strays).toFixed(1) + '%', (100 * ref.strays).toFixed(1) + '%', Math.abs(mine.strays - ref.strays), TOL.strays, 'absolute'],
   ['largest colour', (100 * mine.largest).toFixed(0) + '%', (100 * ref.largest).toFixed(0) + '%', Math.abs(mine.largest - ref.largest), TOL.largest, 'absolute'],
   ['sky: one tone owns', (100 * mine.skyShare).toFixed(0) + '%', (100 * ref.skyShare).toFixed(0) + '%', Math.abs(mine.skyShare - ref.skyShare), TOL.skyShare, 'absolute'],
+  // ENTROPY BESIDE THE HARD BOUND. `mine - log2(N)` is the distance; the bound is 0 because a frame drawn from an
+  // N-colour table cannot exceed log2(N) bits at all. The reference's own figure is printed beside it for comparison.
+  ['entropy (bits)', mine.entropy.toFixed(3), ref.entropy.toFixed(3), mine.entropy - Math.log2(PALETTE_SIZE), 0, 'bound'],
 ];
 console.log(`MINE ${mine.size}   REFERENCE ${ref.size} (art pitch ${ref.pitch})`);
 console.table(rows.map(([m, a, b, d, t, kind]) => ({ measure: m, mine: a, reference: b, distance: kind === 'log2 ratio' ? d.toFixed(2) : (kind === 'absolute' && d <= 1 ? (100 * d).toFixed(0) + 'pp' : d.toFixed(2)), tolerance: kind === 'log2 ratio' ? t : kind === 'absolute' && t <= 1 ? (100 * t).toFixed(0) + 'pp' : t, ok: d <= t ? 'ok' : 'OFF' })));
 console.log(`sky tone: mine ${mine.skyTone} (blue: ${mine.skyBlue})   reference ${ref.skyTone} (blue: ${ref.skyBlue})`);
+console.log(`ENTROPY BOUND: ${PALETTE_SIZE}-colour table -> log2(N) = ${Math.log2(PALETTE_SIZE).toFixed(4)} bits · ours ${mine.entropy.toFixed(3)} · reference ${ref.entropy.toFixed(3)} · ${mine.entropy <= Math.log2(PALETTE_SIZE) ? 'WITHIN THE BOUND' : 'ABOVE THE BOUND'}`);
 const bad = rows.filter(([, , , d, t]) => d > t);
 if (bad.length) {
   console.log(`\nNOT COMPARABLE TO THE REFERENCE — ${bad.length} of ${rows.length} measures are off: ${bad.map((b) => b[0]).join(', ')}`);
