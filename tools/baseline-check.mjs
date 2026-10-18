@@ -41,12 +41,12 @@ const ROWS = [
   // L3 ON A REAL PHOTOGRAPH. Every picture here came from tools/photo-shot.mjs on photos-test/5.jpg, and the row
   // fails if one is missing or older than the code it shows. The drawn-yard screenshots were deleted with the
   // drawn yard.
-  ['L3 A real photograph builds a yard, and the capture exists', 'docs/shots/photo-yard.png', () => existsSync(shot('photo-yard.png'))],
+  ['L3 A real photograph builds a yard, and the capture exists', 'docs/shots/photo-yard.png', () => existsSync(shot('photo-yard.png')) && shotNewerThan('photo-yard.png', 'src/vector.js')],
   ['L3 The aim highlight and the info tooltip are on screen (v6 path)', 'docs/shots/photo-aim.png + photo-info.png',
-    () => existsSync(shot('photo-aim.png')) && existsSync(shot('photo-info.png'))],
+    () => existsSync(shot('photo-aim.png')) && existsSync(shot('photo-info.png'))
+      && shotNewerThan('photo-aim.png', 'src/render.js') && shotNewerThan('photo-info.png', 'src/main.js')],
   ['L3 A disaster on a REAL photo: water that shows the street, a wave that reads', 'docs/shots/photo-tsunami.png',
     () => existsSync(shot('photo-tsunami.png')) && shotNewerThan('photo-tsunami.png', 'src/render.js')],
-  ['L3 A beast on a REAL photo', 'docs/shots/photo-beyonce.png', () => existsSync(shot('photo-beyonce.png'))],
   ['L1 v6\'s edges map replaced the traced polyline for outlining', 'src/world.js', () => has(src('world.js'), 'export function edgesOf')],
   // THE DESTRUCTION MODEL: recorded before anything is built on it, and implemented in the three parts the
   // knowledge base names - the ladder, the carrier, the transition.

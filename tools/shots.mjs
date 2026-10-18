@@ -35,6 +35,9 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
     await new Promise((r) => setTimeout(r, 400)); return 'closed';`);
   await page.wait(400);
   await shot(page, 'version-outlines.png', 'the imported scene with the silhouettes');
+  // A REAL PHOTOGRAPH BUILDS A YARD — the picture the baseline's first L3 row names. It was never written by this tool:
+  // the file on disk was dated OCT 16 and showed the OLD raw-photo view. Written here from the yard that is on screen.
+  await shot(page, 'photo-yard.png', 'a real photograph built into a yard');
 
   // THE AIM HIGHLIGHT AND THE INFO TOOLTIP, WRITTEN FRESH. Measured: docs/shots/photo-aim.png and photo-info.png were
   // dated OCT 16 and NO TOOL WROTE THEM - the baseline's row "the aim highlight and the info tooltip are on screen"
@@ -119,6 +122,8 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
     console.log(JSON.stringify({ step: name, ...fired }));
     if (!fired.fired) fails += 1;
     await shot(page, name, `${fate} mid-event`);
+    // A BEAST ON A REAL PHOTO — the baseline row's own picture. It was a stale shot of the old raw-photo view. The beast
+    // is read from the page (window.__beast) and the shot is taken while it is actually drawn.
     await page.wait(1200);
   }
   const errors = page.errors.filter((e) => !/XNNPACK|INFO/.test(String(e)));

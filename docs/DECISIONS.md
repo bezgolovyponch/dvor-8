@@ -322,3 +322,17 @@ pixels to the largest integer multiple (1x = 288x512) works mechanically (the pr
 frame's fractional layout then leaves bars, and wrapping the frame to the canvas makes the chip row overlap the art -
 a layout change, not a patch, so it was reverted rather than shipped half-done. **This row is open with its number.**
 
+## D23 — THE BEASTS ARE UNREALISED, AND THE CLAIM IS WITHDRAWN (2026-10-18)
+
+`src/disaster.js` says of the two walking beasts: *"their pixels are correct — 2,890 of them, valid palette indices,
+on-screen coordinates, verified in isolation — but the draw call that should put them over the yard does not reach the
+screen"*, and then, later in the same file, that *"nothing is unrealised any more"*. **Measured this round, twice:**
+firing УРАГАН and then ГОДЗИЛЛА/БЕЙОНСЕ directly and polling the page's own `window.__beast` for twenty seconds gives
+**null** — the beast never reaches the canvas. The second note is wrong; the first is right.
+
+**The creator's rule is followed:** a mechanic that cannot be realised is not shipped, and the baseline may not keep a
+row that claims it. The row *"A beast on a REAL photo"* and its picture `docs/shots/photo-beyonce.png` are **withdrawn**
+(the picture showed a hurricane with no beast — a file whose name lied). The code stays, marked; the withdrawal is
+recorded here rather than silently deleted, and a future round that makes the beast draw must ADD the row and the
+picture back, with a capture that polls `__beast.drew > 0`.
+
