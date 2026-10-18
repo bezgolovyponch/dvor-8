@@ -115,7 +115,34 @@ console.log(`PREMISES: dump ${dumpPath} (${W}x${H}) against ${photo} reduced wit
 console.log(`COLOUR FIDELITY  CIEDE2000/Lab  mean dE ${dmean.toFixed(2)}  max dE ${dmax.toFixed(2)}` + (accepted ? `  · the accepted frame's own mean dE ${accepted.dmean.toFixed(2)} / max ${accepted.dmax.toFixed(2)}` : ''));
 console.log(`STRUCTURAL SIMILARITY  SSIM ${ssim.toFixed(3)}` + (accepted ? `  · the accepted frame's own SSIM ${accepted.ssim.toFixed(3)}` : ''));
 console.log(`PALETTE CONFORMANCE  ${stray} of ${dn} pixels outside the project's table`);
-console.log(`PIXEL-PERFECT SCALING  image-rendering: pixelated = ${pixelated} · no fractional canvas width in the stylesheet = ${integerCanvas}`);
+// THE SCALE, MEASURED (D22): the canvas's computed size against its attribute size, and the view transform that is
+// applied on top. The art is 1:1 in the layout when those two agree; the idle lean is a DESIGNED camera effect (the
+// suite requires it: "the frame always leans a little"), and a rotated raster is resampled by the compositor - so the
+// deviation is reported as the lean's own, never confused with the art's grid.
+let layoutScale = null;
+try {
+  const probe = execFileSync('node', ['--experimental-websocket', '-e', `
+    import('./tools/browser.mjs').then(async (m) => {
+      const out = await m.withPage('http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&photo=/game/${photo}', { width: 412, height: 915 }, async (p) => {
+        await p.wait(1200);
+        return p.run(\`
+          const t0 = performance.now(); while (!window.__world && performance.now() - t0 < 60000) await new Promise(r => setTimeout(r, 250));
+          const c = document.getElementById('yard'), r = c.getBoundingClientRect();
+          const t = c.closest('.tilt');
+          return { attr: [c.width, c.height], rect: [r.width, r.height], transform: t ? getComputedStyle(t).transform : 'none' };\`);
+      });
+      process.stdout.write(JSON.stringify(out)); process.exit(0);
+    });`], { encoding: 'utf8', env: { ...process.env, CHROME: process.env.CHROME || '/tmp/chrome-nosandbox.sh' }, timeout: 120000 });
+  layoutScale = JSON.parse(probe.trim().split('\n').pop());
+} catch { layoutScale = null; }
+if (layoutScale) {
+  const [aw, ah] = layoutScale.attr, [rw, rh] = layoutScale.rect;
+  const kx = rw / aw, ky = rh / ah;
+  const lean = layoutScale.transform !== 'none';
+  console.log(`PIXEL-PERFECT SCALING  art ${aw}x${ah} rendered at ${kx.toFixed(3)}x${ky.toFixed(3)} · lean transform ${lean ? 'ON (a designed camera effect)' : 'off'} · image-rendering pixelated = ${pixelated}`);
+} else {
+  console.log(`PIXEL-PERFECT SCALING  image-rendering: pixelated = ${pixelated} (the layout probe could not run)`);
+}
 const verdict = accepted
   ? (dmean <= accepted.dmean && ssim >= accepted.ssim && stray === 0 && pixelated ? 'MEETS THE ACCEPTED BAR' : 'BELOW THE ACCEPTED BAR')
   : (stray === 0 && pixelated ? 'MEETS THE PALETTE AND SCALING STANDARDS' : 'BELOW');
