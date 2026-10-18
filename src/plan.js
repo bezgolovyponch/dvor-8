@@ -97,7 +97,7 @@ export function scenePlan({ w, h, skyMask = null, horizon = 0, parts = [], rgb =
       // silhouette and carries 1.1% blue, because the glass is drawn over the mask, not present in it.
       else if (darkShare >= 0.35) role = 'dark-plane';
     }
-    facades.push({ role, box: [part.x, part.y, part.x + part.w, part.y + part.h], mean: Math.round(mean), dark: Number(darkShare.toFixed(3)), blue: Number(blueShare.toFixed(3)) });
+    facades.push({ role, box: [part.x, part.y, part.x + part.w, part.y + part.h], mean: Math.round(mean), dark: Number(darkShare.toFixed(3)), blue: Number(blueShare.toFixed(3)), pixels: part.pixels });
   }
 
   // 3. THE ORDER IS PART OF THE PLAN: facades top to bottom, then left to right - so two runs are comparable.

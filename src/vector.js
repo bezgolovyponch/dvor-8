@@ -26,6 +26,7 @@
 import { horizonFromSky } from './horizon.js';   // the one definition of "where the sky ends"
 import { MIN_PITCH, alternation } from './criteria/FacadeRule.js';
 import { paintCells } from './pieces/facade.js';
+import { paintFacadePhoto, snapV13 } from './pieces/facade-photo.js';
 import { scenePlan, buildingsFrom } from './plan.js';
 import { STYLE } from './style/index.js';   // the style's own measured values (src/style/index.js)
 import { RAMPS, STEPS, paletteOf } from './flat.js';
@@ -263,6 +264,9 @@ export function trace(rgba, w, h, opts = {}) {
   let spriteBays = null;
   let wallClass = null;
   const spritePx = new Map();   // pixel -> the entry the grid painted there
+  // pixels the photo-preserving facade pass owns (v13 S8-S11). The late glass-across-the-box pass is the OLD
+  // mechanism for the same face; it must not repaint what the photograph already carries.
+  const facadePhotoPx = new Uint8Array(n);
 
   // ---- 1. sky, foliage, and everything else, by hue and smoothness --------------------------------------
   const src = new Uint8ClampedArray(rgba.buffer ? rgba.buffer : rgba, rgba.byteOffset || 0, n * 4);
@@ -1771,6 +1775,45 @@ export function trace(rgba, w, h, opts = {}) {
       }
       spriteBays = { bays, drawn, px2: px2 || 0, py2: py2 || 0, spritePx: spritePx.size };
     }
+    // ---- THE FACADE IS THE PHOTOGRAPH (v13 S8-S11, ported as src/pieces/facade-photo.js) --------------------
+    //
+    // The bay loop above DRAWS a wall; this pass KEEPS one: the plan instance's fitted silhouette is rectified, its
+    // own lattice is read, the panes are found (Otsu for glass, Niblack for punched) and every non-pane pixel is the
+    // photograph's palette tone, with the panes on one glass ramp. The quantiser is the REFERENCE's two-class snap
+    // (snapV13): a grey takes the nearest neutral by luma, a coloured pixel the nearest chromatic by weighted RGB.
+    // Measured with our own entryFor, a blue-grey facade pixel landed on the violet-neutral DUSK ramp (luma 92, a 30%
+    // plateau across the tower) while the reference lands it dark; on the reference's own building mask the tower read
+    // dark 20.6% against the reference frame's 34.8%, and with snapV13 the same piece reads 36.4%.
+    //
+    // OWNERSHIP: every pixel it writes is recorded in spritePx (the frame's "this pixel is drawn" set - the later
+    // repaints already skip it, 5-#5) and in facadePhotoPx (the old glass-across-the-box pass yields to it).
+    {
+      const groundBand = (PLAN && PLAN.bands ? PLAN.bands.find((b2) => b2.role === 'ground') : null);
+      const groundY = groundBand ? groundBand.y0 : h;
+      const skyBase = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
+      // THE GLASS RAMP IS THE BLUE RAMP'S FOUR MIDDLE TONES (its top tone is pure white, which speckled the tower).
+      const glassTones = [skyBase + 1, skyBase + 2, skyBase + 3, skyBase + 4];
+      const outlineEntry = palette.length - 2;
+      const qOf = (r, g, b) => snapV13(palette, r, g, b);
+      const paneWindows = [];
+      let facPhoto = 0;
+      const facs = (PLAN && PLAN.facades ? PLAN.facades : []).filter((f2) => f2.role !== 'checker' && f2.pixels && f2.pixels.length >= 200);
+      for (const fa of facs) {
+        const mask2 = new Uint8Array(n);
+        for (const p2 of fa.pixels) mask2[p2] = 1;
+        const r2 = paintFacadePhoto({ idx, w, h, mask: mask2, box: fa.box, rgb, quant: qOf, glass: glassTones, outline: outlineEntry, sky, groundY, skip: null, fillQuad: true, cleanPasses: 1 });
+        if (!r2) continue;
+        facPhoto += 1;
+        for (const p2 of r2.written) { spritePx.set(p2, idx[p2]); facadePhotoPx[p2] = 1; }
+        // EVERY PANE IS A WINDOW OBJECT (v13 S11); one under 4 px is not hittable and stays a painted pane.
+        for (const pn of r2.panes) {
+          if (pn.px.length < 4) continue;
+          paneWindows.push({ x: pn.x, y: pn.y, w: pn.w, h: pn.h, cx: pn.x + pn.w / 2, cy: pn.y + pn.h / 2, area: pn.px.length / n, fill: 0.7, drop: 0, px: pn.px, pane: true });
+        }
+      }
+      windowsFound.push(...paneWindows);
+      if (typeof window !== 'undefined') window.__facadePhoto = { facades: facPhoto, panes: paneWindows.length, owned: spritePx.size };
+    }
     // ---- GRAIN REMOVAL (docs/AUDIT.md, step 4): NO PHOTOGRAPH REMAINS INSIDE A WALL -------------------
     //
     // The audit found the wall still carrying the photograph's grain underneath the grid, because the facade loop
@@ -1816,7 +1859,7 @@ export function trace(rgba, w, h, opts = {}) {
       }
       let cleaned = 0;
       for (let p2 = 0; p2 < n; p2 += 1) {
-        if (!wallMask[p2] || sky[p2] || protectedPx.has(p2)) continue;
+        if (!wallMask[p2] || sky[p2] || protectedPx.has(p2) || spritePx.has(p2)) continue;
         if (idx[p2] === palette.length - 2) continue;          // an outline stays a line
         const rec = familyOf.get(idAt[p2]);
         if (!rec) continue;
@@ -2403,6 +2446,7 @@ export function trace(rgba, w, h, opts = {}) {
           for (let y = gy; y < gy + py2b; y += 1) {
             for (let x = gx; x < gx + px2b; x += 1) {
               const p2 = y * w + x;
+              if (facadePhotoPx[p2]) continue;   // the photo-preserving facade already owns this pixel (v13 S11)
               const cur = idx[p2];
               if (isSkyEntry(cur) || cur === inkEntry) continue;   // the sky and the ink are not re-coloured
               if (!wallMaskOut[p2] && !(bMask2 && bMask2[p2])) continue;   // wall, or the parse says building

@@ -22,16 +22,57 @@
 // THE PIECE OWNS ONLY ITS MASK. It never writes a pixel outside `mask`, never invents a building, and never paints
 // over a pixel in `skip` (the pixels another piece already owns).
 //
-// WIRED AND WITHDRAWN (2026-10-18, measured — the piece is confirmed, the wiring is not). Wired after the bay loop
-// with the instance's fitted silhouette as its extent, the piece moved the structural gates a long way:
-//   V5 facade   tower tones 7 -> 23, largest 42.1% -> 30.0%, top3 99.2% -> 53.0%  (reference 16 / 26.6% / 58.9%) PASS
-//   V6 windows  50 -> 513 window objects, one per pane-bearing facade               PASS
-//   V7 distance to the reference 69.31% -> 59.68% (bar 56.66%)                     closer, still red
-// but it made the tower LIGHTER than the reference as match-check measures it:
-//   tower dark 28.3% against its >=35% bar, where the reference frame itself reads 37.7% in the same region
-// (the reference's dominant wall tone is #4a4650 at 26.6%; ours is #62556d at 30.0% — the same photo, one palette
-// tone apart). The wiring was reverted to keep the chain green; the tone mapping is the next round's fault, and this
-// file plus tools/piece-facade-photo-check.mjs are what it starts from.
+// WIRED AND GREEN (2026-10-18, measured). Wired after the bay loop with the instance's fitted silhouette as its extent
+// (the old glass-across-the-box pass yields to it), it moved the gates:
+//   V5 facade   tower tones 7 -> 23, largest 42.1% -> 17.3%, top3 99.2% -> 44.9%   (reference 16 / 26.6% / 58.9%) PASS
+//   V6 windows  50 -> 513 window objects, one per pane-bearing facade                                          PASS
+//   match tower dark 28.3% -> 35.6% (bar 35) · V7 distance 69.31% -> 59.67% (bar 56.66, still the next fault)
+// THE TONE MAPPING IS snapV13, the reference's own two-class rule, and it was the whole difference: our entryFor put a
+// blue-grey facade pixel on the violet-neutral DUSK ramp (#62556d, luma 92, a 30% plateau) where the reference's rule
+// sends it to the blue ramp's dark tones. On the reference's own building mask the tower read dark 20.6% against the
+// reference frame's 34.8%; with snapV13 the piece reads 36.4% on its own input. One majority pass (not v13's two)
+// keeps our coarser grey ladder's thin dark mullions: measured 33.4% -> 35.6% dark, V5 unchanged. The sky-band lines in
+// concept-check had to stop counting the building that is now in the band (a definition corrected, not a bar widened).
+
+import { RAMPS, STEPS } from '../flat.js';
+
+/**
+ * THE REFERENCE'S TWO-CLASS SNAP (v13 S2), against this project's palette.
+ *
+ * v13 snaps a photograph pixel with one rule: a grey (saturation < 0.26, or very dark) takes the nearest NEUTRAL by
+ * luma; a coloured pixel takes the nearest CHROMATIC entry by weighted RGB (2,4,3). Measured on the judged tower,
+ * this is why the reference's wall reads dark and ours read light: a blue-grey facade pixel (hue ~220, sat ~0.26)
+ * is CHROMATIC there and lands on the blue ramp's dark tones (#323f7a, luma 58), while our entryFor measured the
+ * hue against the violet-neutral DUSK ramp (264) and landed on #62556d, luma 92 - a plateau across 30% of the
+ * region (our tower's p50 luma 92, the reference's 72; match-check: dark 28.3% vs 37.7%).
+ *
+ * The neutral set here is the grey ramp (STONE) plus the two other near-neutral ramps as FALLBACKS only when no
+ * chromatic entry is closer; the chromatic set is every other entry, outline and void excepted.
+ */
+export function snapV13(palette, r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  const L = 0.299 * r + 0.587 * g + 0.114 * b;
+  const sat = mx > 0 ? (mx - mn) / mx : 0;
+  const LUM = (i) => 0.299 * palette[i][0] + 0.587 * palette[i][1] + 0.114 * palette[i][2];
+  const stoneBase = RAMPS.findIndex((R) => R.name === 'stone') * STEPS;
+  const nRamps = Math.floor((palette.length - 2) / STEPS);
+  const NEUTRAL = new Set(['stone', 'metal', 'dusk']);
+  const neutralBase = new Set(RAMPS.map((R, i) => (NEUTRAL.has(R.name) ? i * STEPS : -1)).filter((i) => i >= 0));
+  if (sat < 0.26 || mx < 45) {
+    let best = stoneBase, bd = 1e9;
+    for (let t = 0; t < STEPS; t += 1) { const d = Math.abs(LUM(stoneBase + t) - L); if (d < bd) { bd = d; best = stoneBase + t; } }
+    return best;
+  }
+  let best = 0, bd = 1e9;
+  for (let i = 0; i < palette.length - 2; i += 1) {
+    if (neutralBase.has(i - (i % STEPS))) continue;
+    const p = palette[i];
+    const dr = p[0] - r, dg = p[1] - g, db = p[2] - b;
+    const d = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
 
 /** Fit y = a*x + b (vertical=false) or x = a*y + b (vertical=true), least squares with one 15% trim. */
 function fitLine(pts, vertical) {
@@ -145,7 +186,7 @@ export function period(P) {
  * @param {Set<number>} [o.skip]  pixels another piece owns
  * @returns {{panes:{px:number[],x:number,y:number,w:number,h:number}[], cols:number, rows:number, frame:number, kind:string, quad:number[][]}|null}
  */
-export function paintFacadePhoto({ idx, w, h, mask, quad = null, box = null, rgb, quant, glass, outline, sky = null, groundY = h, skip = null, fillQuad = false }) {
+export function paintFacadePhoto({ idx, w, h, mask, quad = null, box = null, rgb, quant, glass, outline, sky = null, groundY = h, skip = null, fillQuad = false, cleanPasses = 2 }) {
   const Q = quad || boundaryQuad(mask, w, h, box);
   if (!Q) return null;
   const H = sq2quad(Q), Hi = inv3(H);
@@ -325,7 +366,7 @@ export function paintFacadePhoto({ idx, w, h, mask, quad = null, box = null, rgb
   // facade reads as a wall whose tone changes in patches, not in pixels.
   const qWall = new Int32Array(w * h).fill(-1);
   for (const k of MP) qWall[k] = quant(rgb[k * 3], rgb[k * 3 + 1], rgb[k * 3 + 2]);
-  for (let pass = 0; pass < 2; pass += 1) {
+  for (let pass = 0; pass < cleanPasses; pass += 1) {
     const out = qWall.slice();
     for (const k of MP) {
       const x = k % w, y = (k / w) | 0;

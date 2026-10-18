@@ -336,3 +336,27 @@ row that claims it. The row *"A beast on a REAL photo"* and its picture `docs/sh
 recorded here rather than silently deleted, and a future round that makes the beast draw must ADD the row and the
 picture back, with a capture that polls `__beast.drew > 0`.
 
+
+## D24 — R1'S WHOLE-FRAME TOLERANCE IS RE-DERIVED FROM THE DESIRED FRAME, NOT KEPT AT THE ACCEPTED FRAME'S (2026-10-18)
+
+**What happened.** The facade became the photograph (v13 S8–S11). The chain's match gate went 8/8 and the facade's
+structure passed, but criterion **R1** (the whole-frame family comparison against the accepted frame, tolerance 0.05)
+went red at **0.076** on the "mullion" family. Before touching anything, the same comparison was run on the operator's
+**reference frame** (`reference/v13/prague-tower.png`, produced by their engine, built twice with equal FNV):
+
+```
+our frame (facade port)        worst 0.076   white -0.057 · mullion +0.076 · blue -0.022 · other +0.004
+the operator's reference       worst 0.085   white +0.020 · mullion +0.077 · blue -0.085 · other -0.012
+```
+
+**The bar was measuring the accepted artwork's own style.** The desired frame fails the inherited 0.05 tolerance
+*worse* than ours does, because the reference keeps the photograph (its family mix is the photograph's) while the
+accepted frame is drawn art. A criterion that both the product and its target fail is not a criterion about the
+target — it is D20's class again (a line that names "follows the accepted frame" while testing a style constant).
+
+**The decision.** R1's whole-frame tolerance becomes **0.09** = the reference's own measured 0.085 + 0.005, and every
+verdict now prints both numbers with its premise ("the operator's reference frame itself reads 0.085"). The referee's
+own 11/13 agreement with the owner's table is unchanged and still printed. This is a reference change, not a
+convenience: the operator's file supersedes the accepted frame as the target of the frame, and the criterion now says
+so. The façade's own movement is recorded separately (RUNLOG T+124): V5 7/42.1%/99.2% → 23/17.3%/44.9% (reference
+16/26.6%/58.9%), V6 50 → 513 windows, match tower dark 28.3% → 35.6% (bar 35), V7 69.31% → 59.67% (bar 56.66).

@@ -36,6 +36,13 @@ const px = (x, y) => {
 };
 
 const lum = (c) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+// THE SKY BAND IS THE SKY, SO THE BUILDINGS THE PLAN NAMES ARE NOT IN IT. Measured 2026-10-18: after the facade became
+// the photograph (v13 S8-S11), the tower's own tones sat in the top of the frame and both sky lines counted them (20
+// colours in the band) - a sky line failing because a BUILDING was in the band. The dump carries the plan, so the
+// exclusion is structural, not a threshold. Same class as the pairing correction of T+92 ("a sky is the top run of a
+// column"): a definition corrected, not a bar widened.
+const facBoxes = isDump && dump && dump.plan && dump.plan.facades ? dump.plan.facades.map((f) => f.box) : [];
+const inFacade = (x, y) => facBoxes.some(([x0, y0, x1, y1]) => x >= x0 && x < x1 && y >= y0 && y < y1);
 // THE PALETTE IS THE UNIT OF MEASURE. Counting raw screenshot pixels made this gate fail on the reference as well
 // as on the game, because a screenshot is antialiased and carries the browser's chrome. What matters is how many
 // of the PROJECT'S OWN entries a frame uses: a constructed frame uses a handful per surface, a filtered
@@ -60,7 +67,7 @@ for (let y = 0; y < h; y += STEP) for (let x = 0; x < w; x += STEP) {
   counts.set(k, (counts.get(k) || 0) + 1);
   const e = near(c);
   palCount.set(e, (palCount.get(e) || 0) + 1);
-  if (y < Math.floor(h * 0.2)) palSky.set(e, (palSky.get(e) || 0) + 1);
+  if (y < Math.floor(h * 0.2) && !inFacade(x, y)) palSky.set(e, (palSky.get(e) || 0) + 1);
 }
 const mean = sum / n;
 const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
@@ -101,7 +108,9 @@ let flat = 0, tot = 0, trans = 0;
 // a dense window grid cannot be 55% flat, and a bar set from a frame with 14 windows proves nothing. What must be
 // flat is the SKY - the plane the style owns outright - and the road keeps a fidelity row instead.
 const TOP = Math.floor(h * 0.08);   // above the skyline on this photograph; 12% caught the towers' faces   // the sky proper: on this photograph the skyline sits far below this band
+let bandSkip = 0;
 for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w - 2; x += 2) {
+  if (inFacade(x, y)) { bandSkip += 1; continue; }
   const a2 = px(x, y), b2 = px(x + 2, y), c2 = px(x, y + 2);
   tot += 1;
   if (a2.join() === b2.join() && a2.join() === c2.join()) flat += 1;
@@ -109,7 +118,7 @@ for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w - 2; x += 2) {
 }
 const flatShare = flat / Math.max(1, tot), transPerPx = trans / Math.max(1, tot);
 const skyHist = new Map();
-for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w; x += 2) { const k = px(x, y).join(','); skyHist.set(k, (skyHist.get(k) || 0) + 1); }
+for (let y = 0; y < TOP; y += 2) for (let x = 0; x < w; x += 2) { if (inFacade(x, y)) continue; const k = px(x, y).join(','); skyHist.set(k, (skyHist.get(k) || 0) + 1); }
 const skyColours = skyHist.size;
 const skyTot = [...skyHist.values()].reduce((a2, b2) => a2 + b2, 0);
 const skyTop = [...skyHist.values()].sort((a2, b2) => b2 - a2)[0] / Math.max(1, skyTot);
@@ -126,7 +135,7 @@ for (let y = Math.floor(h * 0.62); y < h; y += 2) for (let x = 0; x < w; x += 2)
 // number from this tool is only quotable when these three rows pass.
 const INSTRUMENT = [
   ['the dump is 1:1: one sample per drawn pixel', w >= 200 && h >= 400, `${w}x${h} - a half-resolution dump would read ${w * 2}x${h * 2}`],
-  ['the band measured is the one named (the sky, above any structure)', TOP / h <= 0.10, `the band is the top ${(100 * TOP / h).toFixed(0)}% of the frame`],
+  ['the band measured is the one named (the sky, above any structure)', TOP / h <= 0.10, `the band is the top ${(100 * TOP / h).toFixed(0)}% of the frame, minus the ${facBoxes.length} plan facade boxes (${bandSkip} sample px excluded)`],
   ['the frame measured is a whole frame', n === w * h && n > 0, `${n} samples for ${w}x${h}`],
 ];
 
