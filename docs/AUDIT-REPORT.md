@@ -1,5 +1,8 @@
 # AUDIT — DVOR-8 at finalisation: the skeleton, what is verified, what is not, and the order to finish
 
+> **THIS FILE IS HISTORY.** Its numbers are as of the date it was written and are kept unchanged on purpose (the
+> append-only rule): they record what was true then, not what is true now. The current figures live in
+> `docs/DONE-EVIDENCE.md` and are printed by the chain itself.
 **Status:** read-only audit. No file under `src/`, `test.mjs` or `tools/` was modified. This document and one
 `RUNLOG.md` line are the only writes.
 

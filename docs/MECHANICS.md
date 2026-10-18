@@ -36,4 +36,6 @@ owner's referee: the accepted frame is extracted from `reference/v10a-accepted-f
 art rect exactly 1.25x, HUD/rings/seams masked), and **our** dump and that extraction are measured with the same
 family classifier inside the HUD mask. The criterion passes when every family share (white, mullion, blue, other) is
 within **0.05** of the accepted's. The extraction reproduces the owner's own cross-check on 11 of 13 lines, which is
-the premise; the criterion is the whole-frame comparison, and today it reads worst 0.173 (mullion), so R1 is NOT MET.
+the premise; the criterion is the whole-frame comparison, and the chain prints its own figure: **0.044 on the worst
+family at v0.5.4** (bar 0.05), so R1 is MET. (An earlier round recorded 0.173 while the mullion family was open; the
+RUNLOG carries that history, this paragraph carries the current reading.)

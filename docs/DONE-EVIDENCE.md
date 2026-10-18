@@ -1,7 +1,7 @@
 # THE DONE LIST — every item, the command that reproduces it, and its last measured line
 
 One page, for sign-off. Each row is a thing the operator asked for, the exact command to re-measure it, and the line
-that command printed on the shipped tree (`v0.5.3`, commit `47e3fb9`). If a command does not print the line, the item is
+that command printed on the shipped tree (`v0.5.4`, commit `3c39fa5`). If a command does not print the line, the item is
 not met — that is the whole point of the page.
 
 Environment: the page server is `python3 serve.py 4312` from `dvor-style-lab` (it maps `/game/` to this repo), and the
@@ -36,5 +36,5 @@ browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start insid
 
 ## The build
 
-`v0.5.3` — [dvor-8-0.5.3.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.5.3/dvor-8-0.5.3.apk), signed,
+`v0.5.4` — [dvor-8-0.5.4.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.5.4/dvor-8-0.5.4.apk), signed,
 `assets/www/src/main.js` and `src/plan.js` byte-identical to this tree (verified by unzipping the published asset).

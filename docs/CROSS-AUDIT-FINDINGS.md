@@ -1,5 +1,8 @@
 # CROSS-AUDIT FINDINGS (independent verification of CONSTRUCTOR.md and AUDIT-REPORT.md)
 
+> **THIS FILE IS HISTORY.** Its numbers are as of the date it was written and are kept unchanged on purpose (the
+> append-only rule): they record what was true then, not what is true now. The current figures live in
+> `docs/DONE-EVIDENCE.md` and are printed by the chain itself.
 Recorded at HEAD 079f119, read-only audit. THE TWO DOCUMENTS STAY AS WRITTEN (historical), but the items
 below are the TRUE values and supersede them. Nothing here is a preference: each was re-checked line by line.
 

@@ -1,5 +1,8 @@
 # BASELINE TRIAGE — the 18 failing rows, adjudicated one by one
 
+> **THIS FILE IS HISTORY.** Its numbers are as of the date it was written and are kept unchanged on purpose (the
+> append-only rule): they record what was true then, not what is true now. The current figures live in
+> `docs/DONE-EVIDENCE.md` and are printed by the chain itself.
 **What this is.** `node tools/baseline-check.mjs` prints `BASELINE 32 OK  18 FAIL  of 50`. The operator's DONE list
 requires "baseline 50/50 or signed". This file does not fix anything: it takes each failing row **verbatim**, finds
 where its requirement lives, and classifies it under one of four headings, so the operator can sign the rows that
