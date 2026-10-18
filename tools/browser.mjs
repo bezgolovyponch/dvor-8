@@ -44,7 +44,13 @@ export async function withPage(url, { width = 412, height = 915 } = {}, fn) {
         if (r.result.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || r.result.exceptionDetails.text);
         return r.result.result.value;
       },
-      async shot(file) { writeFileSync(file, Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).result.data, 'base64')); },
+      // A CLIP IS A PICTURE OF THE THING ITS NAME SAYS. `toolbar.png` was the whole page because the caller computed a
+      // box and this helper ignored it; Playwright's clip is passed straight to the CDP call.
+      async shot(file, clip = null) {
+        const params = { format: 'png' };
+        if (clip) params.clip = { x: clip.x, y: clip.y, width: clip.w, height: clip.h, scale: 1 };
+        writeFileSync(file, Buffer.from((await send('Page.captureScreenshot', params)).result.data, 'base64'));
+      },
       wait: (ms) => new Promise((r) => setTimeout(r, ms)),
     };
     return await fn(page);

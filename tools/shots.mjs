@@ -45,7 +45,7 @@ await withPage(BASE, { width: 412, height: 915 }, async (page) => {
       if (!bar) return null;
       const r = bar.getBoundingClientRect();
       return { x: Math.max(0, Math.round(r.x - 8)), y: Math.max(0, Math.round(r.y - 8)), w: Math.round(r.width + 16), h: Math.round(r.height + 16) };`);
-    if (box) await page.shot(`${OUT}/toolbar.png`);
+    if (box) await page.shot(`${OUT}/toolbar.png`, box);
   }
 
   const hit = await page.run(`
