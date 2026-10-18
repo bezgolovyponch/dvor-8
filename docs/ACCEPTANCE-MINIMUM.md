@@ -76,9 +76,14 @@ MEASURED BEFORE THE WORK (T+128 build `8ea9fc9a`, dumps in `/tmp/measure/scene-*
    apart; a third would be 72. **This is a palette-architecture limit, not a tuning miss**: closing it means the
    working palette must be built from the photograph (v13 S2's popularity + Lab remap) instead of selected from the
    fixed table - the next round's piece.
-2. **V6 on the sunset is the window finder**: 2 windows against 8 (10% of the reference's 16 panes), and the plan
-   names one facade with 10 panes (НОВОСТРОЙКА 2/10). The finder reads dark openings in a bright wall; that scene's
-   facades are backlit silhouettes at sunset. Next round after the palette.
+2. **V6 on the sunset is the FACADE INSTANCE, not the pane finder.** Measured on that scene (probe, 2026-10-18):
+   `window.__parseBuilding` holds only **1 211 px** (bbox x54..103, y243..282 - a fragment of the dark block), while the
+   scene plan's one instance carries the box **x54..157, y245..521** - i.e. it extends down over the ROAD - and the
+   facade piece therefore paints one patch in it (`__facadePhoto = { facades: 1, panes: 1, owned: 349 }`) and the bay
+   grid draws **0 bays** (`__spriteBays.bays = 0`, against 896 on the judged photograph). The reference draws **16 panes**
+   on that scene (10 on НОВОСТРОЙКА) because its S8 finds the facade GEOMETRICALLY from the photograph's own lattice,
+   never from a segmentation fragment. So the next piece is the facade's extent from the wall structure at dusk (the
+   project's own "a wall is found by structure" pass), not a threshold in the pane finder.
 
 ## D. Determinism and the environment (the project's own proofs, re-run, not trusted)
 
