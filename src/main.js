@@ -324,10 +324,25 @@ function setSize(w, h) {
   const bar = document.getElementById('bar');
   if (bar) {
     const bh = Math.ceil(bar.getBoundingClientRect().height) || 44;
-    const ratio = w / h;
     document.documentElement.style.setProperty('--aspect', String(w / (h + bh)));
     document.documentElement.style.setProperty('--barh', `${bh}px`);
-    void ratio;
+    // PIXEL-PERFECT SCALING (D22). The art is 288x512 and must be shown at an INTEGER multiple of its own grid with
+    // its own aspect: measured before this, the browser displayed it at 1.034 by 1.025 - neither integer nor even
+    // uniform - and `image-rendering: pixelated` keeps the edges hard but the art's pixels then land on unequal screen
+    // widths. k is the largest integer that fits the viewport once the HUD, the toolbar's strip and the panels are
+    // reserved; the frame is then sized to exactly k art pixels plus its borders, so the canvas (100% of the tilt) is
+    // an integer box.
+    const vw = window.innerWidth || 412, vh = window.innerHeight || 915;
+    const k = Math.max(1, Math.floor(Math.min((vw - 24) / w, (vh - 330) / (h + bh))));
+    const frame = canvas.closest ? canvas.closest('.frame') : null;
+    if (frame) {
+      frame.style.width = `${w * k + 6}px`;          // the tilt's 3-px border on each side
+      frame.style.height = `${h * k + bh + 6}px`;
+      frame.style.aspectRatio = 'auto';
+    }
+    const tilt = canvas.closest ? canvas.closest('.tilt') : null;
+    if (tilt) tilt.style.inset = `0 0 ${bh}px 0`;
+    if (typeof window !== 'undefined') window.__canvasScale = { k, art: [w, h], artCss: [w * k, h * k], bar: bh };
   }
 }
 // The windows in the walls, added to the things the detector found. `big` is the same crop at several
