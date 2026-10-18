@@ -1050,29 +1050,10 @@ export function trace(rgba, w, h, opts = {}) {
         const onFrame = x === q.x || y === q.y || x === q.x + q.w - 1 || y === q.y + q.h - 1;
         idx[p2] = onFrame ? winEntry : glassEntry;
       }
-      // and the SILL: one row of lighter masonry directly under the frame
-      for (let xx = q.x; xx < q.x + q.w; xx += 1) {
-        const yy = q.y + q.h + 1;
-        if (yy >= 0 && yy < h && xx >= 0 && xx < w) {
-          const p2 = yy * w + xx;
-          if (!sky[p2] && idx[p2] !== winEntry) idx[p2] = sillEntry;
-        }
-      }
-      // a one-pixel frame one tone up, so a window is a window and not a hole in the picture
-      for (let xx = q.x - 1; xx <= q.x + q.w; xx += 1) {
-        for (const yy of [q.y - 1, q.y + q.h]) {
-          if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
-          const p2 = yy * w + xx;
-          if (!sky[p2] && idx[p2] !== winEntry) idx[p2] = frameEntry;
-        }
-      }
-      for (let yy = q.y - 1; yy <= q.y + q.h; yy += 1) {
-        for (const xx of [q.x - 1, q.x + q.w]) {
-          if (yy < 0 || yy >= h || xx < 0 || xx >= w) continue;
-          const p2 = yy * w + xx;
-          if (!sky[p2] && idx[p2] !== winEntry) idx[p2] = frameEntry;
-        }
-      }
+      // NO SILL, NO LIGHT FRAME (visual audit round 3): these painted a LIGHT outline on all 52 detected windows -
+      // measured 37.9% of the tall building's rect above luma 170 before the grain pass, 29.7% at the end, which read as
+      // WHITE BLOBS on a dark tower. The accepted frame has no light window frames: its windows are glass in a dark
+      // plane. The glass stays; the decoration goes.
     }
     windowsFound.push(...gridWindows);
   }
@@ -1829,8 +1810,7 @@ export function trace(rgba, w, h, opts = {}) {
         // light one keeps its own register (the tone comes from entryFor, not from a threshold of ours).
         const band = [Math.max(0, tone - 2), Math.max(0, tone - 1), tone].map((t) => family * STEPS + t);
         // the wall's own mean luma, so the face rule can tell a DARK building from a light one
-        const meanLuma = 0.299 * (r0 / c) + 0.587 * (g0 / c) + 0.114 * (b0 / c);
-        familyOf.set(part.id, { tones: band, meanLuma,
+        familyOf.set(part.id, { tones: band, meanLuma: 0.299 * (r0 / c) + 0.587 * (g0 / c) + 0.114 * (b0 / c),
           minY: part.minY, h: part.maxY - part.minY + 1 });
         for (const p2 of part.px) idAt[p2] = part.id;
       }
