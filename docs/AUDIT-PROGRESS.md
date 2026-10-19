@@ -109,3 +109,39 @@ the glass role in the palette and rejecting out-of-frame targets — were measur
 frame changed) and **reverted**, because an unverified change would repeat the fault being audited. The audit's own
 deliverable is the wiring matrix above and the three ordered actions; the honest statement about the product is: it
 paints to the reference on the photograph it was fitted to, and it has no gate that notices when the finder fails.
+
+## 8. The operator's TARGET screenshot, measured against the project's reference and our frame (T+139)
+
+The operator supplied the app's own screen on the same photograph (`TARGET.webp`, 684×1160: the tower, the checker
+building, the cars, the road with the bicycle marking, the clock, `РАЗБИТО 0`, the `ОПАСНОСТЬ` gauge, the info banner,
+the round chips and play button). Measured against the two things this project compares against:
+
+| | the TARGET screen | `reference/v13/prague-tower.png` (what V1–V7 measure) | our shipped frame |
+|---|---|---|---|
+| the same design? | — | **yes**: the same engine, the same checker, the same cloud field, the same road | **the same scene, our rendering** |
+| checker transitions across a 110-px row through the checker building | **36** (cell ≈ 3 px) | 21 (≈ 5 px) | 25 (≈ 4.4 px) |
+| the sunlit band near the horizon | **present** (the Bayer dither is visible on the right) | present | **absent** (built at T+134, reverted on R1) |
+| the road | flat asphalt with a subtle mottle | flat, two planes ~22 luma apart | two planes **36 luma apart** (bold patches) |
+| the HUD | clock · `РАЗБИТО` · `ОПАСНОСТЬ` gauge · info banner · round chips + play, over a dark bar | — (the art only) | our own v9 layout: one top row, chips over the art, a pink button, panels below |
+
+An earlier pixelmatch of the screenshot's cropped art against the reference read 58.8 % differing — **that was my crop
+and aspect, not a different artefact**: the middle frame in the three-way comparison is visibly the same design as the
+target, and the project's V1–V7 and `template-check` do measure it. So the answer to *"why can't you use the target"* is
+not that it was unavailable: it is that **four specific things separate our frame from it, and each was either blocked
+by a bar derived from the OLD accepted frame or never gated at all**:
+
+1. **the horizon band** — implemented and measured at T+134 (**V2 60.5 → 42.3 %**, **V7 55.39 → 54.34 %**, both better
+   than the target's own 51.4 % on that box), reverted because **R1's blue budget** (0.09, derived from the accepted
+   frame under D24) forbade it. The target's own frame reads 0.085 on the same R1 measure: the budget, not the band, is
+   the thing to re-derive.
+2. **the checker's pitch** — the target's cells are ≈ 3 px at this size, ours ≈ 4.4 px: the plan's bay fit is not held
+   to the target's pitch (and D28 already records that this fit has no validity contract).
+3. **the road's contrast** — ours are the palette's neighbouring rungs, 36 luma apart, the target's asphalt planes ~22
+   apart: the fixed-palette decision (REQ 58), now measurable against the target's numbers rather than argued.
+4. **the HUD** — the target's screen has a game HUD (clock, `РАЗБИТО`, `ОПАСНОСТЬ` gauge, info banner, round chips and
+   play over a dark bar); ours is the v9 layout. **The HUD has never been in any gate or comparison** — it is not art,
+   it is the product, and it was never held to the target at all.
+
+The method error, stated once: I let the **frame's share gates arbitrate the target** instead of letting the target
+arbitrate them. D24 says the operator's file supersedes the accepted frame; it was applied to R1's tolerance once and
+then not to R1's own blue budget, and the HUD was never compared. The four actions follow directly, in that order.
