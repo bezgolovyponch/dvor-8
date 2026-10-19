@@ -22,6 +22,9 @@ const DUMP = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
 const steps = [
   ['0 PREFLIGHT', 'node', ['tools/preflight.mjs'], {}],
   ['0b IMPORTS', 'node', ['tools/undefined-check.mjs'], {}],
+  // THE BRICKS ARE GATED BEFORE THE PRODUCT IS ASSEMBLED. Every file in src/pieces/ must be registered with its own
+  // check, and every check must pass - a piece is trusted only after it has proven its contract on a synthetic input.
+  ['0c PIECES', 'node', ['tools/pieces-check.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],

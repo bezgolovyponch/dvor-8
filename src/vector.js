@@ -27,6 +27,7 @@ import { horizonFromSky } from './horizon.js';   // the one definition of "where
 import { MIN_PITCH, alternation } from './criteria/FacadeRule.js';
 import { paintCells } from './pieces/facade.js';
 import { paintFacadePhoto, snapV13 } from './pieces/facade-photo.js';
+import { paintSkyStyle } from './pieces/sky-style.js';
 import { scenePlan, buildingsFrom } from './plan.js';
 import { STYLE } from './style/index.js';   // the style's own measured values (src/style/index.js)
 import { RAMPS, STEPS, paletteOf } from './flat.js';
@@ -2489,81 +2490,18 @@ export function trace(rgba, w, h, opts = {}) {
     paintingSky = false;
     let repainted = 0;
     for (let p2 = 0; p2 < n; p2 += 1) if (skyMaskFinal[p2]) { idx[p2] = skyEntry; repainted += 1; }
-    // ---- THE SKY'S OWN STYLE: v13's S6, PORTED (value-noise clouds, two tones + a shade) ----------------
-    //
-    // WHY. Measured on the frame this block replaced: one tone owned **85.7%** of the sky box (x158..288, y8..272).
-    // The operator's own v13 engine reads 50.1% on that box, its accepted frame 24% - a sky that is 86% one flat
-    // plane is exactly the fault the v13 gate's V2 line names, and its bar is ≤70%.
-    //
-    // WHAT IS PORTED. `skyStyle` in tools/v13/engine-v13.txt line 85: two-octave value noise, thresholded, shade
-    // sampled from the same field 2.5 px higher (Perlin-lineage value noise with smoothstep). v13 also dithered a band
-    // toward the horizon; this port omits it and says so - the band's tone in this palette is either pure white
-    // (which spends the R1 white/blue budget measured below) or a grey (which spends the mullion budget already at
-    // +0.076 of its 0.09), so the cloud field is the mechanism that carries V2 and the band stays an open row.
-    //
-    // WHAT IS NOT COPIED. v13 subtracts `(ys-150)/60*0.2` above y=150, i.e. it PILES clouds at the top of the frame.
-    // That one part cannot be copied: this project's delivery rule (tools/deliver-check.mjs S1) reads the top 8% band
-    // and requires its most common colour to be the blue plane at ≥35%, and the concept gate wants the largest single
-    // colour of that band at ≥40%. A top-heavy field makes a cloud tone the band's most common colour - measured at
-    // T+125: S1 failed and R1 went to 0.096 against its 0.09 tolerance, so that change was reverted. The field here
-    // runs the other way: its threshold RISES toward the zenith (the top stays a blue plane) and the deck sits over
-    // the yard toward the horizon - the shape T+126 named as the reconciliation.
-    //
-    // THE TONES ARE THE SKY RAMP'S OWN, so no palette entry is added and the family mix R1 measures is preserved: the
-    // lit top is the ramp's white (+5), the shaded underside its +3 blue (blue family in R1's classifier), the plane
-    // +4 - the tone this sky has always been painted with. The shade is one step DARKER than the base because the
-    // palette has no pale blue between +4 and white, and inventing one would be a palette change.
-    //
-    // THE CONSTANTS ARE A SWEEP, NOT A GUESS. Every (threshold, zenith lift, horizon push) triple in
-    // /tmp/measure/sim5.mjs was scored on the three lines that pull on this axis; the chosen one is a triple whose
-    // three margins are positive at once: V2 59.1% (bar ≤70) · S1 band blue 41.1% (bar ≥35) · R1 blue −0.064 and
-    // white −0.016 (bars 0.09), worst family unchanged at the mullion's 0.076.
-    const SKY_RAMP_I = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
-    const SKY_LIT = SKY_RAMP_I + 5;          // rgb(255,255,255) - the cloud's lit top
-    const SKY_SHADE = SKY_RAMP_I + 3;        // rgb(47,131,224) - its shaded underside
-    const skyClamp = (v) => Math.max(0, Math.min(1, v));
-    // a stateless hash, so the field is a function of the pixel and nothing else: two runs of one photograph agree
-    const skyHash = (x, y) => {
-      let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;
-      h = Math.imul(h ^ (h >>> 13), 1274126177);
-      return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-    };
-    const skyNoise = (x, y) => {
-      const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
-      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);   // smoothstep, as v13's `vn`
-      const A = skyHash(ix, iy), B = skyHash(ix + 1, iy), C = skyHash(ix, iy + 1), D2 = skyHash(ix + 1, iy + 1);
-      return A + (B - A) * sx + (C - A) * sy + (A - B - C + D2) * sx * sy;
-    };
-    // THE HEIGHT PROFILE IS THE SKY'S OWN, NOT A FIXED ROW COUNT. Measured at T+129 on the operator's sunset scene: its
-    // horizon sits at row 270, so the gate's sky box is only y8..200 and the four absolute row constants above (40, 100,
-    // 160 - tuned on the tower's 334-row sky) suppressed the deck over most of it: V2 read 74% against the bar 70 while
-    // the same code read 64% on the tower. The three constants are therefore FRACTIONS OF THE MEASURED HORIZON:
-    // 100/334 = 0.30 for the zenith's clear band, 40/334 = 0.12 where the deck starts, 160/334 = 0.48 where the push
-    // is full. On the tower's sky they reproduce the tuned numbers exactly; on a shorter sky the deck follows it down.
-    let skyH = 0, skyCols = 0;
-    for (let x = 0; x < w; x += 1) if (skyline[x] > 0 && skyline[x] <= h) { skyH += skyline[x]; skyCols += 1; }
-    skyH = skyCols ? skyH / skyCols : h * 0.65;
-    let fieldPx = 0, litPx = 0, shadePx = 0;
-    for (let p2 = 0; p2 < n; p2 += 1) {
-      if (!skyMaskFinal[p2]) continue;
-      const x = p2 % w, y = (p2 / w) | 0;
-      const v = skyNoise(x / 31 + 3, y / 11) * 0.65 + skyNoise(x / 11 + 9, y / 5 + 2) * 0.35 - 0.5
-        + 0.10 * skyClamp((y - 0.12 * skyH) / (0.48 * skyH));    // the horizon push: the deck sits over the yard
-      const thr = 0.12 + 0.06 * skyClamp((0.30 * skyH - y) / (0.30 * skyH));   // the zenith stays a blue plane
-      if (v <= thr) continue;
-      // the lit top is the field's own core, the shaded underside its rim - v13's 2.5-px shade rule as a band,
-      // because on this palette the rim is what has to read as a cloud's underside
-      if (v > thr + 0.08) { idx[p2] = SKY_LIT; litPx += 1; } else { idx[p2] = SKY_SHADE; shadePx += 1; }
-      fieldPx += 1;
-    }
-    if (typeof window !== 'undefined') window.__skyField = { fieldPx, litPx, shadePx };
-    // AND THEN ITS CLOUDS. The designed puffs were drawn BEFORE this repaint, so the flat blue wiped them - the
-    // same "painted last wipes the earlier work" pattern that hid the sky itself. The sky goes down first, the
-    // clouds on top of it, and the frame is finished in that order.
-    if (cloudMaskFinal) {
-      let clouds = 0;
-      for (let p2 = 0; p2 < n; p2 += 1) if (cloudMaskFinal[p2] >= 0) { idx[p2] = cloudMaskFinal[p2]; clouds += 1; }
-      if (typeof window !== 'undefined') window.__cloudFinal = clouds;
+    // THE SKY'S STYLE IS A PIECE (`src/pieces/sky-style.js`) and this block only hands it the frame's own facts: the
+    // sky's mask, the designed puffs, the measured skyline and the palette. Its parameters, their source in the
+    // operator's engine and the one part it does NOT paint (the horizon band, measured and reverted at T+134) are
+    // documented in the piece and checked by `tools/piece-sky-check.mjs`.
+    {
+      const skyRamp = RAMPS.findIndex((R) => R.name === 'sky') * STEPS;
+      const st = paintSkyStyle({
+        w, h, idx, skyMask: skyMaskFinal, cloudMask: cloudMaskFinal, skyline,
+        base: skyEntry, ramp: skyRamp, steps: STEPS,
+      });
+      if (typeof window !== 'undefined') window.__skyField = st.field;
+      if (typeof window !== 'undefined') window.__cloudFinal = st.puffs;
     }
     if (typeof window !== 'undefined') window.__skyFinal = repainted;
   }
