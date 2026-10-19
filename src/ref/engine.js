@@ -2,7 +2,6 @@
 // This is the operator's own engine code, byte-exact apart from the class header and the export below.
 // Its sha256 is checked by tools/engine-check.mjs against ENGINE_SHA; a mismatch refuses the build.
 class Component {
-
   // ═══ DVOR-8 PHOTO → PIXEL ENGINE v11 ═══════════════════════════════════════════════════════════
   // Reuse in the app: SPEC = rulebook (each stage: rule, method, source) · SCENES = annotation format
   // (one entry per photo) · build(img, scene, seed) = the deterministic converter · D-model methods

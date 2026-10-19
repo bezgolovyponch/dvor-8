@@ -15,7 +15,10 @@ import { createHash } from 'node:crypto';
 const src = readFileSync(new URL('./engine-v13.txt', import.meta.url), 'utf8');
 const head = 'class Component extends DCLogic {';
 if (!src.startsWith(head)) { console.log(`REFUSED: the extraction does not start with "${head}"`); process.exit(2); }
-const body = 'class Component {\n' + src.slice(head.length);
+// NO EXTRA NEWLINE: the slice after `{` starts with a newline itself, so `'class Component {' + slice` reproduces the
+// operator's bytes exactly from the class keyword on. The first version added one, which made the generated module
+// subtly NOT byte-equal to the extraction - caught by tools/engine-check.mjs's body-equality line.
+const body = 'class Component {' + src.slice(head.length);
 const out = `// GENERATED FROM tools/v13/engine-v13.txt BY tools/v13/make-module.mjs — DO NOT EDIT BY HAND.
 // This is the operator's own engine code, byte-exact apart from the class header and the export below.
 // Its sha256 is checked by tools/engine-check.mjs against ENGINE_SHA; a mismatch refuses the build.

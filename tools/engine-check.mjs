@@ -15,13 +15,22 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { withPage } from './browser.mjs';
 
-const ENGINE_SHA = '098f21b610497373c3aefe763f7261bae2e05a5a03c38bc4be1c49ce0fbc5cf3';
+const ENGINE_SHA = '9f91d1ae87d72320b0349e6e138b5eeef7555ce8250d44031d0d3b5dfa1eeb39';
 let pass = 0, fail = 0;
 const ok = (what, cond, detail) => { console.log(`${cond ? 'ok  ' : 'FAIL'}  ${what.padEnd(58)} ${detail}`); if (cond) pass += 1; else fail += 1; };
 
 const code = readFileSync(new URL('../src/ref/engine.js', import.meta.url), 'utf8');
 const sha = createHash('sha256').update(code).digest('hex');
 ok('1 THE MODULE IS THE OPERATOR\'S FILE (sha256)', sha === ENGINE_SHA, `${sha.slice(0, 12)}… ${sha === ENGINE_SHA ? 'matches' : 'DOES NOT MATCH — regenerate with tools/v13/make-module.mjs'}`);
+
+// THE MODULE'S BODY IS THE OPERATOR'S BYTES, NOT "APART FROM A NEWLINE": the one difference allowed is the class
+// header (`extends DCLogic` removed) and the export line. Measured while answering "do you rely on the real product or
+// on your own code?" - the first generator added one newline, and this line now refuses that.
+const extraction = readFileSync(new URL('./v13/engine-v13.txt', import.meta.url), 'utf8');
+const bodyOf = (s) => s.slice(s.indexOf('class Component {') + 'class Component {'.length, s.lastIndexOf('\nexport { Component };'));
+const sliceOf = (s) => s.slice(s.indexOf('class Component extends DCLogic {') + 'class Component extends DCLogic {'.length);
+ok('1b THE BODY IS THE OPERATOR\'S BYTES (only the header and the export differ)', bodyOf(code) === sliceOf(extraction),
+  `${bodyOf(code).length} chars of engine body, identical to the extraction: ${bodyOf(code) === sliceOf(extraction)}`);
 
 const ref = JSON.parse(readFileSync(new URL('../reference/v13/readout.json', import.meta.url), 'utf8'));
 const scenes = ref.map((r) => ({ label: r.label, fnv: r.h1, palette: r.sub.length, wn: r.wn, region: r.rep.map((f) => ({ name: f.name, grid: `${f.lu}x${f.lv}`, nw: f.nw })) }));
