@@ -477,3 +477,23 @@ ABSENT, `concept-check` exits 1 with "7 palette entries on the road, 8 in the fr
 untouched; the frame's tonality is now controlled by V1's own bar (≤24) rather than by a floor on how many tones a
 frame may use. A frame can no longer be a handful of flat blocks (that is what the counterexamples prove) and it can
 no longer be a 43-tone table spray either (V1).
+
+## D28 — DERIVED GEOMETRY NEEDS A VALIDITY CONTRACT (2026-10-19, the operator's phone screenshot)
+
+**What happened.** The operator converted a photograph on their phone and the app showed **13 targets, no windows, no
+cars, diagonal spill** over a grey picture. Reproduced on `photos-test/b.jpg`: the facade lattice fit returned a pitch
+of **432 × 45 px** on a **288-px-wide** frame, the bay grid drew **0 of 2 880 possible bays** (`spritePx 0`), the
+checker pass used the same pitch and painted diagonal cells, and the frame contained **0.0 % glass-ramp pixels** while
+the model held **69 window regions**. On the fitted photograph (`5.jpg`) the pitch is **8 × 6**, the grid draws 798
+bays / 36 492 sprite pixels, and glass covers **32.5 %** of the frame.
+
+**The decision.** An implausible derived lattice is a REFUSAL, not a number to divide by. The lattice becomes a piece
+(`src/pieces/lattice.js`) with a validity contract (pitch within `[3, w/4] × [3, h/8]`, ≥2 rows and ≥2 columns inside
+the instance, a measured pane coverage), a fallback to the pane boxes the facade-photo piece already found (b.jpg: 120
+panes), an `unreadable` mark when neither exists, its own check, and two frame lines that would have caught the
+screenshot: *every window region has drawn pixels* and *no derived pitch exceeds the frame's own bounds*.
+**Why it happened at all, stated plainly:** every gate measured SHARES (tones, dominance, IoU, distance), and the v13
+lines were measured only on the photographs the tune was fitted to. The reference never needs a finder — its scenes
+are hand-annotated (`sc.buildings`, `sc.cars`, `gY`) — so the painting could be ported faithfully while the finding
+layer stayed an unguarded heuristic. A gate that cannot fail is not a gate; the finder had none, so it could not fail,
+and it was believed.
