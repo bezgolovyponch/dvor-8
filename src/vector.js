@@ -28,6 +28,7 @@ import { MIN_PITCH, alternation } from './criteria/FacadeRule.js';
 import { paintCells } from './pieces/facade.js';
 import { paintFacadePhoto, snapV13 } from './pieces/facade-photo.js';
 import { paintSkyStyle } from './pieces/sky-style.js';
+import { paintGroundPlanes } from './pieces/ground-planes.js';
 import { scenePlan, buildingsFrom } from './plan.js';
 import { STYLE } from './style/index.js';   // the style's own measured values (src/style/index.js)
 import { RAMPS, STEPS, paletteOf } from './flat.js';
@@ -1259,98 +1260,17 @@ export function trace(rgba, w, h, opts = {}) {
       const family = Math.floor(body0 / STEPS);
       const baseStep = body0 % STEPS;
       const loRung = Math.max(1, Math.min(STEPS - 2, baseStep));      // mid rungs only: 1..STEPS-2
-      // THE TONE IS CHOSEN FROM THE SURFACE, NOT FROM THE PIXEL. Measured at T+133 against the operator's reference:
-      // our roadway came out SPECKLED - two rungs scattered one pixel at a time, the kerb broken into dashes and the
-      // crossing a blotch - while the reference's is flat planes with a continuous kerb, because its reduction is a
-      // SELECTION PER BLOCK (v13 S2/S3 + mode passes; the project's own PROTOCOL step 4, PixelOE). A per-pixel luma
-      // divides the photograph's asphalt grain across two rungs; a 3x3 MEAN before the rung is chosen makes the grain
-      // the same tone, which is what "a surface is a field" means at this size. The split point and the marking test
-      // use the same smoothed value, so the paint keeps its width instead of breaking into dashes.
-      const lumaMap = new Float32Array(n);
-      for (let p2 = 0; p2 < n; p2 += 1) lumaMap[p2] = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-      const lumaOf = (p2) => {
-        const x = p2 % w, y = (p2 / w) | 0;
-        let sum = 0, k = 0;
-        for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-          sum += lumaMap[ny * w + nx]; k += 1;
-        }
-        return k ? sum / k : lumaMap[p2];
-      };
-      const lumas = [];
-      for (const p2 of pad.px) {
-        const L = lumaOf(p2);
-        if (L <= 168) lumas.push(L);
-      }
-      lumas.sort((x, y) => x - y);
-      // THE SPLIT POINT IS THE REFERENCE'S OWN SHARE, NOT THE MEDIAN. The operator's reference frame, on this same
-      // photograph, carries its ground as 45.6% mid rgb(98,94,104) + 30.9% DARK rgb(74,70,80) - i.e. its darker plane
-      // is 30.9/(45.6+30.9) = **40% of the asphalt**. Splitting at the median made the dark plane 50% and pushed V7
-      // over (measured sweep, /tmp/measure/split.mjs: p50 -> V7 56.86 FAIL, p40 -> V7 54.94 PASS with V3 49.6 PASS,
-      // p35 -> 54.45/54.9). The cut is therefore the asphalt's 40th percentile of its own luma.
-      const SPLIT_SHARE = 0.40;
-      const medL = lumas[Math.floor(lumas.length * SPLIT_SHARE)];
-      const padStep = new Int8Array(n).fill(-1);          // -1: not asphalt (the paint, or not this pad)
-      // THE PAINT IS A SHAPE, NOT A BRIGHTNESS FIELD. The crossing's stripes came out a smudge (measured against the
-      // reference, whose stripes are solid bars) because the paint was decided per pixel from a grainy luma. The mask
-      // is therefore CLOSED first - dilate by one, then erode by one, the morphological gradient the project already
-      // cites for the outline path (OpenCV morphology tutorial) - so a one-pixel gap in a stripe is filled and the
-      // stripe keeps the photograph's own width instead of breaking into dashes and blotches.
-      const paint = new Uint8Array(n);
-      for (const p2 of pad.px) if (lumaOf(p2) > 168) paint[p2] = 1;
-      const closed = new Uint8Array(n);
-      for (const p2 of pad.px) {
-        if (!paint[p2]) continue;
-        const x = p2 % w;
-        closed[p2] = 1;
-        if (x > 0) closed[p2 - 1] = 1;
-        if (x < w - 1) closed[p2 + 1] = 1;
-        if (p2 >= w) closed[p2 - w] = 1;
-        if (p2 + w < n) closed[p2 + w] = 1;
-      }
-      for (const p2 of pad.px) {
-        if (!closed[p2]) continue;
-        const x = p2 % w;
-        const nbr = (p2 - 1 >= 0 && pad[p2 - 1] ? closed[p2 - 1] : 1)
-          + (x < w - 1 && pad[p2 + 1] ? closed[p2 + 1] : 1)
-          + (p2 - w >= 0 && pad[p2 - w] ? closed[p2 - w] : 1)
-          + (p2 + w < n && pad[p2 + w] ? closed[p2 + w] : 1);
-        if (nbr < 4) closed[p2] = 0;                   // the erosion: only the mass of the stripe survives
-      }
-      for (const p2 of pad.px) {
-        if (closed[p2]) { idx[p2] = marking; continue; }       // the paint the photograph has, where it has it
-        const L = lumaOf(p2);
-        padStep[p2] = L < medL ? loRung - 1 : loRung;
-        if (typeof window !== 'undefined') window.__roadTone = (window.__roadTone || 0) + 1;
-      }
-      for (let pass = 0; pass < 5; pass += 1) {              // five passes: the asphalt's own grain must not survive as islands
-        const prev = padStep.slice();
-        for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
-          const p2 = y * w + x;
-          if (prev[p2] < 0) continue;
-          const tally = new Map();
-          for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
-            const q = p2 + dy * w + dx;
-            if (prev[q] < 0) continue;
-            tally.set(prev[q], (tally.get(prev[q]) || 0) + 1);
-          }
-          let best = prev[p2], bestN = 0;
-          for (const [k, v] of tally) if (v > bestN) { bestN = v; best = k; }
-          padStep[p2] = best;                              // a surface is a field: one pass turns speckle into patches
-        }
-      }
-      for (const p2 of pad.px) if (padStep[p2] >= 0) { idx[p2] = family * STEPS + padStep[p2]; }
-      // THE SPLIT IS THE ASPHALT'S, NOT THE PAVEMENT'S. entryFor's own ground register is "a pixel brighter than a
-      // true shadow and darker than concrete" (60..150 in luma); a pad whose mean sits in that register is the
-      // asphalt and gets its two planes. A brighter pad (the crossing, the kerb apron) keeps the single tone its own
-      // mean asks for - measured: splitting it took half of a 173,167,185 plane to 217,216,223, a near-white slab.
+      // THE GROUND'S SURFACE IS A PIECE (`src/pieces/ground-planes.js`): it takes this pad's pixels and the three
+      // tones, and returns the pad's own tone map. Its parameters (3x3 surface mean, the reference's 40% split share,
+      // the closed paint, five passes) are documented in the piece and checked by `tools/piece-ground-check.mjs`.
       const meanL = luma(r / c, g / c, b / c);
-      const split = meanL > 60 && meanL < 150;
-      for (const p2 of pad.px) {
-        if (padStep[p2] < 0) continue;
-        groundTone[p2] = family * STEPS + (split ? padStep[p2] : loRung);
-      }
+      const split = meanL > 60 && meanL < 150;      // entryFor's ground register: asphalt is darker than concrete
+      const gp = paintGroundPlanes({
+        w, h, idx, padPixels: pad.px, rgb, marking,
+        dark: family * STEPS + (loRung - 1), light: family * STEPS + loRung, split,
+      });
+      for (const p2 of pad.px) if (gp.tone[p2] >= 0) groundTone[p2] = gp.tone[p2];
+      if (typeof window !== 'undefined') window.__groundPlanes = (window.__groundPlanes || []).concat([{ dark: gp.dark, light: gp.light, paint: gp.paint, splitAt: Math.round(gp.splitAt), split }]);
     }
     if (roads) sky.__roads = roads;
   }

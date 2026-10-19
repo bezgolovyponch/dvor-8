@@ -20,6 +20,8 @@ const PIECES = [
   { file: 'facade.js', check: 'piece-facade-check.mjs', stage: 'PROTOCOL 3', contract: 'a facade plane + a window sprite grid at the photograph\'s own pitch' },
   { file: 'facade-photo.js', check: 'piece-facade-photo-check.mjs', stage: 'v13 S8–S11', contract: 'a quad homography → the photo kept, panes recoloured, nothing invented' },
   { file: 'sky-style.js', check: 'piece-sky-check.mjs', stage: 'v13 S6', contract: 'a sky mask + the palette → a deterministic plane-and-cloud field, no confetti' },
+  { file: 'ground-planes.js', check: 'piece-ground-check.mjs', stage: 'v13 S2–S3', contract: 'one paved pad → its own two planes at the reference\'s 40% share, a closed paint mask' },
+  { file: 'working-palette.js', check: 'piece-working-palette-check.mjs', stage: 'v13 S1–S2', contract: 'a frame → the working palette: capped, structure pinned, family-faithful' },
 ];
 const HAVE = readdirSync('src/pieces').filter((f) => f.endsWith('.js'));
 const registered = new Set(PIECES.map((p) => p.file));

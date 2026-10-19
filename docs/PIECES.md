@@ -10,6 +10,8 @@ that is not registered, and it runs every registered check — a piece that fail
 | `src/pieces/facade.js` | a facade plane + a window-sprite grid at the photograph's own pitch | PROTOCOL 3: the pitch is **measured**, never typed | `tools/piece-facade-check.mjs` | **VERIFIED** — 9×9 grid, 20 windows, 1728 wall px |
 | `src/pieces/facade-photo.js` | quad homography → the photo kept, panes recoloured, nothing invented | v13 S8–S11: Heckbert 1989 homography, projection-profile period, Otsu 1979 / Niblack 1986, 4-connected components, frame = largest | `tools/piece-facade-photo-check.mjs` | **VERIFIED** — 30 panes from 5×6 openings, 0 on a blank wall, a trapezoid fits, a 10-px comb returns 10 |
 | `src/pieces/sky-style.js` | sky mask + palette → a deterministic plane-and-cloud field | v13 S6: two-octave value noise (Perlin lineage), shade sampled 2.5 px higher, threshold lifted toward the zenith and pushed toward the horizon (D25 — the reference's `-(ys-150)/60*0.2` is top-heavy and S1 requires a plane at the zenith) | `tools/piece-sky-check.mjs` | **VERIFIED** — 6 of 6 promises; cover **27.0 %** against the reference's own ~28 % |
+| `src/pieces/ground-planes.js` | one paved pad + the photograph's luma → its own two planes and its closed paint | v13 S2–S3 (selection per block + mode passes) · the split at **40 %** (the reference's own dark-plane share, D26) · the closing (morphology) | `tools/piece-ground-check.mjs` | **VERIFIED** — 5 of 5 promises; the darker plane is **40.9 %** of the synthetic asphalt, the stripe and its 1-px gap are filled, 0 isolated |
+| `src/pieces/working-palette.js` | a frame + the palette → at most 22 tones | v13 S1–S2: a 50-entry master palette, a working subset by popularity, nearest-entry remap | `tools/piece-working-palette-check.mjs` | **VERIFIED** — 4 of 4 promises: the cap holds, outline/void pinned, **0 of 85 869** remapped pixels crossed a surviving family, deterministic |
 
 ## The extraction proof (how a refactor is accepted here)
 
@@ -18,6 +20,17 @@ reinterpretation: **the frame after the extraction is byte-identical to the fram
 `canvas.json` `px` string on the judged photograph, 0 differing pixels. A piece is accepted when its check passes AND
 its extraction changes no pixel; anything else is a new design and must go through the gates as one.
 
+## Two bricks were found by extraction (the bricks-first method paying for itself)
+
+- **The ground's erosion had never run.** Lifting the road block into a piece exposed that its erosion test read
+  `pad[p2 - 1]` where `pad` was the pad *object*, so the neighbour count was always 4 and the paint mask was only
+  **dilated**. The piece implements the intended closing — and the measurement says the dilation-only version is
+  **better**: with the intended erosion the judged frame reads V3 57.3 % (against 50.2 %) and V7 55.99 % (against
+  55.39 %), because more paint mass on the ground lowers the asphalt's dominant share. The erosion therefore stays in
+  the piece **switched off, with its numbers**, and the frame is byte-identical to the shipped one.
+- **A 1-px stripe cannot survive a surface mean.** The same check caught my own test fixture assuming it could; the
+  fixture now uses a surface-sized mark, which is what the piece's rule implies.
+
 ## What is still inside the monolith (the pending bricks, in pipeline order)
 
 A brick is only a brick when it can be checked alone; these are the ones still inline in `src/vector.js`, with the
@@ -25,10 +38,8 @@ contract they will have when lifted (the same shape as the sky's):
 
 | stage | the inline block | the brick it becomes | its check will assert |
 |---|---|---|---|
-| 5e / v13 S2–S3 | the road/pavement block (1 300 lines in) | `pieces/ground-planes.js` | the two-plane split at the photograph's own 40 % share · the paint mask closed · five mode passes · no isolated tone |
 | the reduction | "AREAS FIRST" + the register lift | `pieces/reduce.js` | a per-block selection, the ground's own tones carried, one mode pass per stage |
 | the outline | 5i's 1-px line against the sky | `pieces/outline.js` | exactly 1-px, only where a building or a car meets the sky, never on a window |
-| the palette | `src/style/working-palette.js` (already a module, not yet under `pieces/`) | `pieces/working-palette.js` | ≤ keep tones · structural entries pinned · the same-family remap law · deterministic |
 
 ## The assembly (once the bricks are finalised)
 

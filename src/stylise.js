@@ -23,7 +23,7 @@
 // that size from the image, so a tall phone photograph makes a tall level.
 
 import { liftRegister } from './style/register.js';   // the style's own register, applied AFTER the conversion
-import { reduceToWorkingPalette } from './style/working-palette.js';   // v13 S2: the frame's working palette
+import { reduceToWorkingPalette } from './pieces/working-palette.js';   // v13 S2: the frame's working palette (a piece)
 import { trace, entryFor } from './vector.js';
 import { render as renderFlat, RAMPS, STEPS, outlineOf, voidOf } from './flat.js';
 import { SKY, OTHER } from './surfaces.js';
