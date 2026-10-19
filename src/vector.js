@@ -29,6 +29,7 @@ import { paintCells } from './pieces/facade.js';
 import { paintFacadePhoto, snapV13 } from './pieces/facade-photo.js';
 import { paintSkyStyle } from './pieces/sky-style.js';
 import { paintGroundPlanes } from './pieces/ground-planes.js';
+import { annotationFacades } from './pieces/scene-annotation.js';
 import { scenePlan, buildingsFrom } from './plan.js';
 import { STYLE } from './style/index.js';   // the style's own measured values (src/style/index.js)
 import { RAMPS, STEPS, paletteOf } from './flat.js';
@@ -1845,7 +1846,18 @@ export function trace(rgba, w, h, opts = {}) {
       const qOf = (r, g, b) => snapV13(palette, r, g, b);
       const paneWindows = [];
       let facPhoto = 0;
-      const facs = (PLAN && PLAN.facades ? PLAN.facades : []).filter((f2) => f2.role !== 'checker' && f2.pixels && f2.pixels.length >= 200);
+      // AN ANNOTATION SUPERSEDES THE INFERRED FACADES - THE REFERENCE'S S7 CONTRACT, WIRED.
+      //
+      // The engine's own SPEC says objects ARRIVE as labelled shapes (a quad per facade, a box per car) and everything
+      // after that is deterministic. This project inferred the facades from a semantic parse, and when the parse was
+      // thin the painter never ran: b.jpg held 69 window regions and 0.0% glass in the frame. A validated annotation
+      // (the player's tap, a detector, or a file in the reference's own SCENES format) is used WHEN PRESENT, ahead of
+      // the inference - so the painter has geometry it can trust, exactly as the reference always has.
+      const ann = (typeof window !== 'undefined' && window.__sceneAnnotation) || null;
+      const annFac = ann ? annotationFacades(ann, w, h).facades : [];
+      if (typeof window !== 'undefined') window.__annotationUsed = annFac.length;
+      const sourceFacades = annFac.length ? annFac : (PLAN && PLAN.facades ? PLAN.facades : []);
+      const facs = sourceFacades.filter((f2) => f2.role !== 'checker' && f2.pixels && f2.pixels.length >= 200);
       for (const fa of facs) {
         const mask2 = new Uint8Array(n);
         for (const p2 of fa.pixels) mask2[p2] = 1;
