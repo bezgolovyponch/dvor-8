@@ -177,3 +177,39 @@ one rule change, made from the canon and measured against the target, and it is 
 band attempt. Nothing is shipped on it yet: the tree is back on the stable build `abb06285…` (v0.5.8), the band
 reverted, and the attempt is recorded here with its numbers so the next round starts from the conflict, not from a
 guess.
+
+## 10. The play state, measured — the pink, the tooltip, and the "14" (T+141)
+
+The operator photographed the app *in play* and named three things. Each was measured, and each has a code location:
+
+1. **"the red around the car and randomly on the building".** The idle clean frame contains **0 pink (aim), 0 cyan
+   (info) and 0 grey (damaged) outline pixels** — measured on the dump the gates use. So nothing leaks at rest: the pink
+   is the **aim state** (`src/render.js:467`, `AIM = '#f04f78'`, drawn from `world.aim`). It reads as "random spill"
+   because it is drawn on **the aimed thing's own silhouette**, and that silhouette is sparse/ragged — the aim colour
+   is correct, the mask under it is not. Same root as §8/§9: the finder's objects are ragged.
+2. **"no info tooltips on objects".** The handler exists and fires: `src/main.js:1591` marks the tapped thing
+   (`world.infoMark = { id, edges, until: clock + 6 }`), draws its **own silhouette** in the help colour, pops its
+   label, and prints one fact — the harness's step reads
+   `{"step":"info","note":"про двор: Эйфелева башня летом выше примерно на 15 сантиметров…"}`. What the operator does
+   not get is a **per-object fact and a visible tooltip panel**: the fact is deliberately about *the yard*
+   (`factFor(lastTheme)`, and the comment says why: a yard fact prefixed with a car's name read as a false claim), and
+   the label is a floating `pop`, not a panel. So the mechanic is half-built: the **mark** exists, the **content** is
+   generic.
+3. **"what are 14 things you are searching?"** `src/main.js:809` writes the detector's **tile counter** into the banner
+   (`ИЩУ ВЕЩИ ${done}/${total}`). 14 is how many 512-px tiles the detector needs for the photograph — **not the number
+   of things**. The project's own comment above it said the string "is a progress readout, not a status", and it is
+   still printed as if it were a count.
+
+**What this says about the order of work.** The three complaints are not art defects and not gate defects: they are the
+**play-state contract** (idle = no state ink; aim = the silhouette state; info = a fact *about the thing* + a visible
+tooltip; the search line = progress, never a count) — and the play state has **no gate at all**. The gates I built
+measure the built frame; the reference's video shows how the *game* behaves. The missing gates, in the same form the
+project already uses, are three lines and they are cheap:
+
+- **idle frame**: 0 aim/info/damaged outline pixels (it already measures 0 — so this one is a *keep*, not a fix);
+- **aim**: exactly the aimed thing's silhouette carries the aim colour, and its pixel set is a *mass* (≥ 20 px, no
+  isolated state pixel) — this is what would have caught the ragged aim ring;
+- **info tap**: a tap on a building/car yields (a) a fact **about that kind**, (b) a visible tooltip element with text,
+  (c) the thing's mark — asserted by the harness, not by eye.
+
+Until those three exist, "it works in the video but not on my phone" is not measurable, which is why it kept recurring.
