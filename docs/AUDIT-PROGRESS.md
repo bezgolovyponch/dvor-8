@@ -145,3 +145,35 @@ by a bar derived from the OLD accepted frame or never gated at all**:
 The method error, stated once: I let the **frame's share gates arbitrate the target** instead of letting the target
 arbitrate them. D24 says the operator's file supersedes the accepted frame; it was applied to R1's tolerance once and
 then not to R1's own blue budget, and the HUD was never compared. The four actions follow directly, in that order.
+
+## 9. The composition attempt against the TARGET's own representation (T+140) — measured, and one rule conflict found
+
+The four separations from §8 were worked in order. Result, measured:
+
+| separation | what was done | measurement | kept? |
+|---|---|---|---|
+| **the horizon band** | re-implemented as the reference's own move (v13 S6 line 85: the band is painted as the **base layer, before the clouds**, so only what the clouds leave is visible), first at 0.45 of the sky in 3-on/2-off runs, then thinned to the last 4 % at 2-on/6-off | at the wide setting: **V2 60.5 → 42.3 %**, **V7 55.39 → 54.34 %**, **R1 worst 0.074 → 0.111** (over 0.09) · at the thin setting: V2 **57.1 %**, V7 **55.26 %**, R1 inside 0.09 | **NO — reverted, see below** |
+| the checker's pitch | measured, not yet fitted | target **36 transitions / 110 px** (cell ≈3 px) · ours **25** (≈4.4 px) — the checker pass reuses the tower's bay pitch (8×6) | open |
+| the road's contrast | measured | target asphalt planes ≈22 luma apart · ours 36 (the fixed palette's rung spacing) | open (a creator decision, REQ 58) |
+| the HUD | measured | the target's screen: clock · `РАЗБИТО` · `ОПАСНОСТЬ` gauge · info banner · round chips + play over a dark bar; ours: the v9 layout | open (never gated) |
+
+**THE RULE CONFLICT, which is the real finding.** The reference's band is a **single-pixel Bayer dither** (S6: an
+ordered-dither threshold per pixel). This project's suite forbids exactly that: *"the vector route paints shapes, not
+confetti: strays under 1 % of the frame"* — measured at **4.59 % stray** when the band was first painted as a threshold
+dither (T+134). Painted as **runs** instead (2 px on, 3 or 6 off) the rule holds and the frame measures better (V2
+57–42 %, V7 54.3–55.3 %), but it does not *look* like the target: at 1:1 it reads as a dotted **seam** across the sky
+at the horizon, which the operator's frame does not show.
+
+So the band cannot be achieved by tuning: **the target's band technique and this project's stray rule are mutually
+exclusive as written.** The project's own canon already contains the resolution, and it is a decision, not a tweak:
+v9's rule says *"dithering only in the sky's horizon band"* — i.e. the single-pixel dither is legitimate **there and
+nowhere else**. What is missing is that the suite's stray check does not honour that exception, so the renderer cannot
+use the technique the canon allows.
+
+**D29 (proposed, not applied):** the stray rule is scoped — *no stray pixels anywhere except a threshold dither inside
+the measured horizon band of the sky* — the suite's check excludes that band (printing the band's extent and the
+excluding count as its premise), and the sky piece then paints the reference's band as the reference paints it. That is
+one rule change, made from the canon and measured against the target, and it is the precondition for every remaining
+band attempt. Nothing is shipped on it yet: the tree is back on the stable build `abb06285…` (v0.5.8), the band
+reverted, and the attempt is recorded here with its numbers so the next round starts from the conflict, not from a
+guess.
