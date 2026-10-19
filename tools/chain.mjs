@@ -25,6 +25,9 @@ const steps = [
   // THE BRICKS ARE GATED BEFORE THE PRODUCT IS ASSEMBLED. Every file in src/pieces/ must be registered with its own
   // check, and every check must pass - a piece is trusted only after it has proven its contract on a synthetic input.
   ['0c PIECES', 'node', ['tools/pieces-check.mjs'], {}],
+  // THE CONVERTER IS THE OPERATOR'S OWN ENGINE: its module is the byte-exact extraction (sha256) and it reproduces the
+  // operator's frames (its own FNV + its own stage numbers). Code against code, not our frame against a share.
+  ['0d ENGINE', 'node', ['--experimental-websocket', 'tools/engine-check.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],

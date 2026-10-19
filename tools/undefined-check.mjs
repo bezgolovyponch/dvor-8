@@ -90,7 +90,17 @@ for (const f of files) {
   // COMMENTS ARE NOT USES. The import scan strips them; the use scan must too, or a file is accused of using a name
   // that appears only in a sentence about it - which is how `BLOCK`, `NEVER` and `predicate` were "found" in four
   // files that do not use them at all.
-  const body = raw.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^[ \t]*\/\/[^\n]*$/gm, ' ').replace(/\/\/[^\n]*/g, ' ');
+  // ...AND NEITHER ARE STRING LITERALS. Measured T+145: the engine's own fact data contains the string 'MATERIALS'
+  // (a theme key), and the use scan accused src/ref/engine.js of USING a global MATERIALS - a string compared as code,
+  // the same class of false positive the comments rule was written for. Literals (single, double, backtick) are
+  // blanked before the scan; the import scan reads the original, where a specifier is a literal by definition.
+  const body = raw
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/^[ \t]*\/\/[^\n]*$/gm, ' ')
+    .replace(/\/\/[^\n]*/g, ' ')
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``');
   for (const name of exported) {
     if (decl.has(name)) continue;
     if (!new RegExp(`\\b${name}\\b(?!\\s*:)`).test(body)) continue;   // not used as a value here (a key is not a use)

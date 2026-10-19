@@ -12,7 +12,7 @@ import { downscaleContrast, expandContrast } from './pieces/downscale.js';   // 
 import { styliseVector } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
-import { makeWorld, pick, strike, tick, left } from './world.js';
+import { left, makeWorld, pick, strike, tick } from './world.js';
 import { RAMPS } from './flat.js';   // STEPS is already imported above; two imports of it is a hard error
 import { makeFx, throwThing, impact, burst, stepFx, shakeOffset } from './fx.js';
 import { MODES, splashTargets, chainNext } from './modes.js';
@@ -484,6 +484,30 @@ async function build(rgba, w, h, dets, big = null) {
   }
   if (typeof window !== 'undefined' && params.get('parse') === '1') window.__parseFirst = parse;
   const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
+  // ===== THE OPERATOR'S ENGINE AS THE CONVERTER (docs/PLAN-REAL-PRODUCT.md §3) ==========================
+  //
+  // When an annotation is present - `?engine=<scene label>` for the reference's own scenes, or an annotation object
+  // supplied by the app (`window.__sceneAnnotation`, the S7 contract) - the operator's engine builds the frame AND the
+  // objects, and this function adopts them. The art is then the reference's own output (the same FNV, the same 1321
+  // pane objects, the same working palette of 12), not a re-derivation of it. No annotation: the vector route runs.
+  let engineRegions = null;
+  const engineLabel = params.get('engine');
+  const supplied = (typeof window !== 'undefined' && window.__sceneAnnotation) || null;
+  if (engineLabel || supplied) {
+    try {
+      const { engineFrame, referenceScene } = await import('./ref/convert.js');
+      const scene = supplied || await referenceScene(engineLabel);
+      if (scene) {
+        const photoUrl = (typeof window !== 'undefined' && window.__photoUrl) || null;
+        const ef = await engineFrame({ src: photoUrl, rgba, w, h, scene, seed: 8 });
+        st.idx = ef.idx; st.palette = ef.palette; st.windows = []; st.structures = [];
+        engineRegions = ef.regions;
+        if (typeof window !== 'undefined') window.__engine = ef.readout;
+      }
+    } catch (e) {
+      if (typeof window !== 'undefined') window.__engineError = String((e && e.message) || e);
+    }
+  }
   if (typeof window !== 'undefined') window.__spriteBays = (st.stats && st.stats.spriteBays) || null;   // DIAGNOSTIC
   if (typeof window !== 'undefined') { window.__traceParts = (st.stats && st.stats.wallParts) || []; window.__traceRgb = (st.stats && st.stats.rgb) || null; }   // the PLAN's inputs
   // THE SCENE PLAN IS THE RENDERER'S OWN: trace() computes it ONCE from the wall parts and returns it, so the bay
@@ -501,7 +525,14 @@ async function build(rgba, w, h, dets, big = null) {
     const c = st.palette[st.idx[p2]] || [0, 0, 0];
     reduced[i2] = c[0]; reduced[i2 + 1] = c[1]; reduced[i2 + 2] = c[2]; reduced[i2 + 3] = 255;
   }
-  const { regions, owner } = withWindows(toRegions(dets, reduced, w, h), st, w, h, big, reduced);
+  let { regions, owner } = withWindows(toRegions(dets, reduced, w, h), st, w, h, big, reduced);
+  // THE ENGINE'S OBJECTS ARE THE OBJECTS: the annotation names them, the engine maps them per pixel, and the owner map
+  // is rebuilt from that map so the app's outline, hit-test and damage act on the engine's very regions.
+  if (engineRegions && engineRegions.length) {
+    regions = engineRegions;
+    owner = new Int32Array(w * h).fill(-1);
+    for (const r of regions) for (const p of r.pixels) owner[p] = r.id;
+  }
 
   // THE WINDOWS THE VECTOR ROUTE FOUND ARE THINGS TOO. The per-pixel route guesses at openings in a wall
   // (frame.js, "на глаз"); the vector route reads the facade's own rhythm and returns rectangles. Either way a
@@ -721,6 +752,14 @@ async function decode(file, size = null) {
       el.onerror = () => reject(new Error('снимок не читается'));
       el.src = url;
     }).finally(() => setTimeout(() => URL.revokeObjectURL(url), 1000));
+  }
+  // THE DECODED PHOTOGRAPH IS KEPT FOR THE ENGINE: its S0 box-averages the ORIGINAL pixels (the reference's own input),
+  // so the app must hand it the same image element, not the already-reduced game grid.
+  if (typeof window !== 'undefined') {
+    // A URL to the ORIGINAL BYTES: the engine's S0 reads naturalWidth/naturalHeight and box-averages the photograph
+    // itself; an ImageBitmap (what createImageBitmap returns) has neither, and a reduced grid would change its frame.
+    try { window.__photoUrl = URL.createObjectURL(file); } catch { window.__photoUrl = null; }
+    window.__photoImg = image;
   }
   const iw = image.naturalWidth || image.width, ih = image.naturalHeight || image.height;
   // THE PHOTOGRAPH DECIDES THE SHAPE OF THE LEVEL.
@@ -1299,7 +1338,14 @@ function frame(now) {
         sfx.tick(r.id);
         pop(r.label.toUpperCase(), r.cx, r.cy, 'tag');
       }
-      if (scanT >= SCAN_TIME) { stage = 'play'; scanY = null; foldForPlay(true); sfx.ready(); banner(`${world.regions.length} ${world.regions.length === 1 ? 'ЦЕЛЬ' : 'ЦЕЛЕЙ'}`); }
+      if (scanT >= SCAN_TIME) {
+        stage = 'play'; scanY = null; foldForPlay(true); sfx.ready();
+        // THE COUNT IS THE COUNTED TARGETS, NOT THE REGIONS. With the engine as the converter the world holds 1082
+        // regions (2 buildings + 6 cars + 1074 panes) and the banner said "1082 ЦЕЛЕЙ" - the operator's HUD counts
+        // buildings + cars only (its TARGETS = 8). `left()` is the one place that rule lives.
+        const n = left(world);
+        banner(`${n} ${n === 1 ? 'ЦЕЛЬ' : 'ЦЕЛЕЙ'}`);
+      }
     }
     const frozen = fx.freeze > 0;
     // A PINNED CLOCK PINS THE EFFECTS' OWN CLOCK TOO. `fx.clock` is a SECOND time (src/fx.js:106) and it drives
