@@ -22,6 +22,7 @@ const PIECES = [
   { file: 'sky-style.js', check: 'piece-sky-check.mjs', stage: 'v13 S6', contract: 'a sky mask + the palette → a deterministic plane-and-cloud field, no confetti' },
   { file: 'ground-planes.js', check: 'piece-ground-check.mjs', stage: 'v13 S2–S3', contract: 'one paved pad → its own two planes at the reference\'s 40% share, a closed paint mask' },
   { file: 'working-palette.js', check: 'piece-working-palette-check.mjs', stage: 'v13 S1–S2', contract: 'a frame → the working palette: capped, structure pinned, family-faithful' },
+  { file: 'outline.js', check: 'piece-outline-check.mjs', stage: 'v13 S13', contract: 'a region pixel set → the 1-px silhouette of its MASS (lattice → perimeter, not a scatter)' },
 ];
 const HAVE = readdirSync('src/pieces').filter((f) => f.endsWith('.js'));
 const registered = new Set(PIECES.map((p) => p.file));

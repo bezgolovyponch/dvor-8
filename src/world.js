@@ -5,6 +5,7 @@
 
 import { OUTLINE, VOID, scorchMap } from './palette.js';
 import { mayBeDestroyed, damageProfile } from './criteria/DestructionRule.js';   // the requirement, by name
+import { regionEdges } from './pieces/outline.js';   // the silhouette: the boundary of the region's MASS
 import { STEPS } from './flat.js';
 import { mulberry32 } from './rng.js';
 import { makeDecals } from './decal.js';
@@ -26,16 +27,12 @@ import { makeDecals } from './decal.js';
  * car came out outlined as a rectangle. The edge PIXELS cannot fail that way: a pixel is on the edge when one of
  * its four neighbours is not in the thing.
  */
+// THE SILHOUETTE IS A PIECE. The old body of this function was "a region pixel with a neighbour outside the region is
+// an edge", which is the silhouette only for a SOLID mask: the tower's region pixels are the photograph's wall lattice
+// (the mullions), so almost every pixel qualified and the aimed tower filled with pink dots instead of an outline
+// (measured T+142). `src/pieces/outline.js` fills the enclosed holes first and takes the boundary of the mass.
 export function edgesOf(world, region) {
-  const { w } = world;
-  const inR = new Set(region.pixels);
-  const out = [];
-  for (const p of region.pixels) {
-    const x = p % w, y = (p / w) | 0;
-    if (x === 0 || y === 0 || x === w - 1 || y === world.h - 1) { out.push(p); continue; }
-    if (!inR.has(p - 1) || !inR.has(p + 1) || !inR.has(p - w) || !inR.has(p + w)) out.push(p);
-  }
-  return out;
+  return regionEdges(world.w, world.h, region.pixels);
 }
 
 /** The region's outline as a simplified closed polyline. Empty if the region has no pixels. */
