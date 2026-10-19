@@ -165,7 +165,7 @@ export function extend(world, yard) {
   world.yards.push({ x: x0, w: yard.w, base, made: yard.made, palette: yard.palette });
   // THE CLEAR CONDITION IS RECOMPUTED, NEVER CLEARED. `done = false` on any arriving region let a stretch of two
   // chairs resurrect a finished yard (measured); D9 says the clear counts destroyable things only.
-  if (part.regions.length) world.done = !world.regions.some((r) => !r.gone && mayBeDestroyed(r));
+  if (part.regions.length) world.done = !world.regions.some((r) => !r.gone && r.counted !== false && mayBeDestroyed(r));
   return true;
 }
 

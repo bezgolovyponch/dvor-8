@@ -541,4 +541,8 @@ export function tick(world, dt) {
 
 // «осталось» IS THE CLEAR CONDITION'S COUNTER, so it counts the same things the clear condition counts: destroyable
 // regions still standing. A bench or a bicycle is not "left to break" - the rules do not let you break it.
-export const left = (world) => world.regions.reduce((n, r) => n + (!r.gone && mayBeDestroyed(r) ? 1 : 0), 0);
+// A PIECE IS NOT A TARGET. Windows are destroyable (mayBeDestroyed says so, and a hit on one throws glass), but they
+// are pieces of their building, and the operator's engine counts buildings and cars in its target list - so a pane
+// is counted only when its region says it is a target (`counted !== false`). Measured: 521 -> 8 on the judged
+// photograph (4 buildings + 4 cars), against the reference's own building+car count.
+export const left = (world) => world.regions.reduce((n, r) => n + (!r.gone && r.counted !== false && mayBeDestroyed(r) ? 1 : 0), 0);

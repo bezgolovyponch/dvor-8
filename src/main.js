@@ -524,6 +524,12 @@ async function build(rgba, w, h, dets, big = null) {
       const id = regions.length;
       for (const p2 of pixels) owner[p2] = id;
       regions.push({
+        // A WINDOW IS A PIECE OF ITS BUILDING, NOT A COUNTED TARGET. The operator's own engine counts
+        // `TARGETS = buildings + cars` (`engine-v13.txt` line 263: `sc.buildings.map(...).concat(this.CARIDS)`), while
+        // its per-pane window objects (`WN`) exist for the DESTRUCTION model, not for the HUD. Measured here before the
+        // change: «осталось 521» = 4 buildings + 4 cars + **513 window panes**, i.e. the counter was counting glass.
+        // A window stays breakable (it is the building's own piece and throws glass, REQ 54) but is not counted.
+        counted: false,
         id, kind: 'window', label: TARGETS.window ? TARGETS.window.ru : 'окно', score: 1, pixels: Int32Array.from(pixels),
         x: q.x, y: q.y, w: q.w, h: q.h, cx: q.cx, cy: q.cy, area: pixels.length,
         hp: HP, hits: 0, gone: false, seen: false,

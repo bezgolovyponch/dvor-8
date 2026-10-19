@@ -1258,9 +1258,28 @@ export function trace(rgba, w, h, opts = {}) {
       const family = Math.floor(body0 / STEPS);
       const baseStep = body0 % STEPS;
       const loRung = Math.max(1, Math.min(STEPS - 2, baseStep));      // mid rungs only: 1..STEPS-2
+      // THE TONE IS CHOSEN FROM THE SURFACE, NOT FROM THE PIXEL. Measured at T+133 against the operator's reference:
+      // our roadway came out SPECKLED - two rungs scattered one pixel at a time, the kerb broken into dashes and the
+      // crossing a blotch - while the reference's is flat planes with a continuous kerb, because its reduction is a
+      // SELECTION PER BLOCK (v13 S2/S3 + mode passes; the project's own PROTOCOL step 4, PixelOE). A per-pixel luma
+      // divides the photograph's asphalt grain across two rungs; a 3x3 MEAN before the rung is chosen makes the grain
+      // the same tone, which is what "a surface is a field" means at this size. The split point and the marking test
+      // use the same smoothed value, so the paint keeps its width instead of breaking into dashes.
+      const lumaMap = new Float32Array(n);
+      for (let p2 = 0; p2 < n; p2 += 1) lumaMap[p2] = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+      const lumaOf = (p2) => {
+        const x = p2 % w, y = (p2 / w) | 0;
+        let sum = 0, k = 0;
+        for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          sum += lumaMap[ny * w + nx]; k += 1;
+        }
+        return k ? sum / k : lumaMap[p2];
+      };
       const lumas = [];
       for (const p2 of pad.px) {
-        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
+        const L = lumaOf(p2);
         if (L <= 168) lumas.push(L);
       }
       lumas.sort((x, y) => x - y);
@@ -1272,13 +1291,39 @@ export function trace(rgba, w, h, opts = {}) {
       const SPLIT_SHARE = 0.40;
       const medL = lumas[Math.floor(lumas.length * SPLIT_SHARE)];
       const padStep = new Int8Array(n).fill(-1);          // -1: not asphalt (the paint, or not this pad)
+      // THE PAINT IS A SHAPE, NOT A BRIGHTNESS FIELD. The crossing's stripes came out a smudge (measured against the
+      // reference, whose stripes are solid bars) because the paint was decided per pixel from a grainy luma. The mask
+      // is therefore CLOSED first - dilate by one, then erode by one, the morphological gradient the project already
+      // cites for the outline path (OpenCV morphology tutorial) - so a one-pixel gap in a stripe is filled and the
+      // stripe keeps the photograph's own width instead of breaking into dashes and blotches.
+      const paint = new Uint8Array(n);
+      for (const p2 of pad.px) if (lumaOf(p2) > 168) paint[p2] = 1;
+      const closed = new Uint8Array(n);
       for (const p2 of pad.px) {
-        const L = luma(rgb[p2 * 3], rgb[p2 * 3 + 1], rgb[p2 * 3 + 2]);
-        if (L > 168) { idx[p2] = marking; continue; }         // the paint the photograph has, where it has it
+        if (!paint[p2]) continue;
+        const x = p2 % w;
+        closed[p2] = 1;
+        if (x > 0) closed[p2 - 1] = 1;
+        if (x < w - 1) closed[p2 + 1] = 1;
+        if (p2 >= w) closed[p2 - w] = 1;
+        if (p2 + w < n) closed[p2 + w] = 1;
+      }
+      for (const p2 of pad.px) {
+        if (!closed[p2]) continue;
+        const x = p2 % w;
+        const nbr = (p2 - 1 >= 0 && pad[p2 - 1] ? closed[p2 - 1] : 1)
+          + (x < w - 1 && pad[p2 + 1] ? closed[p2 + 1] : 1)
+          + (p2 - w >= 0 && pad[p2 - w] ? closed[p2 - w] : 1)
+          + (p2 + w < n && pad[p2 + w] ? closed[p2 + w] : 1);
+        if (nbr < 4) closed[p2] = 0;                   // the erosion: only the mass of the stripe survives
+      }
+      for (const p2 of pad.px) {
+        if (closed[p2]) { idx[p2] = marking; continue; }       // the paint the photograph has, where it has it
+        const L = lumaOf(p2);
         padStep[p2] = L < medL ? loRung - 1 : loRung;
         if (typeof window !== 'undefined') window.__roadTone = (window.__roadTone || 0) + 1;
       }
-      for (let pass = 0; pass < 2; pass += 1) {
+      for (let pass = 0; pass < 5; pass += 1) {              // five passes: the asphalt's own grain must not survive as islands
         const prev = padStep.slice();
         for (let y = 1; y < h - 1; y += 1) for (let x = 1; x < w - 1; x += 1) {
           const p2 = y * w + x;
