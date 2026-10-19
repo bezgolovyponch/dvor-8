@@ -1,7 +1,7 @@
 # THE DONE LIST — every item, the command that reproduces it, and its last measured line
 
 One page, for sign-off. Each row is a thing the operator asked for, the exact command to re-measure it, and the line
-that command printed on the shipped tree (`v0.5.8`, commit `0f33f30`, build `abb06285…`). If a command does not print the line, the item is
+that command printed on the shipped tree (`v0.5.9`, commit `934f6ed`, build `2ed99b7b…`). If a command does not print the line, the item is
 not met — that is the whole point of the page.
 
 **Every command on this page was re-run against the shipped tree and printed the line given** (T+118): match `MATCHES
@@ -41,8 +41,8 @@ browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start insid
 
 ## The build
 
-`v0.5.8` — [dvor-8-0.5.8.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.5.8/dvor-8-0.5.8.apk), signed,
-**64,353,808 bytes**, published 2026-10-19 from the chain-green tree (`abb06285…`, 55 files, 15 chain steps, **6 verified bricks**). VERIFIED after publishing:
+`v0.5.9` — [dvor-8-0.5.9.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.5.9/dvor-8-0.5.9.apk), signed,
+**64,357,982 bytes**, published 2026-10-19 from the chain-green tree (`2ed99b7b…`, 56 files, 15 chain steps, **7 verified bricks**). VERIFIED after publishing:
 the released asset was downloaded and unzipped, and `assets/www/src/vector.js`, `main.js`, `world.js` and `street.js`
 are **byte-identical** to this tree (sha256 on both sides). What it carries over v0.5.4: the operator's reference sky
 (v13 S6 cloudscape, V2 85.7 → 60.5), the ground's own two planes (V3 71.6 → **50.2**, V7 → **55.39**), the working
