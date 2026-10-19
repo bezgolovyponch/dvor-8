@@ -1,7 +1,7 @@
 # THE DONE LIST — every item, the command that reproduces it, and its last measured line
 
 One page, for sign-off. Each row is a thing the operator asked for, the exact command to re-measure it, and the line
-that command printed on the shipped tree (`v0.5.5`, commit `c5de4e0`, build `2100f68c…`). If a command does not print the line, the item is
+that command printed on the shipped tree (`v0.5.6`, commit `528d97b`, build `ba023002…`). If a command does not print the line, the item is
 not met — that is the whole point of the page.
 
 **Every command on this page was re-run against the shipped tree and printed the line given** (T+118): match `MATCHES
@@ -41,10 +41,12 @@ browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start insid
 
 ## The build
 
-`v0.5.5` — [dvor-8-0.5.5.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.5.5/dvor-8-0.5.5.apk), signed,
-**64,349,547 bytes**, published 2026-10-19 from the chain-green tree (`2100f68c…`, 53 files). VERIFIED after publishing:
-the released asset was downloaded and unzipped, and `assets/www/src/vector.js`, `assets/www/src/main.js`,
-`assets/www/src/style/working-palette.js` and `index.html` are **byte-identical** to this tree (sha256 on both sides),
-65 packaged files. What it carries over v0.5.4: the operator's reference sky (v13 S6 cloudscape, V2 85.7 → 60.5), the
-ground's own two planes (V3 71.6 → 53.0, V7 green), the working palette (V1 43 → 17), the lobe-shaped designed clouds,
-and D25–D27 with `docs/ACCEPTANCE-MINIMUM.md`.
+`v0.5.6` — [dvor-8-0.5.6.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.5.6/dvor-8-0.5.6.apk), signed,
+**64,353,643 bytes**, published 2026-10-19 from the chain-green tree (`ba023002…`, 53 files). VERIFIED after publishing:
+the released asset was downloaded and unzipped, and `assets/www/src/vector.js`, `main.js`, `world.js` and `street.js`
+are **byte-identical** to this tree (sha256 on both sides). What it carries over v0.5.4: the operator's reference sky
+(v13 S6 cloudscape, V2 85.7 → 60.5), the ground's own two planes (V3 71.6 → **50.2**, V7 → **55.39**), the working
+palette (V1 43 → **17**), the lobe-shaped designed clouds, **the count fixed at 8** (buildings + cars; window panes are
+breakable pieces, not counted targets — it read 521), the pavement converted **per surface** (3×3-mean rung, five mode
+passes, morphologically closed paint), and the review `docs/COMPOSITION-REVIEW.md` with D25–D27 and
+`docs/ACCEPTANCE-MINIMUM.md`.
