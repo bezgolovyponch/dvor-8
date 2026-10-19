@@ -24,6 +24,7 @@ const PIECES = [
   { file: 'working-palette.js', check: 'piece-working-palette-check.mjs', stage: 'v13 S1–S2', contract: 'a frame → the working palette: capped, structure pinned, family-faithful' },
   { file: 'outline.js', check: 'piece-outline-check.mjs', stage: 'v13 S13', contract: 'a region pixel set → the 1-px silhouette of its MASS (lattice → perimeter, not a scatter)' },
   { file: 'scene-annotation.js', check: 'piece-annotation-check.mjs', stage: 'v13 S7', contract: 'the reference\'s annotation format → validated geometry + a quad → the facade mask' },
+  { file: 'region-grow.js', check: 'piece-region-grow-check.mjs', stage: 'v13 S5 → S7', contract: 'a photograph + a tap → the connected region and its quad (a wall, not its windows)' },
 ];
 const HAVE = readdirSync('src/pieces').filter((f) => f.endsWith('.js'));
 const registered = new Set(PIECES.map((p) => p.file));

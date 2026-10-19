@@ -483,6 +483,12 @@ async function build(rgba, w, h, dets, big = null) {
     window.__parseHorizon = { cols: w, agree, resolved, imputed: w - resolved, noSky: !!parse.noSky };
   }
   if (typeof window !== 'undefined' && params.get('parse') === '1') window.__parseFirst = parse;
+  // THE SKYLINE THE ENGINE'S BAND IS SCALED TO: the reference's `h0` (`SKY.s = max(.3, h0/327)`), measured here from
+  // the app's own sky mask instead of the engine's 90th-percentile fallback, which on a big sky inflates the band.
+  if (typeof window !== 'undefined' && parse && parse.horizon && parse.horizon.length) {
+    window.__skylineY = Math.round(parse.horizon.reduce((a, b) => a + b, 0) / parse.horizon.length);
+    window.__skylineCols = parse.horizon.filter((v) => v > 0).length;
+  }
   const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
   // ===== THE OPERATOR'S ENGINE AS THE CONVERTER (docs/PLAN-REAL-PRODUCT.md §3) ==========================
   //
@@ -837,12 +843,14 @@ async function decode(file, size = null) {
 }
 
 async function fromFile(file) {
+  if (typeof window !== 'undefined') window.__photoFile = file;   // the annotate flow rebuilds from the same photo
   const { w, h, large, small, big, rgba } = await decode(file);
   stage = 'detect'; world = null; me = null; cards(null); paintView();
   cam = { x: 0, y: 0, w, h };
   setSize(w, h);
   ctx.drawImage(small, 0, 0);
   banner('ИЩУ ВЕЩИ', true);
+  if (params.get('annotate') === '1') note('НАЖМИ НА ЗДАНИЕ ИЛИ МАШИНУ — рамка покажет, где оно, и двор пересоберётся из него');
   note('ищу настоящие вещи на снимке — всё на телефоне, снимок никуда не уходит');
   const t0 = performance.now();
   const found = await detectAll(large, (done, total) => { $('banner').textContent = `ИЩУ ВЕЩИ ${done}/${total}`; });
@@ -1474,7 +1482,35 @@ tiltEl.addEventListener('pointermove', (e) => {
   const at = toWorld(e);
   aimAt(at.x, at.y);
 }, { passive: true });
+// ---- THE ANNOTATION FROM THE PLAYER'S TAP (?annotate=1) -----------------------------------------------------
+//
+// The reference is GIVEN a quad per building (its S7 contract); this app has no annotator, so the tap becomes one. A
+// tap grows the region under the finger (`pieces/region-grow.js`, the reference's S5 mechanism with a colour and an
+// edge guard), takes its quad, and rebuilds the yard through the operator's engine with that annotation. This is the
+// product's own gesture - the game already tells the player to press a building - used as the geometry input.
+async function annotateAt(at) {
+  if (!yard || !yard.rgba) return;
+  const { growRegion, quadOf } = await import('./pieces/region-grow.js');
+  const w = yard.w, h = yard.h;
+  const x = Math.max(0, Math.min(w - 1, Math.round(at.x)));
+  const y = Math.max(0, Math.min(h - 1, Math.round(at.y)));
+  const r = growRegion({ w, h, rgba: yard.rgba, seed: y * w + x });
+  if (r.pixels.length < 200) { pop('МЕЛКО', at.x, at.y, 'tag'); return; }
+  const q = quadOf(r.pixels, w);
+  ann.buildings.push({ kind: 'auto', quad: q.quad });
+  const gy = Math.max(...ann.buildings.map((b) => Math.max(b.quad[2][1], b.quad[3][1], b.quad[0][1], b.quad[1][1])));
+  // `sky: 'auto'` IS THE REFERENCE'S OWN FIELD (three of its four scenes omit h0 and let the engine measure the
+  // horizon from the sky); without it the band's scale is undefined and the frame's sky fills with band dots.
+  window.__sceneAnnotation = { gy: Math.min(h - 2, Math.round(gy)), sky: 'auto', h0: (window.__skylineY || null), buildings: ann.buildings.map((b, i) => ({ id: i + 1, ...b })), cars: ann.cars };
+  banner(`ЗДАНИЕ ${ann.buildings.length} · ${r.pixels.length} px`);
+  pop('ЗДАНИЕ', at.x, at.y, 'tag');
+  if (window.__photoFile) fromFile(window.__photoFile);
+}
+const ann = { buildings: [], cars: [] };
+// THE TAP IS REACHABLE FROM THE PAGE in annotate mode: the gate and the probes press the same function the finger does.
+if (params.get('annotate') === '1' && typeof window !== 'undefined') window.__annotateAt = annotateAt;
 tiltEl.addEventListener('pointerdown', (e) => {
+  if (params.get('annotate') === '1' && yard) { e.preventDefault(); unlock(); annotateAt(toWorld(e)); return; }
   if (stage !== 'play' || world.done || folk.seen) return;
   e.preventDefault();
   unlock();

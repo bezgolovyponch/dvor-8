@@ -94,7 +94,9 @@ export function annotationFacades(ann, w, h) {
     const x0 = Math.max(0, Math.floor(Math.min(...xs))), y0 = Math.max(0, Math.floor(Math.min(...ys)));
     out.push({
       pixels,
-      box: { x: x0, y: y0, w: Math.min(w - 1, Math.ceil(Math.max(...xs))) - x0, h: Math.min(h - 1, Math.ceil(Math.max(...ys))) - y0 },
+      // the painter's own box form: [x0, y0, x1, y1] (facade-photo's boundaryQuad destructures it); an {x,y,w,h}
+      // object there threw "object is not iterable" and the build died silently (measured, T+146)
+      box: [x0, y0, Math.min(w - 1, Math.ceil(Math.max(...xs))), Math.min(h - 1, Math.ceil(Math.max(...ys)))],
       role: b.kind === 'checker' ? 'checker' : 'auto',
       quad: b.quad, clip: b.clip, annotated: true,
     });
