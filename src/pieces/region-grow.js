@@ -61,6 +61,48 @@ export function growRegion({ w, h, rgba, seed, tolerance = 90, edgeGuard = 40, m
   return { mask, pixels: Int32Array.from(pix), mean: [mr, mg, mb], capped };
 }
 
+/**
+ * The region's FILLED mass: every ENCLOSED hole joins it (a floor's glass cells are inside its mullion lattice), while a
+ * gap open to the frame's edge stays outside (the sky beside the building is not a hole). The same rule as the outline
+ * piece - a lattice is not a thin line, it is the boundary of a plane.
+ */
+export function fillHoles(mask, w, h) {
+  const outside = new Uint8Array(w * h);
+  const stack = new Int32Array(w * h);
+  let top = 0;
+  const push = (p) => { if (!mask[p] && !outside[p]) { outside[p] = 1; stack[top] = p; top += 1; } };
+  for (let x = 0; x < w; x += 1) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y += 1) { push(y * w); push(y * w + w - 1); }
+  while (top > 0) {
+    top -= 1;
+    const p = stack[top], x = p % w;
+    if (x > 0) push(p - 1);
+    if (x < w - 1) push(p + 1);
+    if (p >= w) push(p - w);
+    if (p + w < w * h) push(p + w);
+  }
+  const out = [];
+  for (let p = 0; p < w * h; p += 1) if (mask[p] || !outside[p]) out.push(p);
+  return out;
+}
+
+/** A separable box blur of the photograph - the scale at which a facade's PANE GRID disappears and its silhouette does not. */
+export function blurRgba(rgba, w, h, r) {
+  const out = new Uint8ClampedArray(rgba.length);
+  const tmp = new Uint8ClampedArray(rgba.length);
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+    let sr = 0, sg = 0, sb = 0, n = 0;
+    for (let d = -r; d <= r; d += 1) { const xx = x + d; if (xx < 0 || xx >= w) continue; const p = (y * w + xx) * 4; sr += rgba[p]; sg += rgba[p + 1]; sb += rgba[p + 2]; n += 1; }
+    const q = (y * w + x) * 4; tmp[q] = sr / n; tmp[q + 1] = sg / n; tmp[q + 2] = sb / n; tmp[q + 3] = 255;
+  }
+  for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+    let sr = 0, sg = 0, sb = 0, n = 0;
+    for (let d = -r; d <= r; d += 1) { const yy = y + d; if (yy < 0 || yy >= h) continue; const p = (yy * w + x) * 4; sr += tmp[p]; sg += tmp[p + 1]; sb += tmp[p + 2]; n += 1; }
+    const q = (y * w + x) * 4; out[q] = sr / n; out[q + 1] = sg / n; out[q + 2] = sb / n; out[q + 3] = 255;
+  }
+  return out;
+}
+
 /** The region's four extreme corners, in the reference's `quad` order TL, TR, BR, BL. */
 export function quadOf(pixels, w) {
   if (!pixels.length) return null;

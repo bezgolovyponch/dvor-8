@@ -353,7 +353,7 @@ function rail(c, w, h, hideT = 1) {
 
 // scanY: null once the scan is over; before that, everything below it is still the photograph.
 // cam: the part of the street on screen ({ x, y, w, h }); the buffer and the canvas are that size.
-export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0, weather = null, disaster = null, clean = false }) {
+export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion, shake, cam, me = null, drink = null, flier = null, folk = null, hideT = 0, land = 0, weather = null, disaster = null, clean = false, annot = null }) {
   // The table the picture is drawn through: the mode's look first, then the weather's. Both are whole-screen
   // moods and both are table transforms, which is the rule the NES decided for this project (D1) — a filter is
   // a different table, and so is a sky.
@@ -546,6 +546,21 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
     if (marked && !planar(marked)) pips(marked);
   }
 
+  // THE ANNOTATION QUAD WHILE THE PLAYER EDITS IT (the reference's hand annotation, done by the finger): its four
+  // edges in the help colour and four square handles - the thing the player drags onto the building's own corners.
+  if (annot && annot.quad && annot.quad.length === 4) {
+    const q = annot.quad;
+    ctx.fillStyle = '#30e1b9';
+    for (let i = 0; i < 4; i += 1) {
+      const [x1, y1] = q[i], [x2, y2] = q[(i + 1) % 4];
+      const n2 = Math.max(1, Math.max(Math.abs(x2 - x1), Math.abs(y2 - y1)));
+      for (let t = 0; t <= n2; t += 1) ctx.fillRect(Math.round(x1 + ((x2 - x1) * t) / n2), Math.round(y1 + ((y2 - y1) * t) / n2), 1, 1);
+    }
+    for (const [x, y] of q) {
+      ctx.fillStyle = '#0b0018'; ctx.fillRect(x - 4, y - 4, 9, 9);
+      ctx.fillStyle = '#f9c22b'; ctx.fillRect(x - 3, y - 3, 7, 7);
+    }
+  }
   // WHAT IS ALREADY BROKEN keeps a faint grey outline of its wreck, and that is the third and last state.
   // The kinds are docs/MECHANICS.md's: BUILDINGS AND CARS, and nothing else. This loop used to outline every
   // visible region, so a frame with twenty targets read as twenty rings — and windows were outlined too,

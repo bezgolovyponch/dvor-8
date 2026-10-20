@@ -1393,7 +1393,7 @@ function frame(now) {
       hidden: folk.hidden, seen: folk.seen, done: world.done, scanY: scanY === null ? null : Math.round(scanY),
       weather: cleanFrame ? null : weather?.kind, disaster: cleanFrame ? null : disaster?.kind, filter, clean: cleanFrame,
     });
-    draw(ctx, buf, world, fx, { filter, mode, seconds: clock, scanY, motion, shake, cam, me, weather,
+    draw(ctx, buf, world, fx, { annot: annEdit, filter, mode, seconds: clock, scanY, motion, shake, cam, me, weather,
       drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk,
       hideT, land: me?.land ?? 0, disaster: cleanFrame ? null : disaster, weather: cleanFrame ? null : weather,
       clean: cleanFrame, scanY: cleanFrame ? null : scanY });
@@ -1478,6 +1478,12 @@ function throwHere() {
 // Where the narrow view is dark, a finger first LOOKS (drag) and then throws (tap): the throw happens on
 // lifting, and only if the finger did not travel. Everywhere else a throw is on touch, with no wait.
 tiltEl.addEventListener('pointermove', (e) => {
+  if (annEdit.drag >= 0 && annEdit.quad) {
+    const at = toWorld(e);
+    const w = yard ? yard.w : 288, h = yard ? yard.h : 512;
+    annEdit.quad[annEdit.drag] = [Math.max(0, Math.min(w - 1, Math.round(at.x))), Math.max(0, Math.min(h - 1, Math.round(at.y)))];
+    return;
+  }
   if (stage !== 'play' || !world || press) return;
   const at = toWorld(e);
   aimAt(at.x, at.y);
@@ -1490,27 +1496,77 @@ tiltEl.addEventListener('pointermove', (e) => {
 // product's own gesture - the game already tells the player to press a building - used as the geometry input.
 async function annotateAt(at) {
   if (!yard || !yard.rgba) return;
-  const { growRegion, quadOf } = await import('./pieces/region-grow.js');
+  const { growRegion, quadOf, fillHoles } = await import('./pieces/region-grow.js');
   const w = yard.w, h = yard.h;
   const x = Math.max(0, Math.min(w - 1, Math.round(at.x)));
   const y = Math.max(0, Math.min(h - 1, Math.round(at.y)));
-  const r = growRegion({ w, h, rgba: yard.rgba, seed: y * w + x });
+  // THE GROWTH IS THE FACADE'S OWN GRID, AND ITS HOLES ARE THE FACADE'S GLASS. On a glass tower the growth travels the
+  // mullion lattice (measured: 9 520 px, bounded by pane edges - correct) but stops at the tower's edge where the glass
+  // changes tone, so its own extent is short (x<=82 against the hand quad's 141). The lattice's ENCLOSED holes are the
+  // glass cells, so filling them gives the plane the reference's annotation draws; a blurred-scale growth was tried
+  // (T+149) and leaked into the street (58 983 px), and a Hough snap landed on a pane row - both measured, both rejected.
+  // THE SETTINGS ARE MEASURED, NOT CHOSEN: a sweep on the judged photograph (tolerance 90..220 x edge guard 40/70) gave
+  // 9 520 px at 90/40 (stops mid-tower), 20 244 px at 120/70 with the quad [[0,0],[98,0],[121,288],[0,293]] against the
+  // operator's hand quad [[0,0],[141,0],[126,289],[0,258]], and a LEAK into the next building at 150/40 (right side 227)
+  // and 180+ (the whole street). 120/70 is the widest setting that stays on the tower.
+  const r = growRegion({ w, h, rgba: yard.rgba, seed: y * w + x, tolerance: 120, edgeGuard: 70 });
   if (r.pixels.length < 200) { pop('МЕЛКО', at.x, at.y, 'tag'); return; }
-  const q = quadOf(r.pixels, w);
+  const filled = fillHoles(r.mask, w, h);
+  const mass = Int32Array.from(filled);
+  // THE GROWTH KNOWS THE PLANE, THE EDGES KNOW THE EXTENT: the plain quad is the growth's own reach (on the tower that
+  // is x<=82 where the hand quad says 141), so it is snapped to the photograph's strongest boundary lines around it.
+  const plainQ = quadOf(mass, w);
+  const q = { quad: plainQ.quad, area: plainQ.area };
+  if (typeof window !== 'undefined') window.__tapQuad = { grown: r.pixels.length, filled: mass.length, quad: plainQ.quad };
   ann.buildings.push({ kind: 'auto', quad: q.quad });
   const gy = Math.max(...ann.buildings.map((b) => Math.max(b.quad[2][1], b.quad[3][1], b.quad[0][1], b.quad[1][1])));
   // `sky: 'auto'` IS THE REFERENCE'S OWN FIELD (three of its four scenes omit h0 and let the engine measure the
   // horizon from the sky); without it the band's scale is undefined and the frame's sky fills with band dots.
   window.__sceneAnnotation = { gy: Math.min(h - 2, Math.round(gy)), sky: 'auto', h0: (window.__skylineY || null), buildings: ann.buildings.map((b, i) => ({ id: i + 1, ...b })), cars: ann.cars };
+  annEdit.quad = q.quad.map(([x, y]) => [x, y]);       // the handles are draggable from here
   banner(`ЗДАНИЕ ${ann.buildings.length} · ${r.pixels.length} px`);
   pop('ЗДАНИЕ', at.x, at.y, 'tag');
   if (window.__photoFile) fromFile(window.__photoFile);
 }
 const ann = { buildings: [], cars: [] };
+// THE QUAD BEING EDITED: the tap produces it, the player drags its four handles onto the building's corners (the
+// reference's annotation is a hand quad; this is the same act with a finger), and the yard is rebuilt on release.
+const annEdit = { quad: null, drag: -1 };
+const HANDLE_R = 11;                                   // game px: how near a corner a press must land to grab it
+const handleNear = (at) => {
+  if (!annEdit.quad) return -1;
+  let best = -1, bestD = HANDLE_R;
+  annEdit.quad.forEach(([x, y], i) => { const d = Math.hypot(x - at.x, y - at.y); if (d < bestD) { bestD = d; best = i; } });
+  return best;
+};
+function applyQuad() {
+  if (!annEdit.quad || !ann.buildings.length) return;
+  const b = ann.buildings[ann.buildings.length - 1];
+  b.quad = annEdit.quad.map(([x, y]) => [x, y]);
+  const h = yard ? yard.h : 512;
+  const gy = Math.max(...b.quad.map((c) => c[1]));
+  window.__sceneAnnotation = { gy: Math.min(h - 2, Math.round(gy)), sky: 'auto', h0: window.__skylineY || null,
+    buildings: ann.buildings.map((bb, i) => ({ id: i + 1, quad: bb.quad, kind: bb.kind || 'auto' })), cars: ann.cars };
+  // THE HANDLES STAY AFTER A REBUILD: the player drags corner after corner, and each release re-paints the yard.
+  // A REBUILD'S READOUT MUST NOT BE THE PREVIOUS BUILD'S: clearing it is what lets a caller (and the page's own probes)
+  // wait for the new frame instead of reading the old one - measured: the first drag test read 12x12/425 from the
+  // previous build and could not see its own effect.
+  window.__engine = null;
+  if (window.__photoFile) fromFile(window.__photoFile);
+}
 // THE TAP IS REACHABLE FROM THE PAGE in annotate mode: the gate and the probes press the same function the finger does.
-if (params.get('annotate') === '1' && typeof window !== 'undefined') window.__annotateAt = annotateAt;
+if (params.get('annotate') === '1' && typeof window !== 'undefined') {
+  window.__annotateAt = annotateAt;
+  window.__dragQuad = (i, x, y) => { if (!annEdit.quad) return null; annEdit.quad[i] = [x, y]; applyQuad(); return annEdit.quad; };
+}
 tiltEl.addEventListener('pointerdown', (e) => {
-  if (params.get('annotate') === '1' && yard) { e.preventDefault(); unlock(); annotateAt(toWorld(e)); return; }
+  if (params.get('annotate') === '1' && yard) {
+    e.preventDefault(); unlock();
+    const at0 = toWorld(e);
+    const k = handleNear(at0);
+    if (k >= 0) { annEdit.drag = k; return; }           // a press near a corner drags it
+    annotateAt(at0); return;
+  }
   if (stage !== 'play' || world.done || folk.seen) return;
   e.preventDefault();
   unlock();
@@ -1527,6 +1583,7 @@ tiltEl.addEventListener('pointermove', (e) => {
   if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) press.moved = true;
 });
 tiltEl.addEventListener('pointerup', (e) => {
+  if (annEdit.drag >= 0) { annEdit.drag = -1; applyQuad(); return; }
   if (!press || stage !== 'play') { press = null; return; }
   const tap = !press.moved;
   press = null;
@@ -1645,6 +1702,12 @@ $('fateBtn')?.addEventListener('click', () => { if (stage === 'play') summonDisa
     note(infoOn ? 'режим справки: ткни в вещь и узнаешь про неё правду' : 'снова можно бросать');
   });
   tiltEl.addEventListener('pointermove', (e) => {
+  if (annEdit.drag >= 0 && annEdit.quad) {
+    const at = toWorld(e);
+    const w = yard ? yard.w : 288, h = yard ? yard.h : 512;
+    annEdit.quad[annEdit.drag] = [Math.max(0, Math.min(w - 1, Math.round(at.x))), Math.max(0, Math.min(h - 1, Math.round(at.y)))];
+    return;
+  }
   if (stage !== 'play' || !world || press) return;
   const at = toWorld(e);
   aimAt(at.x, at.y);
