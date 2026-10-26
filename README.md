@@ -8,7 +8,7 @@ are found by a detector running on the phone itself.
 
 ## Android app
 
-**[Download dvor-8-0.6.2.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.6.2/dvor-8-0.6.2.apk)** (64 MB, Android 8 and later).
+**[Download dvor-8-0.6.3.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.6.3/dvor-8-0.6.3.apk)** (64 MB, Android 8 and later).
 
 ### Building and publishing
 
