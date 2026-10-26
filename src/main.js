@@ -850,7 +850,7 @@ async function fromFile(file) {
   setSize(w, h);
   ctx.drawImage(small, 0, 0);
   banner('ИЩУ ВЕЩИ', true);
-  if (params.get('annotate') === '1') note('НАЖМИ НА ЗДАНИЕ ИЛИ МАШИНУ — рамка покажет, где оно, и двор пересоберётся из него');
+  if (params.get('annotate') === '1') { note('НАЖМИ НА ЗДАНИЕ ИЛИ МАШИНУ — рамка покажет, где оно; углы рамки тянутся'); annotatePanel(); }
   note('ищу настоящие вещи на снимке — всё на телефоне, снимок никуда не уходит');
   const t0 = performance.now();
   const found = await detectAll(large, (done, total) => { $('banner').textContent = `ИЩУ ВЕЩИ ${done}/${total}`; });
@@ -1509,8 +1509,30 @@ async function annotateAt(at) {
   // 9 520 px at 90/40 (stops mid-tower), 20 244 px at 120/70 with the quad [[0,0],[98,0],[121,288],[0,293]] against the
   // operator's hand quad [[0,0],[141,0],[126,289],[0,258]], and a LEAK into the next building at 150/40 (right side 227)
   // and 180+ (the whole street). 120/70 is the widest setting that stays on the tower.
-  const r = growRegion({ w, h, rgba: yard.rgba, seed: y * w + x, tolerance: 120, edgeGuard: 70 });
-  if (r.pixels.length < 200) { pop('МЕЛКО', at.x, at.y, 'tag'); return; }
+  // a CAR is a tighter growth than a building: two parked cars share their tone, and a 120/70 growth merges them into
+  // one 151-px-wide box (measured T+150) - 60/30 keeps one car
+  const r = growRegion({ w, h, rgba: yard.rgba, seed: y * w + x, tolerance: annKind === 'car' ? 90 : 120, edgeGuard: annKind === 'car' ? 45 : 70 });
+  // a CAR may be 80 px on this grid (the reference's own boxes are 23..86 wide); a BUILDING is never that small
+  if (r.pixels.length < (annKind === 'car' ? 80 : 200)) { pop('МЕЛКО', at.x, at.y, 'tag'); return; }
+  // ---- A CAR IS A BOX, AND IT IS THE SAME GESTURE -----------------------------------------------------------
+  if (annKind === 'car') {
+    const xs = [], ys = [];
+    for (const p of r.pixels) { xs.push(p % w); ys.push((p / w) | 0); }
+    const bx = Math.min(...xs), by = Math.min(...ys);
+    const bw = Math.max(...xs) - bx + 1, bh = Math.max(...ys) - by + 1;
+    if (bw < 6 || bh < 6) { pop('МЕЛКО', at.x, at.y, 'tag'); return; }
+    // THE ENGINE'S CAR FORMAT IS FLAT: it reads `cr.x, cr.y, cr.w, cr.h, cr.type` (engine line 221) - a nested
+    // `{box:{...}}` produced a build with `targets: 1` and no cars (measured T+150).
+    ann.cars.push({ x: bx, y: by, w: bw, h: bh, type: 'box', name: 'МАШИНА' });
+    const gy = Math.max(...ann.cars.map((c) => c.y + c.h));
+    window.__sceneAnnotation = { gy: Math.min(h - 2, Math.round(gy)), sky: 'auto', h0: window.__skylineY || null,
+      buildings: ann.buildings.map((bb, i) => ({ id: i + 1, quad: bb.quad, kind: bb.kind || 'auto' })), cars: ann.cars };
+    banner(`МАШИНА ${ann.cars.length}`);
+    pop('МАШИНА', at.x, at.y, 'tag');
+    window.__engine = null;
+    if (window.__photoFile) fromFile(window.__photoFile);
+    return;
+  }
   const filled = fillHoles(r.mask, w, h);
   const mass = Int32Array.from(filled);
   // THE GROWTH KNOWS THE PLANE, THE EDGES KNOW THE EXTENT: the plain quad is the growth's own reach (on the tower that
@@ -1518,7 +1540,10 @@ async function annotateAt(at) {
   const plainQ = quadOf(mass, w);
   const q = { quad: plainQ.quad, area: plainQ.area };
   if (typeof window !== 'undefined') window.__tapQuad = { grown: r.pixels.length, filled: mass.length, quad: plainQ.quad };
-  ann.buildings.push({ kind: 'auto', quad: q.quad });
+  // THE REFERENCE PINKS THE CHECKER HOUSE (`kind: 'checker'` in its SCENES); a facade the engine analyses on its own is
+  // `auto`. The panel offers the third choice, because the engine's auto-detection read the checker house as a punched
+  // facade (11x9/88 where the operator's pinned annotation reads 6x7/228 - measured T+150).
+  ann.buildings.push({ kind: annKind === 'checker' ? 'checker' : 'auto', quad: q.quad });
   const gy = Math.max(...ann.buildings.map((b) => Math.max(b.quad[2][1], b.quad[3][1], b.quad[0][1], b.quad[1][1])));
   // `sky: 'auto'` IS THE REFERENCE'S OWN FIELD (three of its four scenes omit h0 and let the engine measure the
   // horizon from the sky); without it the band's scale is undefined and the frame's sky fills with band dots.
@@ -1529,9 +1554,38 @@ async function annotateAt(at) {
   if (window.__photoFile) fromFile(window.__photoFile);
 }
 const ann = { buildings: [], cars: [] };
+// ---- THE ANNOTATION PANEL: the product's own step, not a URL flag -------------------------------------------
+//
+// The reference's geometry is authored per photograph; the app's equivalent is the player's finger. The panel is the
+// only new UI: what a tap adds (a building or a car), and the button that finishes and builds the yard.
+function annotatePanel() {
+  if (document.getElementById('annBar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'annBar';
+  bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:60;display:flex;gap:6px;font:600 12px/1.1 system-ui,sans-serif';
+  const mk = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.style.cssText = 'flex:1;padding:10px 6px;border-radius:8px;border:2px solid #0b0018;background:#30e1b9;color:#0b0018'; b.addEventListener('click', fn); bar.appendChild(b); return b; };
+  const bBuilding = mk('ЗДАНИЕ', () => { annKind = 'building'; paint(); });
+  const bChecker = mk('ШАХМАТКА', () => { annKind = 'checker'; paint(); });
+  const bCar = mk('МАШИНА', () => { annKind = 'car'; paint(); });
+  mk('ГОТОВО', () => { bar.remove(); applyQuad(); });
+  const paint = () => {
+    bBuilding.style.background = annKind === 'building' ? '#30e1b9' : '#2a2a3a';
+    bBuilding.style.color = annKind === 'building' ? '#0b0018' : '#9fb8c8';
+    bChecker.style.background = annKind === 'checker' ? '#30e1b9' : '#2a2a3a';
+    bChecker.style.color = annKind === 'checker' ? '#0b0018' : '#9fb8c8';
+    bCar.style.background = annKind === 'car' ? '#30e1b9' : '#2a2a3a';
+    bCar.style.color = annKind === 'car' ? '#0b0018' : '#9fb8c8';
+  };
+  paint();
+  document.body.appendChild(bar);
+}
 // THE QUAD BEING EDITED: the tap produces it, the player drags its four handles onto the building's corners (the
 // reference's annotation is a hand quad; this is the same act with a finger), and the yard is rebuilt on release.
 const annEdit = { quad: null, drag: -1 };
+// WHAT A TAP ADDS. The reference's annotation carries buildings (quads) AND cars (boxes) - both are the player's
+// geometry, both are given (`S7`). A building is grown and quad-edited; a car is grown and taken as its BOX (the engine's
+// S12 cuts inside a given box). The panel in annotate mode sets this.
+let annKind = 'building';
 const HANDLE_R = 11;                                   // game px: how near a corner a press must land to grab it
 const handleNear = (at) => {
   if (!annEdit.quad) return -1;
@@ -1558,6 +1612,7 @@ function applyQuad() {
 if (params.get('annotate') === '1' && typeof window !== 'undefined') {
   window.__annotateAt = annotateAt;
   window.__dragQuad = (i, x, y) => { if (!annEdit.quad) return null; annEdit.quad[i] = [x, y]; applyQuad(); return annEdit.quad; };
+  window.__annotateKind = (k) => { annKind = k === 'car' ? 'car' : k === 'checker' ? 'checker' : 'building'; return annKind; };
 }
 tiltEl.addEventListener('pointerdown', (e) => {
   if (params.get('annotate') === '1' && yard) {
