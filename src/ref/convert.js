@@ -88,7 +88,7 @@ export async function engineFrame({ img: given = null, src = null, rgba = null, 
   // black frame with a correct idx buffer (measured: the canvas was black while the readout said FNV 7204df6f).
   const palette = (c.RGB || []).map(([r, g, b]) => [r, g, b]);
   return {
-    idx, palette, regions, ms,
+    idx, palette, regions, ms, component: c,
     readout: {
       fnv: c.fnv(c.clean), palette: c.SUB.length, windows: (c.WN || []).length, targets: (c.TARGETS || []).length,
       facades: (c.REP || []).map((r) => ({ name: r.name, kind: r.kind, grid: `${r.lu}x${r.lv}`, nw: r.nw, T: r.T, cover: r.cover })),

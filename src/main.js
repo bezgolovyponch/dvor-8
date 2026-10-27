@@ -525,6 +525,10 @@ async function build(rgba, w, h, dets, big = null) {
         const ef = await engineFrame({ src: photoUrl, rgba, w, h, scene, seed: 8 });
         st.idx = ef.idx; st.palette = ef.palette; st.windows = []; st.structures = [];
         engineRegions = ef.regions;
+        // THE ENGINE'S OWN D-MODEL DRIVES THE DAMAGE: its S15-S19 produce cracked / darkened / gutted pieces, glass
+        // shards and debris - our damage art (craters, wireframe wrecks) painted over the engine's frame is a
+        // mismatch, and it is what the operator's phone showed. The instance is kept so a hit can be routed to it.
+        if (typeof window !== 'undefined') window.__engineInst = ef.component;
         if (typeof window !== 'undefined') window.__engine = ef.readout;
       }
     } catch (e) {
@@ -603,8 +607,27 @@ async function build(rgba, w, h, dets, big = null) {
   begin();
   return true;
 }
+// A HIT ON A YARD THAT THE ENGINE PAINTED IS THE ENGINE'S: `damageAt` runs its own D-model, and the frame is copied
+// back from its buffer. The app's damage art then never touches an engine frame.
+function engineDamage(x, y) {
+  const c = (typeof window !== 'undefined' && window.__engineInst) || null;
+  if (!c || !world || !world.engineFrame) return false;
+  try {
+    // THE ENGINE'S SIGNATURE: damageAt(S, x, y, fx) - the state first, then the frame point, then the effect list
+    // (engine line 340). Calling it with the point first threw "Cannot read properties of undefined" on this.S.
+    c.damageAt(c.S, Math.floor(x) + 0.5, Math.floor(y) + 0.5, []);
+    const clean = c.clean;
+    for (let p = 0; p < world.idx.length; p += 1) world.idx[p] = clean[p];
+    world.palette = c.RGB ? c.RGB.map(([r, g, b]) => [r, g, b]) : world.palette;
+    return true;
+  } catch (e) { return false; }
+}
 function begin() {
   world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env, structures: yard.st.structures });
+  // THE PAGE CAN PRESS A HIT, so a gate can test the real impact path (not a re-implementation of it).
+  if (typeof window !== 'undefined' && params.has('debug')) window.__strikeAt = (x, y) => hit(world.regions.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) || null, x, y, 2, 1);
+  // THE ENGINE PAINTED THIS FRAME: its damage model owns the picture (see engineDamage).
+  if (typeof window !== 'undefined' && window.__engineInst && yard.regions && yard.regions.some((r) => r.engineId != null || r.engineBid != null)) world.engineFrame = true;
   // ---- BUILDINGS BECOME REGIONS, FROM THE WORLD'S OWN STRUCTURES -----------------------------------------
   //
   // COCO/EfficientDet has no building class, so a building can never arrive from the detector - which is why the
@@ -978,6 +1001,19 @@ function resolve(rock) {
 
 // One impact on one thing, from a throw or from a pair of feet: the rules decide, and everything answers.
 function hit(t, hx, hy, damage, comboTime) {
+  // AN ENGINE-PAINTED YARD TAKES THE HIT IN THE ENGINE: its D-model paints the piece, glass and debris, and the frame
+  // is copied back. Our own damage art is only for the vector route.
+  if (world.engineFrame && engineDamage(hx, hy)) {
+    // THE HUD COUNTS WHAT THE ENGINE PAINTED: its model keeps its own state, so the app's `hits` is moved here (a hit is
+    // a hit), and a region the engine has taken to no-id is gone.
+    t.hits = (t.hits || 0) + 1;
+    const c = window.__engineInst;
+    const k = Math.floor(hy) * world.w + Math.floor(hx);
+    if (c && c.S && c.S.ID && k >= 0 && k < c.S.ID.length && !c.S.ID[k]) t.gone = true;
+    impact(fx, 'hit', calm); sfx.hit(1); navigator.vibrate?.(12);
+    pop(`+1`, hx, hy);
+    return { kind: 'hit', points: 1, combo: 1 };
+  }
   const pane = t.kind === WINDOW && !t.gone ? struckGlass(t, hx, hy, damage) : null;
   const res = strike(world, t, hx, hy, { damage, combo: comboTime });
   if (!res) return null;
