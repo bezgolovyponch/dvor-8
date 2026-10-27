@@ -265,3 +265,28 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 .factPanel .fpText { margin: 0; font-size: 14px; line-height: 1.45; color: #fff6c2; }
 .factPanel .fpFoot { display: flex; justify-content: flex-end; }
 .factPanel .fpMore { background: #30e1b9; color: #0b0018; border: 0; font: italic 900 11px/1 'Arial Black', Impact, sans-serif; padding: 10px 12px; box-shadow: 3px 3px 0 #f04f78; cursor: pointer; }
+
+/* THE TEMPLATE'S GEOMETRY, AS RATIOS OF THE FRAME (tools/html-audit.mjs measures these rows):
+   score left 4.9% / top 5.9% / font 5.9% of the width · danger right 4.9% / top 5.9% · banner top 13.3% ·
+   bar inside the picture: right 0.7% / bottom 2% / height 8.4% · info round 13.2% · chips 27.8% x 6.6%. */
+.hudTop { position: absolute; left: 0; top: 0; right: 0; bottom: 0; height: 100%; display: flex; justify-content: space-between; align-items: flex-start; padding: 0; pointer-events: none; z-index: 7; }
+.hudTop .hudLeft { position: absolute; left: 4.9%; top: 5.9%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.hudTop .clock { position: absolute; left: 4.9%; top: 1.4%; }
+.hudTop .hudLeft .clock { order: -1; font: 700 2.6cqw/1 'Trebuchet MS', system-ui, sans-serif; color: #fff; letter-spacing: .06em; text-shadow: 1px 1px 0 #0b0018; }
+.hudTop .hud { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.hudTop .hud .score { display: flex; align-items: baseline; gap: 4px; }
+.hudTop .hud .score b { font: italic 900 5.9cqw/1 'Arial Black', Impact, sans-serif; color: #fff; text-shadow: 2px 2px 0 #f04f78; }
+.hudTop .hud .score span, .hudTop .hud .left span { font-size: 9px; letter-spacing: .12em; color: #fff; text-shadow: 1px 1px 0 #0b0018; }
+.hudTop .hud .left { display: flex; align-items: baseline; gap: 3px; line-height: 1.2; }
+.hudTop .hud .left b { font: italic 900 3.4cqw/1 'Arial Black', Impact, sans-serif; color: #fff; text-shadow: 1px 1px 0 #0b0018; }
+.hudTop .hud .combo { display: none; }
+.hudTop .hudDanger { position: absolute; right: 4.9%; top: 5.9%; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.hudTop .hudDanger .heat { display: flex; gap: 3px; width: 44px; height: 6px; }
+.hudTop .hudDanger span { font-size: 9px; letter-spacing: .14em; color: #fff; text-shadow: 1px 1px 0 #0b0018; }
+.hudTop .hudDanger .heat u { display: block; width: auto; height: 6px; flex: 1 1 0; background: #2a2430; box-shadow: 1px 1px 0 #0b0018; }
+.hudTop .hudDanger .heat u.on { background: #f04f78; }
+#frame { container-type: size; }
+#bar.inFrame { position: absolute; right: 0.7%; bottom: 2%; height: 8.4%; width: auto; z-index: 8; }
+#bar.inFrame .round { width: 13.2cqw; height: 13.2cqw; }
+#bar.inFrame .pill, #bar.inFrame .barDrop { height: 100%; }
+#banner { top: 13.3% !important; }

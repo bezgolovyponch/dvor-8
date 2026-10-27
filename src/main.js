@@ -318,7 +318,10 @@ function paintHud() {
   $('coolBar').style.width = mode.cooldown ? `${(1 - fx.cool / mode.cooldown) * 100}%` : '0';
   $('drunkBar').style.width = `${drink.drunk * 100}%`;
   const lit = stars(folk);
-  $('heat').parentElement.hidden = folk.people.length === 0 && lit === 0;
+  // ОПАСНОСТЬ IS ALWAYS ON SCREEN, as the operator's template has it (five segments from the first frame). It used to be
+  // hidden until a person appeared, which left the top-right corner of the screen empty and made the HUD differ from the
+  // reference's own layout (measured by tools/html-audit.mjs: the block existed but was display:none).
+  $('heat').parentElement.hidden = false;
   if (lit !== shown.stars) {
     [...$('heat').children].forEach((el, n) => { el.className = n < lit ? 'on' : ''; });
     $('heat').classList.toggle('hot', lit >= 4); $('heat').setAttribute('aria-valuenow', String(lit));
@@ -373,13 +376,39 @@ function hudRestructure() {
   const frame = document.getElementById('frame');
   const hud = document.querySelector('header .hud');
   const clock = document.getElementById('clock');
+  const heatEl = document.getElementById('heat');               // the app's own meter (setHeat updates its children)
   if (!frame || !hud || document.getElementById('hudTop')) return;
+  // THE OPERATOR'S SCREEN IS ONE PHONE WITH EVERYTHING INSIDE IT. Its template puts the score at left 4.9% / top 5.9%
+  // (font 5.9% of the width), the danger at right 4.9% / top 5.9%, the banner at 13.3%, and the bar at bottom 2% /
+  // right 0.7% / height 8.4% - all INSIDE the 576x1024 phone. Ours had the bar and the danger BELOW the picture, which
+  // the audit (tools/html-audit.mjs) measured as 2370% and 283% off. They are moved in, with the template's ratios.
   const top = document.createElement('div');
   top.id = 'hudTop';
   top.className = 'hudTop';
-  if (clock) top.appendChild(clock);
-  top.appendChild(hud);
+  const left = document.createElement('div');
+  left.className = 'hudLeft';
+  if (clock) left.appendChild(clock);
+  left.appendChild(hud);
+  top.appendChild(left);
+  // THE DANGER BLOCK IS BUILT AROUND THE APP'S OWN METER: the label is ours, `#heat` is the same element the game
+  // updates (so the pips keep working). Moving the old wrapper collapsed to zero (measured: the wrapper's flex
+  // child with a zero-size label); this is explicit and measurable.
+  if (heatEl) {
+    const right = document.createElement('div');
+    right.className = 'hudDanger';
+    const lab = document.createElement('span');
+    lab.textContent = 'ОПАСНОСТЬ';
+    right.appendChild(lab);
+    const oldWrap = heatEl.parentElement;
+    right.appendChild(heatEl);
+    // THE OLD WRAPPER GOES: it kept its "ОПАСНОСТЬ" label below the picture, so the screen showed the word twice
+    // (measured in the screenshot). One block, one label.
+    if (oldWrap && oldWrap !== right && !oldWrap.querySelector('#heat')) oldWrap.remove();
+    top.appendChild(right);
+  }
   frame.appendChild(top);
+  const bar = document.getElementById('bar');
+  if (bar) { bar.classList.add('inFrame'); frame.appendChild(bar); }
 }
 function clockTick() {
   const el = document.getElementById('clock');

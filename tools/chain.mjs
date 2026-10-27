@@ -35,6 +35,9 @@ const steps = [
   // app's pixel identity intact and damaged) is re-measured and refused if it got worse. `--accept` with a reason is
   // the only way to move a lock, and it writes docs/ledger-history.md.
   ['0f LEDGER', 'node', ['--experimental-websocket', 'tools/ledger-check.mjs'], {}],
+  // THE SCREEN IS THE OPERATOR'S TEMPLATE, MEASURED: every HUD element's position and size, as ratios of the frame,
+  // against the .dc.html's own inline styles. An impression of "looks close" is not this row.
+  ['0g HTML', 'node', ['--experimental-websocket', 'tools/html-audit.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],
