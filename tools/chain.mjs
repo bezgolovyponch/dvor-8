@@ -38,6 +38,9 @@ const steps = [
   // THE SCREEN IS THE OPERATOR'S TEMPLATE, MEASURED: every HUD element's position and size, as ratios of the frame,
   // against the .dc.html's own inline styles. An impression of "looks close" is not this row.
   ['0g HTML', 'node', ['--experimental-websocket', 'tools/html-audit.mjs'], {}],
+  // EVERY DISASTER IS THE ENGINE'S OWN AND VISIBLE: the four are summoned through the app's panel and must reach
+  // `impact`, throw nothing, and repaint at least 300 pixels.
+  ['0h DISASTER', 'node', ['--experimental-websocket', 'tools/disaster-check.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],

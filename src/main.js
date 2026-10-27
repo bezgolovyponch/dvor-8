@@ -711,6 +711,27 @@ function engineDamage(x, y) {
     return true;
   } catch (e) { return false; }
 }
+// THE ENGINE'S OWN DISASTER, DRIVEN FROM THE APP: `disStep(F, put, d)` takes a copy of the engine's frame, lets the
+// disaster paint into it and damage `S`, and the app shows that copy. Phases are the engine's: siren (60 frames of the
+// siren table), impact, calm, then it clears itself.
+function engineDisaster() {
+  const c = (typeof window !== 'undefined' && window.__engineInst) || null;
+  if (!c || !c.S || !disaster) return false;
+  try {
+    // THE ENGINE'S UI CALLBACK IS NOT OURS: `disStep` calls `setState` on the phase changes (siren -> impact -> calm);
+    // in the app that is a no-op, the frame is what we take (measured: without it the step threw before the disaster
+    // could paint).
+    if (!c.setState) c.setState = () => {};
+    if (!c.dis) c.dis = { id: disaster.kind, f: 0, t: 0, phase: 'siren', wet: {} };
+    const W = c.W, H = c.H;
+    const F = Uint8Array.from(c.S.base);
+    const put = (x, y, col) => { const k = Math.floor(y) * W + Math.floor(x); if (k >= 0 && k < W * H) F[k] = col; };
+    c.disStep(F, put, c.dis);
+    for (let p = 0; p < world.idx.length; p += 1) world.idx[p] = F[p];
+    if (!c.dis) disaster = null;
+    return true;
+  } catch (e) { if (typeof window !== 'undefined') window.__engineDisasterError = String((e && e.message) || e); return false; }
+}
 function begin() {
   world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env, structures: yard.st.structures });
   // THE PAGE CAN PRESS A HIT, so a gate can test the real impact path (not a re-implementation of it).
@@ -1556,11 +1577,28 @@ function frame(now) {
       tick(world, dt);
       stepBlooms(world, dt);
       for (const ev of stepWeather(weather, world, fx, dt, rnd, { x: cam.x, y: cam.y, w: cam.w, h: cam.h })) weatherSays(ev);
-      if (disaster) for (const ev of stepDisaster(disaster, world, dt, rnd)) disasterSays(ev);
+      if (disaster) {
+        // AN ENGINE FRAME TAKES ITS DISASTER IN THE ENGINE: `dis_hurricane / dis_tsunami / dis_godzilla / dis_beyonce`
+        // are the operator's own implementations (log-spiral bands, a Gaussian crest with a water blend LUT, a walker's
+        // footprint, a head that bites cars), and their visuals are the reference's. Ours ran a separate, poorer model.
+        if (world.engineFrame && engineDisaster()) { /* the engine painted this frame */ }
+        else for (const ev of stepDisaster(disaster, world, dt, rnd)) disasterSays(ev);
+      }
       stepDrink(drink, dt);
       if (me?.down) walk(dt);
       if (stepSky(sky, dt, cam.w)) sfx.fly();
-      if (!world.done && !folk.seen) for (const ev of stepFolk(folk, dt * peopleSpeed(weather), { x0: cam.x, x1: cam.x + cam.w, top: Math.max(top + 6, cam.y + cam.h * 0.45), bottom: cam.y + cam.h * 0.78 }, rnd)) folkSays(ev);
+      if (typeof window !== 'undefined') window.__folk = folk;
+      // THE PEOPLE WALK ON THE SCENE'S GROUND LINE, NOT ON A PERCENTAGE OF THE CAMERA. Their band used to be 45%..78%
+      // of the camera height, which in the walking view lands in the sky (the operator saw people "flying"). The
+      // scene's own ground line (`gy` of the annotation, the engine's own number) puts them on the street, and the band
+      // is a strip of that street.
+      {
+        const ann = typeof window !== 'undefined' ? window.__sceneAnnotation : null;
+        const gy = ann && Number.isFinite(Number(ann.gy)) ? Number(ann.gy) : null;
+        const bandTop = gy != null ? gy + 6 : Math.max(top + 6, cam.y + cam.h * 0.45);
+        const bandBottom = gy != null ? Math.min(world.h - 6, gy + Math.max(40, Math.round(cam.h * 0.16))) : cam.y + cam.h * 0.78;
+        if (!world.done && !folk.seen) for (const ev of stepFolk(folk, dt * peopleSpeed(weather), { x0: cam.x, x1: cam.x + cam.w, top: bandTop, bottom: bandBottom }, rnd)) folkSays(ev);
+      }
       if (folk.seen && (endIn -= dt) <= 0) finish();
       if (world.done && (endIn -= dt) <= 0) finish();
     }
