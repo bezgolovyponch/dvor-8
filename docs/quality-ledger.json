@@ -1,0 +1,40 @@
+{
+  "note": "Every row is a measurement of the operator's own product, not a bar we chose. tools/ledger-check.mjs re-measures and refuses any regression. Update ONLY with --accept \"reason\". The seven reference lines are gated by the chain's v13 step and the step count by the chain itself.",
+  "rows": {
+    "engine.fnv": {
+      "value": "7204df6f",
+      "kind": "equal",
+      "source": "the operator's engine on prague-tower (tools/v13/readout.json)"
+    },
+    "engine.palette": {
+      "value": 12,
+      "kind": "equal",
+      "source": "the engine's own working palette"
+    },
+    "engine.windows": {
+      "value": 1321,
+      "kind": "equal",
+      "source": "the engine's own window objects"
+    },
+    "engine.grid.tower": {
+      "value": "10x11",
+      "kind": "equal",
+      "source": "the engine's own facade grid"
+    },
+    "engine.grid.checker": {
+      "value": "6x7",
+      "kind": "equal",
+      "source": "the engine's own facade grid"
+    },
+    "app.intactPx": {
+      "value": 0,
+      "kind": "max",
+      "source": "the app's canvas vs the engine frame, same photo, same seed"
+    },
+    "app.damagedPx": {
+      "value": 0,
+      "kind": "max",
+      "source": "the app's canvas vs the engine frame after the same ten hits"
+    }
+  }
+}

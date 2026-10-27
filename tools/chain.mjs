@@ -31,6 +31,10 @@ const steps = [
   // THE DAMAGE IS THE REFERENCE'S OWN: our damaged frame against the same engine's damaged frame (the operator's .html
   // model, hit the same ten times). Code against code, picture against picture - the bar is 2%.
   ['0e DAMAGE', 'node', ['--experimental-websocket', 'tools/damage-check.mjs'], {}],
+  // NO REGRESSION IS SHIPPED: every verified number of the operator's own product (FNV, palette, windows, grids, the
+  // app's pixel identity intact and damaged) is re-measured and refused if it got worse. `--accept` with a reason is
+  // the only way to move a lock, and it writes docs/ledger-history.md.
+  ['0f LEDGER', 'node', ['--experimental-websocket', 'tools/ledger-check.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],

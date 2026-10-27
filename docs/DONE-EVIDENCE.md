@@ -42,7 +42,7 @@ browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start insid
 ## The build
 
 `v0.6.1` — [dvor-8-0.6.8.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.6.8/dvor-8-0.6.8.apk), signed,
-**64,423,917 bytes**, published 2026-10-19 from the chain-green tree (`79952ff4…`, 61 files, 17 chain steps, **9 verified bricks**, the operator's engine as the converter, its body byte-identical to the extraction) and its packaged `ref/engine.js` / `ref/convert.js` / `pieces/region-grow.js` are byte-identical to the tree. VERIFIED after publishing:
+**64,423,917 bytes**, published 2026-10-19 from the chain-green tree (`79952ff4…`, 61 files, 18 chain steps, **9 verified bricks**, the operator's engine as the converter, its body byte-identical to the extraction) and its packaged `ref/engine.js` / `ref/convert.js` / `pieces/region-grow.js` are byte-identical to the tree. VERIFIED after publishing:
 the released asset was downloaded and unzipped, and `assets/www/src/vector.js`, `main.js`, `world.js` and `street.js`
 are **byte-identical** to this tree (sha256 on both sides). What it carries over v0.5.4: the operator's reference sky
 (v13 S6 cloudscape, V2 85.7 → 60.5), the ground's own two planes (V3 71.6 → **50.2**, V7 → **55.39**), the working
