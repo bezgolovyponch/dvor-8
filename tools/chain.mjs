@@ -28,6 +28,9 @@ const steps = [
   // THE CONVERTER IS THE OPERATOR'S OWN ENGINE: its module is the byte-exact extraction (sha256) and it reproduces the
   // operator's frames (its own FNV + its own stage numbers). Code against code, not our frame against a share.
   ['0d ENGINE', 'node', ['--experimental-websocket', 'tools/engine-check.mjs'], {}],
+  // THE DAMAGE IS THE REFERENCE'S OWN: our damaged frame against the same engine's damaged frame (the operator's .html
+  // model, hit the same ten times). Code against code, picture against picture - the bar is 2%.
+  ['0e DAMAGE', 'node', ['--experimental-websocket', 'tools/damage-check.mjs'], {}],
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],

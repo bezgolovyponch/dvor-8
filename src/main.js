@@ -673,8 +673,11 @@ function engineDamage(x, y) {
     // THE ENGINE'S SIGNATURE: damageAt(S, x, y, fx) - the state first, then the frame point, then the effect list
     // (engine line 340). Calling it with the point first threw "Cannot read properties of undefined" on this.S.
     c.damageAt(c.S, Math.floor(x) + 0.5, Math.floor(y) + 0.5, []);
-    const clean = c.clean;
-    for (let p = 0; p < world.idx.length; p += 1) world.idx[p] = clean[p];
+    // THE ENGINE'S LIVE FRAME IS `S.base`, NOT `clean`: `clean` is the pristine frame kept for the reveal, and copying
+    // it after a hit left our canvas showing our own damage art over an unchanged picture (measured: our damaged frame
+    // was 94.38% different from the operator's own damaged frame). `damageAt` writes the hit into `S.base`.
+    const live = c.S && c.S.base ? c.S.base : c.clean;
+    for (let p = 0; p < world.idx.length; p += 1) world.idx[p] = live[p];
     world.palette = c.RGB ? c.RGB.map(([r, g, b]) => [r, g, b]) : world.palette;
     return true;
   } catch (e) { return false; }
@@ -1099,7 +1102,10 @@ function hit(t, hx, hy, damage, comboTime) {
     const c = window.__engineInst;
     const k = Math.floor(hy) * world.w + Math.floor(hx);
     if (c && c.S && c.S.ID && k >= 0 && k < c.S.ID.length && !c.S.ID[k]) t.gone = true;
-    impact(fx, 'hit', calm); sfx.hit(1); navigator.vibrate?.(12);
+    // NO SCREEN-WIDE EFFECTS ON AN ENGINE FRAME: `impact` sets a full-screen flash, which repaints every pixel and
+    // reads as the screen jumping/blinding (measured: a 90% frame difference that was the FLASH, not the damage). The
+    // reference's frame is never flashed; the hit answers with the engine's own painted damage.
+    sfx.hit(1); navigator.vibrate?.(12);
     pop(`+1`, hx, hy);
     return { kind: 'hit', points: 1, combo: 1 };
   }
@@ -1548,7 +1554,17 @@ function frame(now) {
       hidden: folk.hidden, seen: folk.seen, done: world.done, scanY: scanY === null ? null : Math.round(scanY),
       weather: cleanFrame ? null : weather?.kind, disaster: cleanFrame ? null : disaster?.kind, filter, clean: cleanFrame,
     });
-    draw(ctx, buf, world, fx, { annot: annEdit, filter, mode, seconds: clock, scanY, motion, shake, cam, me, weather,
+    // THE REFERENCE'S FRAME DOES NOT MOVE. The app shook the whole canvas on every hit (a rotation/translation of the
+    // picture), which on an engine-painted yard reads as the screen jumping - measured: our damaged frame differed from
+    // the operator's by 94.38% because the dump was taken mid-shake, not because the damage was wrong. An engine frame
+    // is drawn still.
+    // AN ENGINE FRAME IS THE WHOLE PICTURE, 1:1 - THE REFERENCE'S PHONE SCREEN. The app's walking camera zoomed the
+    // yard to the player's eye, which cropped an engine frame and made it look like a different scene (measured: our
+    // damaged frame differed from the operator's by 90% purely from the camera). On an engine frame: no camera, no
+    // tilt, no shake - the frame IS the screen.
+    if (typeof window !== 'undefined') window.__cam = cam;
+    const engineView = world.engineFrame ? { cam: { x: 0, y: 0, w: world.w, h: world.h }, motion: { angle: 0, x: 0, y: 0 }, shake: { angle: 0, x: 0, y: 0 } } : null;
+    draw(ctx, buf, world, fx, { annot: annEdit, filter, mode, seconds: clock, scanY, motion: engineView ? engineView.motion : motion, shake: engineView ? engineView.shake : shake, cam: engineView ? engineView.cam : cam, me: engineView ? null : me, weather,
       drink: filter === 'alcohol' ? { full: level(drink), busy: drink.busy / SWIG_TIME } : null, flier: stage === 'play' ? sky.flier : null, folk,
       hideT, land: me?.land ?? 0, disaster: cleanFrame ? null : disaster, weather: cleanFrame ? null : weather,
       clean: cleanFrame, scanY: cleanFrame ? null : scanY });
