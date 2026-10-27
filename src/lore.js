@@ -44,3 +44,10 @@ export function factFor(lastTheme, rnd = Math.random) {
 }
 
 export const THEMES = [...new Set(FACTS.map((f) => f.theme))];
+
+// THE THEME LABELS, IN RUSSIAN — the panel's chip shows these, never the internal key (the operator's screen shows
+// the theme as a readable tag; drawing `weather` there was the same leak the pop had: "plants" read by a player).
+export const THEME_RU = {
+  animals: 'ЖИВОТНЫЕ', cities: 'ГОРОДА', history: 'ИСТОРИЯ', materials: 'МАТЕРИАЛЫ', plants: 'РАСТЕНИЯ',
+  sound: 'ЗВУК', space: 'КОСМОС', time: 'ВРЕМЯ', water: 'ВОДА', weather: 'ПОГОДА',
+};

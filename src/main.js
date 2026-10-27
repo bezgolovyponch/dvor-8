@@ -40,8 +40,8 @@ import { boxDown } from './flat.js';
 import { photoLayer, BLOCK } from './criteria/RoadRule.js';   // THE PHOTOGRAPH LAYER, BY NAME (P2)
 import { chip, surfaceAt, imprint, borderOf, edgesOf, wreckAlong, rollOver, breakCells, cellsOf } from './world.js';
 import { rollFor, makeWeather, weatherTable, stepWeather, peopleSpeed, weatherLine, WEATHERS } from './weather.js';
-import { factFor } from './lore.js';
-import { DISASTERS, ORDER as DISASTER_ORDER, makeDisaster, rollDisaster, stepDisaster, beastPixels, beastAt } from './disaster.js';
+import { factFor, THEME_RU } from './lore.js';
+import { DISASTERS, ORDER as DISASTER_ORDER, makeDisaster, stepDisaster, beastPixels, beastAt } from './disaster.js';
 import { makeWindow, hitWindow, shards } from './glass.js';
 import { PAINTS, stamp, lay } from './decal.js';
 import { spawn, fling, PRESETS } from './parts.js';
@@ -329,6 +329,41 @@ function paintHud() {
 }
 // THE CLOCK IN THE HEADER (the reference's own HUD element): the phone's local time, updated each minute, and only
 // while a yard is being played.
+// ---- THE FACT PANEL, AS THE OPERATOR'S TEMPLATE HAS IT ------------------------------------------------------
+//
+// Its screen shows the info as a PANEL, not a floating line: a black box with a yellow border and a pink shadow,
+// the thing's name, a theme chip, "ФАКТ n", the text, a "ЕЩЁ ФАКТ" button and a close cross. That is the same panel
+// this function builds, with the ids our gates already read (`#factText`).
+function factPanel({ name, theme, fact, text, onMore, onClose }) {
+  const frame = document.getElementById('frame');
+  if (!frame) return null;
+  let el = document.getElementById('factPanel');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'factPanel';
+    el.className = 'factPanel';
+    frame.appendChild(el);
+  }
+  el.replaceChildren();
+  const head = document.createElement('div'); head.className = 'fpHead';
+  const title = document.createElement('b'); title.textContent = name || 'ДВОР'; head.appendChild(title);
+  const x = document.createElement('button'); x.type = 'button'; x.className = 'fpX'; x.textContent = '×';
+  x.addEventListener('click', () => { el.remove(); if (onClose) onClose(); });
+  head.appendChild(x);
+  const meta = document.createElement('div'); meta.className = 'fpMeta';
+  const chip = document.createElement('span'); chip.className = 'fpChip'; chip.textContent = THEME_RU[theme] || String(theme || 'ДВОР').toUpperCase();
+  const num = document.createElement('span'); num.className = 'fpN'; num.textContent = fact ? `ФАКТ ${fact}` : '';
+  meta.appendChild(chip); meta.appendChild(num);
+  const body = document.createElement('p'); body.id = 'factText'; body.className = 'fpText'; body.textContent = text || '';
+  const foot = document.createElement('div'); foot.className = 'fpFoot';
+  // NO GLYPH TRICKS IN A BLACK-LETTER TYPEFACE: the operator's arrow does not exist in Arial Black, so the label says
+  // the action in words.
+  const more = document.createElement('button'); more.type = 'button'; more.className = 'fpMore'; more.textContent = 'ЕЩЁ ФАКТ';
+  more.addEventListener('click', () => { if (onMore) onMore(); });
+  foot.appendChild(more);
+  el.append(head, meta, body, foot);
+  return el;
+}
 // ---- THE HUD'S LEFT ZONE, AS THE OPERATOR'S SCREEN HAS IT: the clock, the big score and РАЗБИТО sit OVER the picture,
 // in the top-left corner (its template: "{{ scoreTxt }}" and "РАЗБИТО {{ wrecked }}" at left:28px; top:60px). Our
 // existing elements are moved there, ids unchanged, so every handler and gate keeps working. The ОПАСНОСТЬ meter and
@@ -694,14 +729,16 @@ function begin() {
   if (weather.kind !== 'clear') note(`${weatherLine(weather)} — ${WEATHERS[weather.kind].why}`);
   // THE DAY CAN ALSO GO WRONG. Rare, deterministic by date (D28) like the street and the sky, and it can be
   // summoned from the drawer for anyone who does not want to wait for their yard to be eaten.
-  const rolled = rollDisaster(daySeed(today), rnd);
-  disaster = rolled ? makeDisaster(rolled, rnd) : null;
-  if (disaster) note(`${DISASTERS[disaster.kind].line}`);
+  // THE YARD STARTS CALM. The day used to roll a disaster and start it WITH the yard - "everything explodes without
+  // the player doing anything". A disaster is now only what the player summons from СТИХИЯ (the day's weather stays:
+  // it changes the light, not the objects).
+  disaster = null;
   top = bandTop(world); ended = false; stomps = 0;
   clearSky(sky, skyLines());
   folk = makeFolk(); paintHide(); hideT = 0;
   paintView();
   stage = 'scan'; scanT = 0; endIn = 0; shown = {}; press = null; foldForPlay(false);
+  banner('СОБИРАЮ ДВОР', true);       // the loading line: no counts, no labels, nothing to read until the yard is ready
   pops.replaceChildren();
   $('banner').classList.remove('hold', 'show');
   cards(null);
@@ -1455,11 +1492,13 @@ function frame(now) {
     if (stage === 'scan') {
       scanT = clockPin >= 0 ? SCAN_TIME : scanT + dt;   // a pinned capture is of the finished frame, never of the wipe
       scanY = Math.min(1, scanT / SCAN_TIME) * world.h;
+      // NOTHING BUT THE LOADING SCREEN WHILE THE YARD IS BEING BUILT. The scan used to pop every region's label as the
+      // line passed it - with the engine's world (1082 regions: 2 buildings, 6 cars, 1074 panes) that is a screen full
+      // of labels and ticks at once, which the operator saw as "some things appear". The regions are marked seen
+      // silently; one line says what is happening, and the objects appear when the yard is ready.
       for (const r of world.regions) {
         if (r.seen || r.cy > scanY) continue;
         r.seen = true;
-        sfx.tick(r.id);
-        pop(r.label.toUpperCase(), r.cx, r.cy, 'tag');
       }
       if (scanT >= SCAN_TIME) {
         stage = 'play'; scanY = null; foldForPlay(true); sfx.ready();
@@ -1937,8 +1976,14 @@ tiltEl.addEventListener('pointerdown', (e) => {
     // internal theme KEY in English, leaked into the player's screen - and the note prefixed the tapped thing's name to a
     // fact about something else entirely ("машина: Дерево в городе живёт меньше..."), which reads as a false claim about
     // the car. The thing's own name is already its pop; the fact is now shown as what it is, a fact about the yard.
-    pop(f.line, at.x, at.y + 6);
-    note(`про двор: ${f.line}`);
+    // THE FACT IS A PANEL ABOUT THE THING THE PLAYER TOUCHED: its own name in the head, the fact's theme as a chip,
+    // the text, and ЕЩЁ ФАКТ draws the next one from the bag (the operator's template's own behaviour).
+    const show = (ff) => factPanel({
+      name: t ? String(t.label || '').toUpperCase() : 'ДВОР',
+      theme: ff.theme, fact: ff.n, text: ff.line,
+      onMore: () => { lastTheme = ff.theme; show(factFor(lastTheme, rnd)); },
+    });
+    show(f);
     sfx.paper();
     e.preventDefault();
     e.stopPropagation();

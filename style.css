@@ -253,3 +253,15 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 .hudTop .hud .left b { font: italic 900 12px/1 'Arial Black', Impact, sans-serif; color: #fff; text-shadow: 1px 1px 0 #0b0018; }
 .hudTop .hud .combo { display: none; }
 .hudTop .clock { font: 700 11px/1 'Trebuchet MS', system-ui, sans-serif; color: #fff; letter-spacing: .06em; text-shadow: 1px 1px 0 #0b0018; }
+
+/* THE FACT PANEL (the operator's own info design: black box, yellow border, pink shadow, Arial Black italics). */
+.factPanel { position: absolute; left: 10px; right: 10px; top: 12%; z-index: 9; background: #0b0018; border: 3px solid #f9c22b; box-shadow: 5px 5px 0 #f04f78; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+.factPanel .fpHead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.factPanel .fpHead b { font: italic 900 17px/1.1 'Arial Black', Impact, sans-serif; color: #fff; }
+.factPanel .fpX { width: 34px; height: 34px; flex: 0 0 auto; background: #2a2430; color: #fff; border: 0; font: 900 16px/1 'Arial Black', sans-serif; cursor: pointer; }
+.factPanel .fpMeta { display: flex; gap: 8px; align-items: center; }
+.factPanel .fpChip { background: #f04f78; color: #fff; font: 900 10px/1 ui-monospace, Menlo, monospace; letter-spacing: .14em; padding: 4px 7px; text-transform: uppercase; }
+.factPanel .fpN { font-size: 10px; letter-spacing: .12em; color: #9babb2; }
+.factPanel .fpText { margin: 0; font-size: 14px; line-height: 1.45; color: #fff6c2; }
+.factPanel .fpFoot { display: flex; justify-content: flex-end; }
+.factPanel .fpMore { background: #30e1b9; color: #0b0018; border: 0; font: italic 900 11px/1 'Arial Black', Impact, sans-serif; padding: 10px 12px; box-shadow: 3px 3px 0 #f04f78; cursor: pointer; }
