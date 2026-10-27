@@ -239,3 +239,17 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
 
 /* THE CLOCK, the reference's own top-left HUD element: small, quiet, next to the title. */
 .clock { font: 600 12px/1 'Trebuchet MS', system-ui, sans-serif; letter-spacing: .06em; opacity: .8; margin-left: 6px; vertical-align: 4px; }
+
+/* THE HUD'S LEFT ZONE OVER THE PICTURE (the operator's layout: clock, big score, РАЗБИТО). Ids are ours; the
+   arrangement is the reference's. */
+.hudTop { position: absolute; left: 6px; top: 5px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; pointer-events: none; z-index: 6; }
+.hudTop .hud { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+.hudTop .hud .score { display: flex; align-items: baseline; gap: 5px; }
+.hudTop .hud .score b { font: italic 900 24px/1 'Arial Black', Impact, sans-serif; color: #fff; text-shadow: 2px 2px 0 #f04f78; }
+.hudTop .hud .score span, .hudTop .hud .left span { font-size: 7px; line-height: 1.25; letter-spacing: .12em; color: #fff; text-shadow: 1px 1px 0 #0b0018; }
+.hudTop .hud .left { line-height: 1.2; }
+.hudTop .hud .left b { margin-right: 2px; }
+.hudTop .hud .left { display: flex; align-items: baseline; gap: 4px; }
+.hudTop .hud .left b { font: italic 900 12px/1 'Arial Black', Impact, sans-serif; color: #fff; text-shadow: 1px 1px 0 #0b0018; }
+.hudTop .hud .combo { display: none; }
+.hudTop .clock { font: 700 11px/1 'Trebuchet MS', system-ui, sans-serif; color: #fff; letter-spacing: .06em; text-shadow: 1px 1px 0 #0b0018; }

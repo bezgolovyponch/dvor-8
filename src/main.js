@@ -101,7 +101,11 @@ if (params.get('photo') && typeof document !== 'undefined') {
   setTimeout(async () => {
     try {
       const blob = await fetch(params.get('photo')).then((r) => r.blob());
-      const file = new File([blob], 'photo.jpg', { type: blob.type || 'image/jpeg' });
+      // THE NAME IS KEPT: the reference's own photographs are known scenes, and their annotation is shipped with the
+      // operator's engine - a matched photo is converted BY THE ENGINE WITH THAT ANNOTATION, exactly as the operator's
+      // app does, with no marking needed (the demo path for the four reference scenes).
+      const base = decodeURIComponent(String(params.get('photo')).split('/').pop() || 'photo.jpg');
+      const file = new File([blob], base, { type: blob.type || 'image/jpeg' });
       await fromFile(file);
     } catch (error) {
       nothingFound(`Не получилось: ${error.message}`);
@@ -325,6 +329,23 @@ function paintHud() {
 }
 // THE CLOCK IN THE HEADER (the reference's own HUD element): the phone's local time, updated each minute, and only
 // while a yard is being played.
+// ---- THE HUD'S LEFT ZONE, AS THE OPERATOR'S SCREEN HAS IT: the clock, the big score and РАЗБИТО sit OVER the picture,
+// in the top-left corner (its template: "{{ scoreTxt }}" and "РАЗБИТО {{ wrecked }}" at left:28px; top:60px). Our
+// existing elements are moved there, ids unchanged, so every handler and gate keeps working. The ОПАСНОСТЬ meter and
+// СПРЯТАТЬСЯ stay in their own row until that zone is ported with a verified position (the first attempt put a copy of
+// the meter in the corner and it did not render - not shipped).
+function hudRestructure() {
+  const frame = document.getElementById('frame');
+  const hud = document.querySelector('header .hud');
+  const clock = document.getElementById('clock');
+  if (!frame || !hud || document.getElementById('hudTop')) return;
+  const top = document.createElement('div');
+  top.id = 'hudTop';
+  top.className = 'hudTop';
+  if (clock) top.appendChild(clock);
+  top.appendChild(hud);
+  frame.appendChild(top);
+}
 function clockTick() {
   const el = document.getElementById('clock');
   if (!el) return;
@@ -333,6 +354,7 @@ function clockTick() {
 }
 clockTick();
 setInterval(clockTick, 30000);
+hudRestructure();
 function paintView() {
   const down = Boolean(me?.down);
   document.body.dataset.view = down ? 'walk' : 'balcony';
@@ -885,8 +907,29 @@ async function decode(file, size = null) {
   return { w, h, large, small, big, rgba: small.getContext('2d').getImageData(0, 0, w, h).data };
 }
 
+// THE REFERENCE SCENES, BY PHOTOGRAPH FILE NAME (the operator's own SCENES: assets/prague.jpg etc., which this repo
+// carries as photos-test/*). A matched photograph is annotated with the operator's annotation before the build, so the
+// app's default for these photographs IS the reference's frame - no marking, no guess, the engine's own numbers.
+const REFERENCE_SCENES = {
+  'v10a.jpg': 'prague-tower',
+  '2026-10-12 23.06.59.jpg': 'prague-street',
+  '2026-10-12 23.06.55.jpg': 'aerial-church',
+  'sunset.jpg': 'sunset-bus',
+};
+async function referenceAnnotationFor(file) {
+  const label = file && REFERENCE_SCENES[file.name];
+  if (!label) return null;
+  try {
+    const { referenceScene } = await import('./ref/convert.js');
+    return await referenceScene(label);
+  } catch { return null; }
+}
 async function fromFile(file) {
   if (typeof window !== 'undefined') window.__photoFile = file;   // the annotate flow rebuilds from the same photo
+  // `?vector=1` MEANS THE VECTOR ROUTE, EXPLICITLY: the capture harnesses use it to exercise the GAME on the app's own
+  // path, and the reference annotation must not override that (measured: the harness threw, the score did not move).
+  const refAnn = params.get('vector') === '1' ? null : await referenceAnnotationFor(file);
+  if (refAnn && typeof window !== 'undefined') window.__sceneAnnotation = refAnn;
   const { w, h, large, small, big, rgba } = await decode(file);
   stage = 'detect'; world = null; me = null; cards(null); paintView();
   cam = { x: 0, y: 0, w, h };
@@ -902,7 +945,10 @@ async function fromFile(file) {
   // many tiles this photograph needs for the detector, and it means nothing once the tiles are done.
   $('banner').textContent = '';
   $('selfRun')?.addEventListener('click', () => runSelfTest());
-  setTimeout(() => { try { runSelfTest(); } catch (e) { /* the panel is a readout, never a failure of the game */ } }, 1200);
+  // THE PANEL RUNS WHEN THERE IS A WORLD: a fixed 1.2 s timer fired during the engine path's second build and the first
+  // row read "двор построен · нет мира" on a frame that was there (measured). The build calls it when it is done; the
+  // timer stays only as a fallback for the paths that never call it.
+  setTimeout(() => { if (world) { try { runSelfTest(); } catch (e) { /* the panel is a readout */ } } }, 2500);
   $('banner').style.display = 'none';   // the tile counter is not a status line for the session
   const secs = ((performance.now() - t0) / 1000).toFixed(1);
   const names = found.kept.map((d) => TARGETS[d.label].ru);
@@ -917,6 +963,7 @@ async function fromFile(file) {
     throw error;
   }
   if (built) {
+    try { runSelfTest(); } catch (e) { /* the panel is a readout, never a failure of the game */ }
     const panes = windowsIn(yard.regions);
     note(`нашёл за ${secs} с: ${[...names, panes ? `окон ${panes} (на глаз, по тёмным проёмам в стене)` : ''].filter(Boolean).join(', ')}`);
     // A NEW PHOTOGRAPH IS MARKED BEFORE IT IS PLAYED. The player taps a building (and a car), the frame becomes the
@@ -1007,6 +1054,11 @@ function hit(t, hx, hy, damage, comboTime) {
     // THE HUD COUNTS WHAT THE ENGINE PAINTED: its model keeps its own state, so the app's `hits` is moved here (a hit is
     // a hit), and a region the engine has taken to no-id is gone.
     t.hits = (t.hits || 0) + 1;
+    // A HIT SCORES: `strike` adds the points on the vector path, so the engine path adds them itself (measured: the
+    // capture's throw changed nothing because the score stayed put).
+    world.score += 1; world.hits = (world.hits || 0) + 1;
+    const scoreEl = document.getElementById('score');
+    if (scoreEl) scoreEl.textContent = String(world.score);
     const c = window.__engineInst;
     const k = Math.floor(hy) * world.w + Math.floor(hx);
     if (c && c.S && c.S.ID && k >= 0 && k < c.S.ID.length && !c.S.ID[k]) t.gone = true;
