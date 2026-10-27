@@ -496,7 +496,14 @@ async function build(rgba, w, h, dets, big = null) {
   // THE SKYLINE THE ENGINE'S BAND IS SCALED TO: the reference's `h0` (`SKY.s = max(.3, h0/327)`), measured here from
   // the app's own sky mask instead of the engine's 90th-percentile fallback, which on a big sky inflates the band.
   if (typeof window !== 'undefined' && parse && parse.horizon && parse.horizon.length) {
-    window.__skylineY = Math.round(parse.horizon.reduce((a, b) => a + b, 0) / parse.horizon.length);
+    // THE MEDIAN, NOT THE MEAN: a tower that fills the left third pulls a mean skyline far above the horizon it stands
+    // on (measured: mean 248 against the reference's own h0 327 for the same photograph, and the engine's band scale is
+    // h0/327 - so the mean made the band 25% wider than the reference's and the sky read as a dotted field).
+    // THE 90TH PERCENTILE IS THE ENGINE'S OWN STATISTIC for a horizon it is not told (`low[Math.floor(low.length*.9)]`
+    // in its S6): the sky's own bottom, ignoring the columns a tower fills. A mean was 248 and a median 233 against the
+    // reference's h0 327 for the same photograph (measured), which widened the band to a dotted field.
+    const rows = parse.horizon.filter((v) => v > 0).slice().sort((a, b) => a - b);
+    window.__skylineY = rows.length ? rows[Math.min(rows.length - 1, Math.floor(rows.length * 0.9))] : null;
     window.__skylineCols = parse.horizon.filter((v) => v > 0).length;
   }
   const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
@@ -891,14 +898,11 @@ async function fromFile(file) {
     note(`нашёл за ${secs} с: ${[...names, panes ? `окон ${panes} (на глаз, по тёмным проёмам в стене)` : ''].filter(Boolean).join(', ')}`);
     // A NEW PHOTOGRAPH IS MARKED BEFORE IT IS PLAYED. The player taps a building (and a car), the frame becomes the
     // operator's engine's frame; ПРОПУСТИТЬ keeps the vector route for anyone who does not want to mark.
-    // ONLY A PHOTOGRAPH WITHOUT AN ANNOTATION IS MARKED: the rebuild that follows ГОТОВО already carries one, and
-    // re-entering would loop forever (measured: ГОТОВО re-ran the search and asked to mark again).
-    if (!window.__sceneAnnotation && params.get('annotate') !== '0' && params.get('vector') !== '1') {
-      annotating = true;
-      banner('РАЗМЕТЬ ДВОР · ТАПНИ ЗДАНИЕ');
-      note('тапни здание или машину: рамка покажет, где оно, углы рамки тянутся; ГОТОВО строит двор из разметки');
-      annotatePanel();
-    }
+    // MARKING IS AN EXPLICIT ACTION, NOT AN AUTOMATIC ONE. It was automatic for one build, and the operator's phone
+    // showed why that is wrong: the marking panel sits over the game's own bar (i / КАМЕНЬ / СТИХИЯ / play), so a tap
+    // meant for the disaster chip hit the panel, the yard was rebuilt from a half-drawn mark and the screen turned into
+    // a half-marked frame with a disaster on top of it. A photograph now plays as before; РАЗМЕТИТЬ enters the mode.
+    if (params.get('annotate') === '1') enterAnnotate();
   } else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
 }
 
@@ -1582,6 +1586,15 @@ const ann = { buildings: [], cars: [] };
 //
 // The reference's geometry is authored per photograph; the app's equivalent is the player's finger. The panel is the
 // only new UI: what a tap adds (a building or a car), and the button that finishes and builds the yard.
+// THE EXPLICIT ENTRY: the player asks to mark the yard. The current frame keeps playing behind the panel, and ГОТОВО
+// replaces it with the operator's engine's frame built from the mark.
+function enterAnnotate() {
+  if (!yard) { note('сначала сними двор'); return; }
+  annotating = true;
+  banner('РАЗМЕТЬ ДВОР · ТАПНИ ЗДАНИЕ');
+  note('тапни здание или машину: рамка покажет, где оно, углы рамки тянутся; ГОТОВО строит двор из разметки');
+  annotatePanel();
+}
 function annotatePanel() {
   // THE TAP IS REACHABLE FROM THE PAGE while the photograph is being marked: the page's own probes press the same
   // functions the finger does (and the panel is the visual affordance).
@@ -1593,13 +1606,20 @@ function annotatePanel() {
   if (document.getElementById('annBar')) return;
   const bar = document.createElement('div');
   bar.id = 'annBar';
-  bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;z-index:60;display:flex;gap:6px;font:600 12px/1.1 system-ui,sans-serif';
-  const mk = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.style.cssText = 'flex:1;padding:10px 6px;border-radius:8px;border:2px solid #0b0018;background:#30e1b9;color:#0b0018'; b.addEventListener('click', fn); bar.appendChild(b); return b; };
+  // ABOVE THE GAME'S OWN BAR, AND THE BAR IS HIDDEN WHILE MARKING: the first version sat at bottom:8px, exactly over
+  // i/КАМЕНЬ/СТИХИЯ/play, and swallowed the player's taps (measured on the operator's phone).
+  bar.style.cssText = 'position:fixed;left:8px;right:8px;bottom:78px;z-index:60;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font:600 11px/1.1 system-ui,sans-serif';
+  const gameBar = document.getElementById('bar');
+  if (gameBar) gameBar.style.display = 'none';
+  const mk = (text, fn) => { const b = document.createElement('button'); b.textContent = text; b.style.cssText = 'padding:10px 4px;border-radius:8px;border:2px solid #0b0018;background:#30e1b9;color:#0b0018;white-space:nowrap'; b.addEventListener('click', fn); bar.appendChild(b); return b; };
+  const big = (b) => { b.style.gridColumn = 'span 3'; };
   const bBuilding = mk('ЗДАНИЕ', () => { annKind = 'building'; paint(); });
   const bChecker = mk('ШАХМАТКА', () => { annKind = 'checker'; paint(); });
   const bCar = mk('МАШИНА', () => { annKind = 'car'; paint(); });
-  mk('ГОТОВО', () => { bar.remove(); annotating = false; applyQuad(); banner(''); });
-  mk('ПРОПУСТИТЬ', () => { bar.remove(); annotating = false; banner(''); note('двор собран старым путём: разметка не задана'); });
+  const close = () => { bar.remove(); annotating = false; if (gameBar) gameBar.style.display = ''; banner(''); };
+  const bReady = mk('ГОТОВО', () => { close(); applyQuad(); });
+  const bSkip = mk('ПРОПУСТИТЬ', () => { close(); note('двор собран старым путём: разметка не задана'); });
+  big(bReady); big(bSkip);
   const paint = () => {
     bBuilding.style.background = annKind === 'building' ? '#30e1b9' : '#2a2a3a';
     bBuilding.style.color = annKind === 'building' ? '#0b0018' : '#9fb8c8';
@@ -1859,6 +1879,7 @@ for (const id of ['paletteBox', 'fateBox']) {
 }
 // THE ARROW HIDES THE PANEL. It is not one of the four controls: folded away it appears between the two round
 // buttons, and it is then the only way back — which is what a player wants once they have chosen.
+$('annotateBtn')?.addEventListener('click', () => { if (stage === 'play' || yard) enterAnnotate(); });
 $('barMore')?.addEventListener('click', (e) => {
   const bar = $('bar');
   if (!bar) return;

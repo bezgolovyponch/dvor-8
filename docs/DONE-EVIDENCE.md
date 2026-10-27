@@ -1,7 +1,7 @@
 # THE DONE LIST — every item, the command that reproduces it, and its last measured line
 
 One page, for sign-off. Each row is a thing the operator asked for, the exact command to re-measure it, and the line
-that command printed on the shipped tree (`v0.6.4`, commit `6e1afd4`, build `c517cd99…`). If a command does not print the line, the item is
+that command printed on the shipped tree (`v0.6.5`, commit `de354ed`, build `170feb81…`). If a command does not print the line, the item is
 not met — that is the whole point of the page.
 
 **Every command on this page was re-run against the shipped tree and printed the line given** (T+118): match `MATCHES
@@ -41,8 +41,8 @@ browser is `/tmp/chrome-nosandbox.sh` (Chrome's inner sandbox cannot start insid
 
 ## The build
 
-`v0.6.1` — [dvor-8-0.6.4.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.6.4/dvor-8-0.6.4.apk), signed,
-**64,415,725 bytes**, published 2026-10-19 from the chain-green tree (`c517cd99…`, 61 files, 16 chain steps, **9 verified bricks**, the operator's engine as the converter, its body byte-identical to the extraction) and its packaged `ref/engine.js` / `ref/convert.js` / `pieces/region-grow.js` are byte-identical to the tree. VERIFIED after publishing:
+`v0.6.1` — [dvor-8-0.6.5.apk](https://github.com/bezgolovyponch/dvor-8/releases/download/v0.6.5/dvor-8-0.6.5.apk), signed,
+**64,415,725 bytes**, published 2026-10-19 from the chain-green tree (`170feb81…`, 61 files, 16 chain steps, **9 verified bricks**, the operator's engine as the converter, its body byte-identical to the extraction) and its packaged `ref/engine.js` / `ref/convert.js` / `pieces/region-grow.js` are byte-identical to the tree. VERIFIED after publishing:
 the released asset was downloaded and unzipped, and `assets/www/src/vector.js`, `main.js`, `world.js` and `street.js`
 are **byte-identical** to this tree (sha256 on both sides). What it carries over v0.5.4: the operator's reference sky
 (v13 S6 cloudscape, V2 85.7 → 60.5), the ground's own two planes (V3 71.6 → **50.2**, V7 → **55.39**), the working
