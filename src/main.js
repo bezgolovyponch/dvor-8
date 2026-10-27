@@ -323,6 +323,16 @@ function paintHud() {
   }
   if (drink.left !== shown.sips) { $('sipBtn').textContent = drink.left ? `ГЛОТОК ×${drink.left}` : 'ПУСТО — БРОСАЙ'; shown.sips = drink.left; }
 }
+// THE CLOCK IN THE HEADER (the reference's own HUD element): the phone's local time, updated each minute, and only
+// while a yard is being played.
+function clockTick() {
+  const el = document.getElementById('clock');
+  if (!el) return;
+  const d = new Date();
+  el.textContent = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+clockTick();
+setInterval(clockTick, 30000);
 function paintView() {
   const down = Boolean(me?.down);
   document.body.dataset.view = down ? 'walk' : 'balcony';
@@ -615,7 +625,10 @@ function begin() {
   // world is built. Recorded rather than left as a half-working pass.
   // ---- РАЗБИТО n: THE COUNT THE TARGET FRAME SHOWS -----------------------------------------------------
   const brokenEl = document.getElementById('broken');
-  const brokenCount = () => world.regions.reduce((acc, r) => acc + (r.hits > 0 ? 1 : 0), 0);
+  // `world` IS NULL WHILE A REBUILD RUNS (fromFile sets it before decoding the next frame), and this interval keeps
+  // ticking through that window: reading regions on a null world threw every 400 ms while the annotation rebuild ran
+  // (measured: 11 identical TypeErrors during one owner capture). A missing world is 0 broken, not an error.
+  const brokenCount = () => (world && world.regions ? world.regions.reduce((acc, r) => acc + (r.hits > 0 ? 1 : 0), 0) : 0);
   if (brokenEl) { brokenEl.textContent = String(brokenCount()); setInterval(() => { brokenEl.textContent = String(brokenCount()); }, 400); }
 
   // THE WORLD IS READABLE FROM THE PAGE, on purpose: the self-evaluation (clustering, outlines, cars) runs in the
@@ -876,6 +889,16 @@ async function fromFile(file) {
   if (built) {
     const panes = windowsIn(yard.regions);
     note(`нашёл за ${secs} с: ${[...names, panes ? `окон ${panes} (на глаз, по тёмным проёмам в стене)` : ''].filter(Boolean).join(', ')}`);
+    // A NEW PHOTOGRAPH IS MARKED BEFORE IT IS PLAYED. The player taps a building (and a car), the frame becomes the
+    // operator's engine's frame; ПРОПУСТИТЬ keeps the vector route for anyone who does not want to mark.
+    // ONLY A PHOTOGRAPH WITHOUT AN ANNOTATION IS MARKED: the rebuild that follows ГОТОВО already carries one, and
+    // re-entering would loop forever (measured: ГОТОВО re-ran the search and asked to mark again).
+    if (!window.__sceneAnnotation && params.get('annotate') !== '0' && params.get('vector') !== '1') {
+      annotating = true;
+      banner('РАЗМЕТЬ ДВОР · ТАПНИ ЗДАНИЕ');
+      note('тапни здание или машину: рамка покажет, где оно, углы рамки тянутся; ГОТОВО строит двор из разметки');
+      annotatePanel();
+    }
   } else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
 }
 
@@ -1352,7 +1375,8 @@ function frame(now) {
         // regions (2 buildings + 6 cars + 1074 panes) and the banner said "1082 ЦЕЛЕЙ" - the operator's HUD counts
         // buildings + cars only (its TARGETS = 8). `left()` is the one place that rule lives.
         const n = left(world);
-        banner(`${n} ${n === 1 ? 'ЦЕЛЬ' : 'ЦЕЛЕЙ'}`);
+        // WHILE THE PHOTOGRAPH IS BEING MARKED THE BANNER ASKS FOR THE MARK, NOT FOR THE COUNT
+        banner(annotating ? 'РАЗМЕТЬ ДВОР · ТАПНИ ЗДАНИЕ' : `${n} ${n === 1 ? 'ЦЕЛЬ' : 'ЦЕЛЕЙ'}`);
       }
     }
     const frozen = fx.freeze > 0;
@@ -1559,6 +1583,13 @@ const ann = { buildings: [], cars: [] };
 // The reference's geometry is authored per photograph; the app's equivalent is the player's finger. The panel is the
 // only new UI: what a tap adds (a building or a car), and the button that finishes and builds the yard.
 function annotatePanel() {
+  // THE TAP IS REACHABLE FROM THE PAGE while the photograph is being marked: the page's own probes press the same
+  // functions the finger does (and the panel is the visual affordance).
+  if (typeof window !== 'undefined') {
+    window.__annotateAt = annotateAt;
+    window.__dragQuad = (i, x, y) => { if (!annEdit.quad) return null; annEdit.quad[i] = [x, y]; applyQuad(); return annEdit.quad; };
+    window.__annotateKind = (k) => { annKind = k === 'car' ? 'car' : k === 'checker' ? 'checker' : 'building'; return annKind; };
+  }
   if (document.getElementById('annBar')) return;
   const bar = document.createElement('div');
   bar.id = 'annBar';
@@ -1567,7 +1598,8 @@ function annotatePanel() {
   const bBuilding = mk('ЗДАНИЕ', () => { annKind = 'building'; paint(); });
   const bChecker = mk('ШАХМАТКА', () => { annKind = 'checker'; paint(); });
   const bCar = mk('МАШИНА', () => { annKind = 'car'; paint(); });
-  mk('ГОТОВО', () => { bar.remove(); applyQuad(); });
+  mk('ГОТОВО', () => { bar.remove(); annotating = false; applyQuad(); banner(''); });
+  mk('ПРОПУСТИТЬ', () => { bar.remove(); annotating = false; banner(''); note('двор собран старым путём: разметка не задана'); });
   const paint = () => {
     bBuilding.style.background = annKind === 'building' ? '#30e1b9' : '#2a2a3a';
     bBuilding.style.color = annKind === 'building' ? '#0b0018' : '#9fb8c8';
@@ -1586,6 +1618,10 @@ const annEdit = { quad: null, drag: -1 };
 // geometry, both are given (`S7`). A building is grown and quad-edited; a car is grown and taken as its BOX (the engine's
 // S12 cuts inside a given box). The panel in annotate mode sets this.
 let annKind = 'building';
+// THE APP'S OWN STEP: a new photograph is ANNOTATED first - the reference's contract needs the geometry, and the
+// player's finger is where it comes from. `?vector=1` skips it (the vector route, the old pipeline); ГОТОВО or ПРОПУСТИТЬ
+// end it. A photograph is never silently converted by a guess.
+let annotating = false;
 const HANDLE_R = 11;                                   // game px: how near a corner a press must land to grab it
 const handleNear = (at) => {
   if (!annEdit.quad) return -1;
@@ -1609,13 +1645,9 @@ function applyQuad() {
   if (window.__photoFile) fromFile(window.__photoFile);
 }
 // THE TAP IS REACHABLE FROM THE PAGE in annotate mode: the gate and the probes press the same function the finger does.
-if (params.get('annotate') === '1' && typeof window !== 'undefined') {
-  window.__annotateAt = annotateAt;
-  window.__dragQuad = (i, x, y) => { if (!annEdit.quad) return null; annEdit.quad[i] = [x, y]; applyQuad(); return annEdit.quad; };
-  window.__annotateKind = (k) => { annKind = k === 'car' ? 'car' : k === 'checker' ? 'checker' : 'building'; return annKind; };
-}
+
 tiltEl.addEventListener('pointerdown', (e) => {
-  if (params.get('annotate') === '1' && yard) {
+  if (annotating && yard) {
     e.preventDefault(); unlock();
     const at0 = toWorld(e);
     const k = handleNear(at0);

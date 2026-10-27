@@ -16,7 +16,7 @@ import { buildHash } from './build-hash.mjs';
 
 const OUT = process.argv[2] || 'docs/shots';
 const PHOTO = process.argv[3] || 'photos-test/v10a.jpg';
-const BASE = process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&debug&photo=/game/' + PHOTO;
+const BASE = process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&debug&vector=1&photo=/game/' + PHOTO;
 mkdirSync(OUT, { recursive: true });
 let fails = 0;
 const shot = async (page, name, why) => {

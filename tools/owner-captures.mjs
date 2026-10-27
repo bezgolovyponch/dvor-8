@@ -13,7 +13,7 @@ import { buildHash } from './build-hash.mjs';
 
 const OUT = process.argv[2] || '/tmp/owner-captures';
 const PHOTO = process.argv[3] || 'photos-test/v10a.jpg';
-const BASE = process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&debug&photo=/game/' + PHOTO;
+const BASE = process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&debug&vector=1&photo=/game/' + PHOTO;
 mkdirSync(OUT, { recursive: true });
 // THE SHEET MUST NAME THE BUILD IT DESCRIBES. A capture is evidence only for the build it photographed, and the build
 // is identified by content (tools/build-hash.mjs), never by a timestamp. This line is what goes into

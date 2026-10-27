@@ -236,3 +236,6 @@ body[data-hidden="true"] #hideBtn { background: var(--gold); color: var(--ink); 
    style, so the two numbers are read the same way. */
 .left.broken { margin-left: 10px; }
 .left.broken b { color: #ffd23f; }
+
+/* THE CLOCK, the reference's own top-left HUD element: small, quiet, next to the title. */
+.clock { font: 600 12px/1 'Trebuchet MS', system-ui, sans-serif; letter-spacing: .06em; opacity: .8; margin-left: 6px; vertical-align: 4px; }
