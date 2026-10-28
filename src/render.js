@@ -296,6 +296,15 @@ function passer(c, p, seconds, hidden) {
   if (p.kind === 'drunk') rects(c, '#ffb347', [[x + 3 * p.dir, by - 7, 1, 3]]);
   if (p.kind === 'lady') rects(c, PINK, [[x - 4 * p.dir, by - 5, 2, 3]]);
   if (p.wet && Math.floor(seconds * 8 + p.phase) % 3) rects(c, '#3f8cf0', [[x - 3, by - 9 + (Math.floor(seconds * 8) % 4), 1, 2], [x + 3, by - 6 - (Math.floor(seconds * 8) % 3), 1, 2]]);
+  // THE REACTION IS VISIBLE: painted people carry the colour, angry people a red mark and a shake.
+  if (p.painted) {
+    for (let n = 0; n < Math.min(3, p.painted); n += 1) rects(c, ['#f04f78', '#30e1b9', '#f9c22b'][n % 3], [[x - 2 + n * 2, by - 13 + (n % 2) * 3, 2, 2]]);
+  }
+  if (p.angry > 0) {
+    const sh = Math.round(Math.sin(seconds * 30) * 1.2);   // a stamp, not a drift
+    rects(c, '#ff2f4f', [[x + sh - 1, by - 17, 2, 3]]);     // the "!" above the head
+    rects(c, '#ff2f4f', [[x + sh - 1, by - 12, 2, 3]]);
+  }
   const mark = p.state === 'alarm' ? '!' : p.state === 'look' ? (hidden ? '?' : '!') : p.state === 'flee' && !p.called ? '112' : '';
   if (!mark) return;
   const mx = x - Math.floor(textWidth(mark) / 2), my = by - 23 - up - (p.state === 'look' && !hidden ? Math.floor(seconds * 10) % 2 : 0);

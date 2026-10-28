@@ -85,16 +85,17 @@ export function stepFolk(folk, dt, area, rnd) {
   for (const p of folk.people) {
     const k = KINDS[p.kind];
     p.t += dt;
+    if (p.angry > 0) p.angry = Math.max(0, p.angry - dt);
     if (p.state === 'go') {
       p.x += p.dir * k.v * (p.leaving ? 1.4 : 1) * dt;
       if (p.kind === 'drunk') p.y = p.y0 + 3 * Math.sin(p.t * 1.7 + p.phase);
       if (p.to !== null && (p.x - p.to) * p.dir >= 0) { p.x = p.to; p.to = null; set(p, 'alarm'); }
     } else if (p.state === 'alarm') {
-      if (p.t >= k.alarm) { set(p, 'look'); out.push({ type: 'look', who: p }); }
+      if (p.t >= k.alarm) { set(p, 'look'); if (p.angry > 0) { p.look = k.look * 1.5; } out.push({ type: 'look', who: p, angry: p.angry > 0 }); }
     } else if (p.state === 'look') {
       if (folk.hidden) p.lost += dt; else { p.lost = 0; watched += 1; folk.heat += k.rate * dt; }
       if (p.kind !== 'cop' && p.lost >= GIVE_UP) { out.push({ type: 'lost', who: p }); after(p, area); }
-      else if (p.t >= k.look) after(p, area);
+      else if (p.t >= (p.look || k.look)) after(p, area);
     } else if (p.state === 'flee') {
       p.x += p.dir * k.v * 2.2 * dt;
       if (!p.called && p.t >= CALL_TIME) {
@@ -139,9 +140,24 @@ export function personAt(folk, x, y, pad = 5, lead = 0) {
 export function soak(folk, p) {
   p.wet += 1; folk.soaked += 1;
   if (p.kind === 'cop') p.sweeps = Math.min(SWEEPS_MAX, p.sweeps + 1);
-  if (p.state !== 'flee') { p.to = null; p.leaving = false; set(p, 'alarm'); }
+  // THE REACTION IS A MOOD ON THE DOCUMENTED ALARM BEAT, not a new state: `soak -> alarm` is the contract the suite holds
+  // (the person stops, turns, looks), and the anger is what makes that alarm louder - a red mark over their head, a
+  // visible shake, and a look that lasts half again as long.
+  if (p.state !== 'flee') { p.to = null; p.leaving = false; p.angry = ANGRY; set(p, 'alarm'); }
   return KINDS[p.kind].points;
 }
+
+// PAINT ON A PERSON: a mark that stays on them. They do not like it either - they stop, shake the mark off, and look up
+// harder, which is the same danger the water raises.
+export function mark(folk, p) {
+  p.painted = (p.painted || 0) + 1;
+  if (p.state !== 'flee') { p.to = null; p.leaving = false; p.angry = ANGRY; set(p, 'alarm'); }
+  return KINDS[p.kind].points;
+}
+
+// THE ANGRY BEAT: two seconds of stamping and shouting (the sprite shakes, a red mark shows), then the look - the person
+// turns to the balcony angrier than before: the look lasts half again as long, and the danger climbs faster.
+export const ANGRY = 2.0;
 
 // Something was thrown in the open. Under someone's eyes that is noticed at once.
 export function threw(folk) {

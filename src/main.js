@@ -30,7 +30,7 @@ import { makeAlbum, visit, record, progress, shareText, dayKey, dayLabel, daySee
 import { makeBuffer, draw, postcard } from './render.js';
 import { makeSky, clearSky, stepSky, hitAt, knock } from './sky.js';
 import { headlines, yardNews, feedUrl, SOURCE } from './news.js';
-import { makeFolk, stepFolk, personAt, soak, threw, stars, KINDS as FOLK } from './folk.js';
+import { makeFolk, stepFolk, personAt, soak, mark, threw, stars, KINDS as FOLK } from './folk.js';
 import { mulberry32 } from './rng.js';
 import { sfx, unlock, setMuted } from './audio.js';
 import { findWindows, addWindows, takesPaint, WINDOW } from './frame.js';
@@ -728,13 +728,40 @@ function engineDamage(x, y, steps = 1, splash = 0, targetId = 0) {
       if (!p) break;
       earned += p;
     }
+    // A DESTROYED THING EXPLODES AND LEAVES RUINS, IN THE ENGINE'S OWN TERMS: when a hit takes a piece to gone
+    // (`earned` reaches the ladder's 100-point step), a RANDOM number of that thing's panes and pieces go with it, and
+    // the engine's own `cascade` drops every piece left with nothing under it (its rule, the same one its tick runs every
+    // third frame: `cascade(S, parts, false)`). The rubble is the engine's `goneChunk` painting, not ours.
+    let exploded = 0;
+    if (earned >= 100 && c.S) {
+      const rnd = Math.random;
+      const pans = [];
+      for (let w = 0; w < (c.WN ? c.WN.length : 0); w += 1) if (c.WN[w] && c.WN[w].bid === targetId && !c.S.wb[w]) pans.push(w);
+      const k = pans.length ? 1 + Math.floor(rnd() * Math.min(6, pans.length)) : 0;
+      for (let n = 0; n < k; n += 1) {
+        const w = pans.splice(Math.floor(rnd() * pans.length), 1)[0];
+        if (w == null) break;
+        const wk = c.WN[w].pix[0];
+        if (wk != null) { c.breakWin(c.S, w, []); exploded += 1; }
+      }
+      const fill = (c.S.fills && c.S.fills[targetId]) || [];
+      const m = 1 + Math.floor(rnd() * 3);
+      for (let n = 0; n < m && fill.length; n += 1) {
+        const kk = fill[Math.floor(rnd() * fill.length)];
+        if (kk == null) break;
+        c.damageAt(c.S, (kk % c.W) + 0.5, ((kk / c.W) | 0) + 0.5, []);
+        exploded += 1;
+      }
+      // and the structure loses what it stands on
+      try { let guard = 0; while (c.cascade(c.S, [], true) && guard < 200) guard += 1; } catch (e) { /* older shapes */ }
+    }
     world.score += earned;
     const scoreEl = document.getElementById('score');
     if (scoreEl) scoreEl.textContent = String(world.score);
     const live = c.S && c.S.base ? c.S.base : c.clean;
     for (let p = 0; p < world.idx.length; p += 1) world.idx[p] = live[p];
     world.palette = c.RGB ? c.RGB.map(([r, g, b]) => [r, g, b]) : world.palette;
-    if (typeof window !== 'undefined' && params.has('debug')) window.__lastDmg = { x, y, steps: n, targetId, earned };
+    if (typeof window !== 'undefined' && params.has('debug')) window.__lastDmg = { x, y, steps: n, targetId, earned, exploded };
     return true;
   } catch (e) { if (typeof window !== 'undefined') window.__dmgError = String((e && e.message) || e); return false; }
 }
@@ -1723,7 +1750,7 @@ function throwAt(at) {
     if (hand === 'paint') {
       throwThing(fx, world, item, 'paint', who.x, who.y, null);
       if (fx.rocks.length) { fx.rocks[fx.rocks.length - 1].paint = paintN; paintN = (paintN + 1) % PAINTS.length; paintHand(); }
-      who.painted = (who.painted || 0) + 1;
+      mark(folk, who);
       pop('В КРАСКЕ', who.x, who.y - 14, 'tag');
     } else if (hand === 'flowers') {
       throwThing(fx, world, item, 'flowers', who.x, who.y, null);
