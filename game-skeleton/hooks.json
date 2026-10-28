@@ -1,6 +1,0 @@
-{
-  "_state": "Run C (Phases 2-3) not started.",
-  "_what": "Hooks, tricks and mechanics considered legendary, each tested against the three-part test.",
-  "_rule": "Every entry carries a tag: SOURCED[id], DERIVED[ids], CREATOR or OPEN. Nothing is dropped silently; a rejected entry stays with its rejection reason.",
-  "entries": []
-}

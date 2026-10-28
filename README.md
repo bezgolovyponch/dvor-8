@@ -128,7 +128,7 @@ is fun.**
     docs/structure.md       the game taken apart: atoms, loops, hooks, and what the research does and does not support
     docs/request-neighbours.md  the people-and-police request: what is built, what similar games show, open questions
     docs/pyramid.html       what stands on what
-    brief.md, game-skeleton/, standards/   the intake and earlier material, kept for the record
+    tools/, docs/, reference/, test.mjs   the gates, the record and the artefacts they read
 
 **This build is `v0.4.0`**: windows that break, paint that stays, and the Android app. Since `v0.3.0` (walking, the street, the bottle, the album) it also gained the news over the yard, the people and the police, six things to throw, and the ink and material layers. Before it, `v0.2.0` (also tagged `mvp-2-real-objects`). The earlier build is `mvp-1-miami` (neon
 heat-map, tone patches, model-naming cascade).

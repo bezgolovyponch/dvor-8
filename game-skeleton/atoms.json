@@ -1,6 +1,0 @@
-{
-  "_state": "Run B (Phase 1) not started.",
-  "_what": "Mechanics and scenario strategies decomposed into their smallest pieces and their connections.",
-  "_rule": "Every entry carries a tag: SOURCED[id], DERIVED[ids], CREATOR or OPEN. Nothing is dropped silently; a rejected entry stays with its rejection reason.",
-  "entries": []
-}
