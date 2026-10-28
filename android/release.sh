@@ -13,6 +13,9 @@ CODE=${2:?usage: release.sh <version> <versionCode>}
 REPO=bezgolovyponch/dvor-8
 cd "$ROOT"
 
+echo "== clear the caches first (the operator's rule: always run local, clear cache, before ship new)"
+node tools/cache-clear.mjs
+
 echo "== the stability gate: the chain must exit 0"
 if ! CHROME=${CHROME:-/tmp/chrome-nosandbox.sh} node tools/chain.mjs > /tmp/release-chain.log 2>&1; then
   echo "REFUSED: the chain is not green. Its last lines:"; tail -6 /tmp/release-chain.log; exit 1

@@ -48,3 +48,10 @@ full-screen flash. Any effect that repaints the whole frame is a regression agai
 `0d ENGINE` (the module is the operator's bytes, and produces the operator's frame), `0e DAMAGE` (our damaged frame is
 the engine's damaged frame) and `0f LEDGER` (no verified number regressed) run before the game is even judged. If any
 of them fails, nothing downstream is read.
+
+## R8 — CLEAR THE CACHES AND RUN THE LOCAL PAGE BEFORE SHIPPING
+
+The operator's rule: *"always run local, clear cache, before ship new."* Enforced by `tools/cache-clear.mjs`, which is the
+first step of `android/release.sh`: it removes every build cache the ship could reuse, hashes `src/main.js`, `style.css` and
+`index.html`, and **re-fetches those three from the local server** to prove the served page is the files on disk. A
+mismatch refuses the release. A ship is measured on the code that is published, never on a stale bundle.
