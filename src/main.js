@@ -1059,7 +1059,10 @@ async function fromFile(file) {
   if (params.get('annotate') === '1') { note('НАЖМИ НА ЗДАНИЕ ИЛИ МАШИНУ — рамка покажет, где оно; углы рамки тянутся'); annotatePanel(); }
   note('ищу настоящие вещи на снимке — всё на телефоне, снимок никуда не уходит');
   const t0 = performance.now();
-  const found = await detectAll(large, (done, total) => { $('banner').textContent = `ИЩУ ВЕЩИ ${done}/${total}`; });
+  // THE TILE COUNTER IS NOT A COUNT OF THINGS. "ИЩУ ВЕЩИ 14/14" read as "14 things" and the operator asked twice what
+  // the 14 was; it is how many detector tiles this photograph needs. The banner now shows the work, not a number that can
+  // be mistaken for a target count.
+  const found = await detectAll(large, (done, total) => { $('banner').textContent = done >= total ? 'ИЩУ ВЕЩИ' : 'ИЩУ ВЕЩИ…'; });
   // THE BANNER IS CLEARED THE MOMENT THE SEARCH ENDS. It was set here and never unset, so "ИЩУ ВЕЩИ 14/14" sat over
   // the yard for the whole session - the creator asked twice where it came from. 14 is not a target count: it is how
   // many tiles this photograph needs for the detector, and it means nothing once the tiles are done.
@@ -1714,7 +1717,19 @@ function throwAt(at) {
   const who = standing(world, at.x, at.y) ? null : personAt(folk, at.x, at.y, 3, WATER.flight);
   if (who && !hitAt(sky, at.x - cam.x, at.y - cam.y)) {
     world.throws += 1;
-    throwThing(fx, world, WATER, 'water', at.x, at.y, null);
+    // WHAT IS IN THE HAND IS WHAT REACHES THE PERSON: the branch used to throw WATER whatever was held, so paint could
+    // never mark anyone and flowers could never be planted at their feet (the operator: "i can't throw paint to the
+    // objects moving (people) or flowers"). Water soaks, paint marks them (a mark that stays), flowers land at their feet.
+    if (hand === 'paint') {
+      throwThing(fx, world, item, 'paint', who.x, who.y, null);
+      if (fx.rocks.length) { fx.rocks[fx.rocks.length - 1].paint = paintN; paintN = (paintN + 1) % PAINTS.length; paintHand(); }
+      who.painted = (who.painted || 0) + 1;
+      pop('В КРАСКЕ', who.x, who.y - 14, 'tag');
+    } else if (hand === 'flowers') {
+      throwThing(fx, world, item, 'flowers', who.x, who.y, null);
+    } else {
+      throwThing(fx, world, WATER, 'water', who.x, who.y, null);
+    }
     sfx.throw();
     return;
   }
@@ -1724,7 +1739,9 @@ function throwAt(at) {
   world.throws += 1;
   // a touch on what is flying is a throw at the sky: it goes where the hand sends it, and the things under it are left alone
   const up = Boolean(hitAt(sky, at.x - cam.x, at.y - cam.y));
-  throwThing(fx, world, live, hand, landing.x, landing.y, up || live.splash || hand === 'paint' ? null : pick(world, landing.x, landing.y));
+  // FLOWERS LAND, THEY DO NOT HIT: with a target they travelled to the thing and burst against it instead of rooting
+  // where they fell (the operator: "i can't throw ... flowers"). No target for paint either - it stains the spot.
+  throwThing(fx, world, live, hand, landing.x, landing.y, up || live.splash || hand === 'paint' || hand === 'flowers' ? null : pick(world, landing.x, landing.y));
   if (up) fx.rocks[fx.rocks.length - 1].sky = true;
   if (hand === 'paint') { fx.rocks[fx.rocks.length - 1].paint = paintN; paintN = (paintN + 1) % PAINTS.length; paintHand(); }
   if (filter === 'alcohol') fresh(drink);
