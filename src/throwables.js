@@ -25,7 +25,7 @@ export const THROWABLES = {
   },
   brick: {
     label: 'кирпич', hint: 'ломает с одного раза · тяжёлый · рука отдыхает',
-    flight: 0.30, damage: 3, scatter: 0, splash: 0, chain: 0, cooldown: 0.7, weight: 74, sky: false,
+    flight: 0.30, damage: 4, scatter: 0, splash: 0, chain: 0, cooldown: 0.7, weight: 74, sky: false,
     why: 'One throw, one thing gone. The long cooldown is the cost of the damage, so it is for the target you cannot afford to miss twice.',
   },
   slipper: {
@@ -35,7 +35,7 @@ export const THROWABLES = {
   },
   bottle: {
     label: 'бутылка', hint: 'бьёт всё вокруг, но рука гуляет',
-    flight: 0.16, damage: 1, scatter: 10, splash: 22, chain: 0, cooldown: 0, weight: 40, sky: false,
+    flight: 0.16, damage: 2, scatter: 10, splash: 22, chain: 0, cooldown: 0, weight: 40, sky: false,
     why: 'Power for accuracy: it bursts over everything near where it lands, and it does not land where you pointed.',
   },
   water: {

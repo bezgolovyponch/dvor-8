@@ -34,7 +34,7 @@ const r = await withPage(BASE, { width: 412, height: 915 }, async (page) => {
     let t1 = performance.now();
     while (!window.__world.regions.every((r) => r.seen) && performance.now() - t1 < 60000) await new Promise((r) => setTimeout(r, 200));
     await new Promise((r) => setTimeout(r, 800));
-    for (let n = 0; n < 10; n++) window.__strikeAt(40 + (n % 3) * 6, 120 + n * 9);
+    for (let n = 0; n < 10; n++) window.__strikeAt(40 + (n % 3) * 6, 120 + n * 9, 1);
     await new Promise((r) => setTimeout(r, 800));
     return { gold, ours: app.toDataURL('image/png'), engineFrame: !!window.__world.engineFrame };
   `);

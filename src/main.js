@@ -427,6 +427,21 @@ function paintView() {
   pad.x = pad.y = 0; pad.jump = pad.once = false; keys.clear();
   $('knob').style.transform = '';
 }
+// THE WEAPON'S ICON IS THE ENGINE'S OWN SPRITE (its `itemGrid` for stone, brick, slipper, bottle, paint). The app's
+// chip drew a CSS shape; the reference's own pixel sprite is the right visual model, and it is already in the code.
+function paintEngineIcon() {
+  const c = (typeof window !== 'undefined' && window.__engineInst) || null;
+  const el = document.getElementById('paletteIcon');
+  if (!c || !el || !c.itemGrid) return;
+  const name = { stone: 'stone', brick: 'brick', slipper: 'slipper', bottle: 'bottle', paint: 'paint' }[hand];
+  if (!name) return;
+  try {
+    const g = c.itemGrid(name, 30, 23, 1.15);
+    let cv = el.querySelector('canvas');
+    if (!cv) { cv = document.createElement('canvas'); cv.style.cssText = 'width:30px;height:23px;display:block;image-rendering:pixelated'; el.textContent = ''; el.appendChild(cv); }
+    c.blitCanvas(cv, g, 1);
+  } catch (e) { /* the vector path has no engine instance: the CSS icon stays */ }
+}
 function paintHand() {
   $('hand').textContent = (hand === 'paint' ? `${item.label} · ${PAINTS[paintN].name}` : item.label).toUpperCase();
   $('hint').textContent = mode.hint;
@@ -695,21 +710,33 @@ async function build(rgba, w, h, dets, big = null) {
 }
 // A HIT ON A YARD THAT THE ENGINE PAINTED IS THE ENGINE'S: `damageAt` runs its own D-model, and the frame is copied
 // back from its buffer. The app's damage art then never touches an engine frame.
-function engineDamage(x, y) {
+// THE REFERENCE'S OWN DESTRUCTION, EXACTLY AS ITS APP DOES IT: one `damageAt` at the impact point, which walks the
+// engine's four-step ladder on that one piece (crack -> scrape -> debris -> gone, S15) and breaks any pane first. No
+// invented band: the band model I wrote turned a car into a half-erased slab and made buildings "disappear partially"
+// (the operator's screenshot), because it damaged a rectangle of chunks instead of the reference's one-piece-per-hit.
+// The engine's OWN area damage exists where the reference uses it - the disasters' `bite` (a radial set of pieces) and
+// `tearColumn` - and the app calls THEM for area effects rather than re-inventing them (see engineDisaster).
+function engineDamage(x, y, steps = 1, splash = 0, targetId = 0) {
   const c = (typeof window !== 'undefined' && window.__engineInst) || null;
   if (!c || !world || !world.engineFrame) return false;
   try {
-    // THE ENGINE'S SIGNATURE: damageAt(S, x, y, fx) - the state first, then the frame point, then the effect list
-    // (engine line 340). Calling it with the point first threw "Cannot read properties of undefined" on this.S.
-    c.damageAt(c.S, Math.floor(x) + 0.5, Math.floor(y) + 0.5, []);
-    // THE ENGINE'S LIVE FRAME IS `S.base`, NOT `clean`: `clean` is the pristine frame kept for the reveal, and copying
-    // it after a hit left our canvas showing our own damage art over an unchanged picture (measured: our damaged frame
-    // was 94.38% different from the operator's own damaged frame). `damageAt` writes the hit into `S.base`.
+    if (!c.setState) c.setState = () => {};
+    let earned = 0;
+    const n = Math.max(1, Math.min(4, steps | 0));
+    for (let s = 0; s < n; s += 1) {
+      const p = c.damageAt(c.S, Math.floor(x) + 0.5, Math.floor(y) + 0.5, []);
+      if (!p) break;
+      earned += p;
+    }
+    world.score += earned;
+    const scoreEl = document.getElementById('score');
+    if (scoreEl) scoreEl.textContent = String(world.score);
     const live = c.S && c.S.base ? c.S.base : c.clean;
     for (let p = 0; p < world.idx.length; p += 1) world.idx[p] = live[p];
     world.palette = c.RGB ? c.RGB.map(([r, g, b]) => [r, g, b]) : world.palette;
+    if (typeof window !== 'undefined' && params.has('debug')) window.__lastDmg = { x, y, steps: n, targetId, earned };
     return true;
-  } catch (e) { return false; }
+  } catch (e) { if (typeof window !== 'undefined') window.__dmgError = String((e && e.message) || e); return false; }
 }
 // THE ENGINE'S OWN DISASTER, DRIVEN FROM THE APP: `disStep(F, put, d)` takes a copy of the engine's frame, lets the
 // disaster paint into it and damage `S`, and the app shows that copy. Phases are the engine's: siren (60 frames of the
@@ -735,7 +762,10 @@ function engineDisaster() {
 function begin() {
   world = makeWorld({ w: yard.w, h: yard.h, photo: yard.rgba, idx: yard.st.idx, palette: yard.st.palette, regions: yard.regions, owner: yard.owner, seed: 8, env: yard.st.env, structures: yard.st.structures });
   // THE PAGE CAN PRESS A HIT, so a gate can test the real impact path (not a re-implementation of it).
-  if (typeof window !== 'undefined' && params.has('debug')) window.__strikeAt = (x, y) => hit(world.regions.find((r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) || null, x, y, 2, 1);
+  if (typeof window !== 'undefined' && params.has('debug')) window.__throwAt = throwAt;
+  // THE HOOK USES THE APP'S OWN `pick` (the owner map), not a box match: a building's box contains the car parked in
+  // front of it, so a box search named the building and the car never took a step (measured by the damage gate).
+  if (typeof window !== 'undefined' && params.has('debug')) window.__strikeAt = (x, y, damage = 2) => hit(pick(world, x, y) || null, x, y, damage, 1);
   // THE ENGINE PAINTED THIS FRAME: its damage model owns the picture (see engineDamage).
   if (typeof window !== 'undefined' && window.__engineInst && yard.regions && yard.regions.some((r) => r.engineId != null || r.engineBid != null)) world.engineFrame = true;
   // ---- BUILDINGS BECOME REGIONS, FROM THE WORLD'S OWN STRUCTURES -----------------------------------------
@@ -1126,7 +1156,7 @@ function resolve(rock) {
   }
   for (const t of targets) {
     const hx = Math.max(t.x, Math.min(t.x + t.w, rock.tx)), hy = Math.max(t.y, Math.min(t.y + t.h, rock.ty));
-    if (hit(t, hx, hy, rock.damage, m.combo)) rock.touched.add(t.id);
+    if (hit(t, hx, hy, rock.damage, m.combo, rock.splash)) rock.touched.add(t.id);
   }
   // A thing that skips goes on to the nearest standing thing it has not touched.
   if (rock.hops > 0) {
@@ -1137,18 +1167,15 @@ function resolve(rock) {
 }
 
 // One impact on one thing, from a throw or from a pair of feet: the rules decide, and everything answers.
-function hit(t, hx, hy, damage, comboTime) {
+function hit(t, hx, hy, damage, comboTime, splash = 0) {
+  if (typeof window !== 'undefined' && params.has('debug')) window.__lastHit = { damage, splash, targetId: t && (t.engineId || t.engineBid || 0), kind: t && t.kind, engineFrame: world && !!world.engineFrame };
   // AN ENGINE-PAINTED YARD TAKES THE HIT IN THE ENGINE: its D-model paints the piece, glass and debris, and the frame
   // is copied back. Our own damage art is only for the vector route.
-  if (world.engineFrame && engineDamage(hx, hy)) {
+  if (world.engineFrame && engineDamage(hx, hy, damage, splash, t && (t.engineId || t.engineBid || 0))) {
     // THE HUD COUNTS WHAT THE ENGINE PAINTED: its model keeps its own state, so the app's `hits` is moved here (a hit is
     // a hit), and a region the engine has taken to no-id is gone.
     t.hits = (t.hits || 0) + 1;
-    // A HIT SCORES: `strike` adds the points on the vector path, so the engine path adds them itself (measured: the
-    // capture's throw changed nothing because the score stayed put).
-    world.score += 1; world.hits = (world.hits || 0) + 1;
-    const scoreEl = document.getElementById('score');
-    if (scoreEl) scoreEl.textContent = String(world.score);
+    world.hits = (world.hits || 0) + 1;
     const c = window.__engineInst;
     const k = Math.floor(hy) * world.w + Math.floor(hx);
     if (c && c.S && c.S.ID && k >= 0 && k < c.S.ID.length && !c.S.ID[k]) t.gone = true;
@@ -2240,6 +2267,7 @@ for (const id of THROW_ORDER) {
     for (const other of $('palette').children) other.classList.toggle('alt', other !== button);
     $('paletteNow').textContent = t.label.toUpperCase();
     $('paletteIcon').dataset.w = id;         // the panel's icon is the thing in the hand, not always a stone
+    paintEngineIcon();
     $('paletteWhy').textContent = t.why;
     foldBox($('paletteBox'), false);         // the choice is made: the drawer closes itself
     paintHand();
@@ -2250,6 +2278,7 @@ for (const id of THROW_ORDER) {
 }
 $('paletteNow').textContent = item.label.toUpperCase();
 $('paletteIcon').dataset.w = hand;
+setTimeout(paintEngineIcon, 0);
 $('paletteWhy').textContent = item.why;
 $('lookNow').textContent = mode.label.toUpperCase();
 $('lookWhy').textContent = mode.why;

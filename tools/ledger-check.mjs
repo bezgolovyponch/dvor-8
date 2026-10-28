@@ -43,7 +43,7 @@ const m = await withPage(BASE, { width: 412, height: 915 }, async (page) => {
     await new Promise((r) => setTimeout(r, 800));
     const yard = document.getElementById('yard');
     const oursIntact = png(yard);
-    for (let n = 0; n < 10; n++) window.__strikeAt(40 + (n % 3) * 6, 120 + n * 9);
+    for (let n = 0; n < 10; n++) window.__strikeAt(40 + (n % 3) * 6, 120 + n * 9, 1);
     await new Promise((r) => setTimeout(r, 900));
     const oursDamaged = png(yard);
     const fac = (c.REP || []).map((r) => r.lu + 'x' + r.lv);
