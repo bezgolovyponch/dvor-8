@@ -1,0 +1,97 @@
+# THE COMPLETE AUDIT — the app, its engine, and the published sources it stands on
+
+Run on a quiet machine (load 1.5), with the local server serving the current tree (`/game` on `127.0.0.1:4312`).
+Every number below is a tool's output, not an impression. Commands are named so each row can be re-run.
+
+## 1. The verdict, in one paragraph
+
+**The engine path works and is provably the reference's.** On a reference photograph the app's frame is the operator's
+engine's frame (its own FNV reproduced, body byte-identical), and the app's *damaged* frame is the engine's damaged frame
+**pixel for pixel (0.00 %, 0 px)**. The HUD's geometry matches the operator's template on **12 of 12** measured rows, all
+four of the engine's disasters are visible (4 of 4), and the quality ledger holds every locked number. **The fallback path
+is the weak half**: a photograph that is neither a reference scene nor marked is drawn by the app's own renderer, and that
+is what the operator saw on the phone and called "even worse". That is not the engine — it is the app's art, and the way out
+of it is the marking flow (ЕЩЁ → РАЗМЕТИТЬ), which the app now says out loud.
+
+## 2. Structure — what the app is made of
+
+| | count | notes |
+|---|---|---|
+| modules under `src/` | **56** | 13 967 lines |
+| largest | `src/vector.js` 2 590 · `src/main.js` 2 374 · `src/flat.js` 1 037 · `src/render.js` 782 · `src/ref/engine.js` 744 | |
+| gates/tools | **63** `.mjs` | each named by the chain |
+| documents | **64** `.md` | 5 current, the rest the record |
+| checks in the suite | **322** checks, **321 PASS / 0 FAIL** | `node test.mjs` |
+| chain steps | **20** | `node tools/chain.mjs` |
+| dead modules | **0** | `node` import scan: nothing unimported |
+
+Boundaries that hold: `src/ref/` is the operator's engine and its bridge (never hand-edited), `src/pieces/` are the
+independently verified bricks (**9 of 9**, `tools/pieces-check.mjs`), and the rest is the game.
+
+## 3. Engine audit
+
+| what | measurement | tool |
+|---|---|---|
+| the body is the operator's bytes | **115 478 chars identical** to the extraction (`sha256 ea0273fe…`); only the header and the export differ | `tools/engine-check.mjs` 1b |
+| it runs in a page | 147 456 px built in **687 ms**, page errors **0** | 2 |
+| it reproduces the operator's own FNV | **7204df6f** — the recorded frame | 3 |
+| it reports the operator's stage numbers | palette **12/12** · windows **1321/1321** · ОФИСНАЯ БАШНЯ **10×11/1262** · ШАХМАТНЫЙ ДОМ **6×7/228** | 4 |
+| the app's frame = the engine's frame | **0.00 %** (intact), ledger row `app.intactPx 0` | `tools/ledger-check.mjs` |
+| the app's damaged frame = the engine's damaged frame | **0.00 % (0 px)**, bar ≤ 2 % | `tools/damage-check.mjs` |
+| the disasters are the engine's and visible | **4 of 4** — hurricane 1 324 px · tsunami 1 803 · godzilla 14 596 · beyonce 4 276 | `tools/disaster-check.mjs` |
+| the screen's geometry is the template's | **12 of 12** rows as ratios of the frame | `tools/html-audit.mjs` |
+| no verified number regresses | `LEDGER OK` — 8 rows (FNV, palette, windows, two grids, intact identity, damaged identity) | `tools/ledger-check.mjs` |
+
+## 4. The `.html` and the reference folder — what is copied, what is not
+
+**Copied (and proven):** the engine class (`src/ref/engine.js`, byte-identical body), its SPEC (20 rows), its palette,
+its detection, its chunk/damage model, its four disasters, its frame hash, its stage numbers, and its HUD's geometry
+(12 rows). The reference's own rule that people and trees are never annotated is honoured: they stay photo pixels.
+
+**Not copied — the app's own:** the game loop, the people (folk: 5 kinds, looks, anger), the weapons beyond the
+reference's five (water, flowers, sponge, fun), the marking flow, the fallback renderer, the phone shell.
+
+**The reference folder** (`reference/`): `TARGET.webp` and `PAIRING.md` (the product being matched), `v13/` (the engine
+extraction, the readout and the scene dumps), `owner/` and `owner-yard2/` (six owner captures with hashes, re-signed every
+build), and `v10a-*` (the accepted frame). Each is read by a gate; none is a picture for the eye alone.
+
+## 5. The external, published sources — 20 of 20 present in the code
+
+`node tools/source-audit.mjs` reads the SPEC from the engine and looks for each cited method's mechanism in the engine's
+own source. **20 of 20 present.**
+
+| row | method | cited source | in the code |
+|---|---|---|---|
+| S0 | Frame | box-filter resampling (mean over the footprint) | 2×2 mean loop |
+| S2 | Snap + reduce | Heckbert 1982, popularity algorithm; CIE Lab; Kuwahara 1976 | histogram → 12 kept → Lab remap |
+| S3 | Clean | rank-order / majority filtering | `maj()` |
+| S4 | Edges | Sobel & Feldman 1968 | the 3×3 Sobel |
+| S5 | Sky segmentation | Adams & Bischof 1994 (seeded region growing); Soille | region masks |
+| S6 | Sky style | Bayer 1973; Perlin 1985 lineage | ordered dither + value noise |
+| S7 | Detector contract | Redmon 2016 (YOLO); Lin 2014 (COCO) | the detection mask (the app's detector is EfficientDet-lite/COCO) |
+| S8 | Facade rectification | Heckbert 1989 (texture mapping) | quad → rectified facade |
+| S12 | Vehicles | Rother, Kolmogorov & Blake 2004 (GrabCut); Besag 1986 | car masks + chunks |
+| S13 | Silhouette | Serra 1982 (mathematical morphology) | outline/morphology |
+| S14 | Pieces | voxel/chunk destruction | `CH`, `chunkOf` |
+| S15 | Damage ladder | FEMA HAZUS-MH states | `hitChunk`: crack → scrape → debris → gone |
+| S16 | Progressive collapse | GSA 2003; UFC 4-023-03 | `cascade` / supports |
+| S17 | Particles & rubble | Reeves 1983 | `stepPart`, rubble height map |
+| S18 | Reveal | Porter & Duff 1984 | layered compositing |
+| S19 | Glass | laminated-glass fracture | `carGlass`, `breakWin` |
+| S20 | Weapons | — | `WEAPONS` |
+| S21 | Disasters | log-spiral rainbands (Senn & Hiser 1959) | `dis_hurricane` etc. |
+| S22 | Determinism | mulberry32 (Ettinger); FNV-1a | `seed()`, `fnv()` |
+| S23 | Info | — | shuffle bag |
+
+## 6. What does NOT work as expected — stated plainly
+
+1. **An unmarked, non-reference photograph is drawn by the app's own renderer.** That is the frame the operator rejected.
+   The reference's annotation is *authored per photograph* (its S7 is "given"); the app offers marking, and now says so.
+   An attempt to invent the annotation automatically was measured and reverted (it drew crates over the sky).
+2. **Buildings are holed and gutted, not levelled.** The engine's own rule keeps the structural frame (`goneChunk`), so a
+   destroyed building looks pierced with rubble — the reference's declared model, not the collapse a player may expect.
+3. **The vector destruction model** (fallback path) is a hit-point model, not the engine's chunk ladder. Fine as a
+   fallback, and documented as one, but it is not what the reference does.
+4. **The disasters are long** (the engine's own lengths: godzilla 470 frames), and there is no difficulty curve around them.
+5. **The app's people have no counterpart in the reference** (which leaves people as photo pixels), so their reaction
+   mechanic is ours and cannot be benchmarked against the product.

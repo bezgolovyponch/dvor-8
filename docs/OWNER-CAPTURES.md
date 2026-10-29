@@ -13,7 +13,7 @@ of the height); everything outside it is the app's chrome (HUD, tool chips, butt
 
 ### the build these captures describe
 
-build: `e56658eb52b155f0097e019e7c5995ef25f839b421a54fda5152d8efec014df9`
+build: `ab3d36025dcd8ad3a5efff57b98bc69a91c0bacccd22b1e3badee38f039eea2f`
 
 That hash is sha256 over the sorted paths and bytes of every file that can change the frame (`src/**`, `index.html`,
 `style.css`; 59 files, printed by `node tools/build-hash.mjs`). `tools/sheet-check.mjs` recomputes it and fails when
@@ -25,17 +25,17 @@ a byte.
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `reference/owner/1-imported-scene.png` | 287,324 | `185a732baa18026a02cae94249367fac6429805bfb8a138686fef9d3906c2608` | the yard as first built |
-| 2 | `reference/owner/2-drawer-open.png` | 216,300 | `2047885b40027acaff056d00412ee6262b8ea07526045a488d4479bb4e9f3e15` | the drawer a thumb opens: all nine hands, opened by its caret and verified open |
-| 3 | `reference/owner/3-after-damage.png` | 301,165 | `073d8c4978d84b294c45bf2189ae9af3ddaac2fd988a942a075c308cf7d410a6` | after the scripted hits: the frame darkens, the score and the combo move |
+| 1 | `reference/owner/1-imported-scene.png` | 287,937 | `b84d13c3e13cb88c9a6f89aef444a75ac244bcf84647fdb21bad36b01585f302` | the yard as first built |
+| 2 | `reference/owner/2-drawer-open.png` | 216,192 | `32270845d41c5afdab4ed08cc6639aad20d758512f951a314337e5aeb84c952b` | the drawer a thumb opens: all nine hands, opened by its caret and verified open |
+| 3 | `reference/owner/3-after-damage.png` | 302,670 | `115798c5556bea35e605bc479d6c3d864c623a81a7ffb7a9fdf5618eb027f0ef` | after the scripted hits: the frame darkens, the score and the combo move |
 
 ### the operator's second yard (yard2-new)
 
 | # | file | bytes | sha256 | what it shows |
 |---|---|---|---|---|
-| 1 | `reference/owner-yard2/1-imported-scene.png` | 289,956 | `11e8669cbbf9774203d479a11f93c8fe347b74a30f7c09ce6b8cc356249516e3` | the yard as first built |
-| 2 | `reference/owner-yard2/2-drawer-open.png` | 181,504 | `e45224be6bc8cc4fa667d76d9c5590e57bc413d981318176f212906c14cb3772` | the drawer a thumb opens: all nine hands, opened by its caret and verified open |
-| 3 | `reference/owner-yard2/3-after-damage.png` | 288,755 | `c575a4c8978d7ac3aa87d46d570b765d150afe057587006515f2373d402b5176` | after the scripted hits: the frame darkens, the score and the combo move |
+| 1 | `reference/owner-yard2/1-imported-scene.png` | 281,182 | `f439c5156eb0713f35f4c4f431a0418017c3f95fc8b7a83e9a44a7e7ac27bbfa` | the yard as first built |
+| 2 | `reference/owner-yard2/2-drawer-open.png` | 195,559 | `9d878c0c8fddf677f3dfcc06ac85b2161b94d6151a30246f40b1aa377635b5d8` | the drawer a thumb opens: all nine hands, opened by its caret and verified open |
+| 3 | `reference/owner-yard2/3-after-damage.png` | 315,272 | `a093beb65b7cc4d8c20b78158b772622306faf914361d773b0d75c79b8a24da8` | after the scripted hits: the frame darkens, the score and the combo move |
 
 **Copies live in the repository** - `reference/owner/` (the judged photograph) and `reference/owner-yard2/` (the operator's yard), byte-identical to the tables above - so the sheet and the pictures travel together.
 
