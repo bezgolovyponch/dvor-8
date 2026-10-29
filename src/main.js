@@ -1109,6 +1109,14 @@ async function fromFile(file) {
   try {
     built = await build(rgba, w, h, found.kept, big);
   } catch (error) {
+    // IF THE AUTO SCENE IS WHAT FAILED, THE PHOTOGRAPH STILL PLAYS ON THE VECTOR ROUTE: a fallback, reported, never a
+    // black screen.
+    if (false && typeof window !== 'undefined') {
+      delete window.__sceneAnnotation;
+      try { built = await build(rgba, w, h, found.kept, big); } catch (e2) { built = false; }
+      if (typeof window !== 'undefined') window.__buildError = String(error && (error.stack || error.message) || error);
+      if (built) { note('движок не собрал этот снимок — играю свою версию'); return; }
+    }
     if (typeof window !== 'undefined') window.__buildError = String(error && (error.stack || error.message) || error);
     throw error;
   }
@@ -1123,6 +1131,13 @@ async function fromFile(file) {
     // meant for the disaster chip hit the panel, the yard was rebuilt from a half-drawn mark and the screen turned into
     // a half-marked frame with a disaster on top of it. A photograph now plays as before; РАЗМЕТИТЬ enters the mode.
     if (params.get('annotate') === '1') enterAnnotate();
+    // AN UNMARKED PHOTOGRAPH IS CONVERTED BY THE APP'S OWN RENDERER, NOT THE REFERENCE'S ENGINE - and that is what the
+    // operator saw on the phone ("its even worse than before"): a photo raked with our flat fills instead of the engine's
+    // frame. The reference's own annotation is AUTHORED per photograph (its S7 is "given"), so the app says so and points
+    // at the one action that turns the picture into the reference's: marking the yard.
+    else if (!refAnn && !world.engineFrame && stage === 'play') {
+      setTimeout(() => { if (!world.engineFrame && stage === 'play') note('этот двор собран своей отрисовкой: нажми ЕЩЁ → РАЗМЕТИТЬ и отметь здание — кадр станет как в эталоне'); }, 1200);
+    }
   } else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
 }
 
