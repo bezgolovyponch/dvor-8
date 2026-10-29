@@ -95,3 +95,43 @@ own source. **20 of 20 present.**
 4. **The disasters are long** (the engine's own lengths: godzilla 470 frames), and there is no difficulty curve around them.
 5. **The app's people have no counterpart in the reference** (which leaves people as photo pixels), so their reaction
    mechanic is ours and cannot be benchmarked against the product.
+
+## 7. The independent audits (two agents, separate contexts, reading artefacts not claims)
+
+### 7.1 The visual audit — the deepest finding of the project
+
+| artefact | what it is | verdict |
+|---|---|---|
+| `reference/TARGET.webp` | the expected look: a phone screenshot (684×1160, WebP-compressed, 46 234 unique pixel values) | **the only valid look oracle** — at its own camera, and by eye |
+| `reference/v10a-art-canvas.png` | **Pillow `quantize(48, MEDIANCUT)` of `reference/v10a-art.png`** (100 % pixel identity, 56 573 → 48 colours) | **not the operator's art**: a machine-derived copy under a name that claims to be the accepted frame. `v10a-art.png` itself is a smooth (56 k colour) image of a *different camera* (~1.25× tighter, bronze facade) |
+| our engine frame | 16 colours, flat 4-tone sky, ~half the target's window density, no warm accents (autumn foliage, shop glow) | the reference *engine's* output — **not the target's look** |
+| our fallback frame | **pixel-identical to the engine frame** on this photograph (0/147 456 differ) | so the fallback is not an independent defect *on this photo*; it inherits the same deltas |
+
+Ranked deltas of our best frame against the target: (1) no HUD in the canvas (the target is a product screen, ~35 % of its area);
+(2) sky flat where the target has a dithered stipple; (3) warm detail missing (foliage, shop glow); (4) window grid ~half
+density, no per-pane glints; (5) cars 2–3 tones with no grille/headlight/glass reflection; (6) asphalt flat, cycle glyph
+illegible; (7) outlines merged into shadow.
+
+**What this means, stated plainly:** the artefact the repo calls "the accepted frame" is a Pillow derivative of a different
+camera, and the engine we lifted produces a *coarser* picture than the target. Either the target was produced by an earlier
+pipeline (the pairing document itself names the frame `10a УЛИЦА`, i.e. v10) or the extracted engine needs parameters it is
+not being given. **Until that is answered, no mechanical look gate can exist, and the app cannot be said to match the
+target look** — only to reproduce the extracted engine's own output exactly (0.00 % on damage, FNV `7204df6f`).
+
+### 7.2 The logic audit — nine divergences, three of them defects, now fixed and gated
+
+| # | divergence | class | state |
+|---|---|---|---|
+| 1 | the app has nine weapons vs the engine's five; **paint deals 0 damage** | extension + defect | paint still 0 — open |
+| 2 | `steps` = the throwable's damage → up to four `damageAt` per throw (the brick went intact→gone in one) | **defect** | **fixed**: one `damageAt` per throw; `0i SEMANTICS` rows 1–2 |
+| 3 | a post-kill "blast" (random panes/pieces) + `cascade(..., true)` inside the hit | **defect** | **fixed**: blast removed; the collapse is the engine's own deferred clock (`cascade(..., false)` every third frame) |
+| 4 | `splash` accepted and never read | **defect** | **fixed**: the engine has no area damage in a throw, so the parameter is gone |
+| 5 | the vector route's hp model vs the engine's five states | documented fallback | open by design |
+| 6 | people (engine has none — S7) | extension | documented |
+| 7 | disasters: engine route is the engine's; vector route is a second implementation | documented fallback | open by design |
+| 8 | the HUD's "N ЦЕЛЕЙ" / "РАЗБИТО" vs the engine's `wrecked` (gutted pieces, half-wrecked cars) | **divergence** | open — the counter counts standing things, not what the engine counts |
+| 9 | the annotation requirement (S7 "given") | documented gap | the app authors it by tapping; unknown photos open marking |
+
+Rows 2–4 were fixed by writing the gate **first** (`tools/engine-semantics-check.mjs`, chain step `0i SEMANTICS`), watching
+it fail on the old tree (`2 pieces changed; states 00204000000`), then changing the code, then watching it pass
+(`1 piece; states 00001000000`; ladder 1→1→2→2).

@@ -735,54 +735,49 @@ async function build(rgba, w, h, dets, big = null) {
 // (the operator's screenshot), because it damaged a rectangle of chunks instead of the reference's one-piece-per-hit.
 // The engine's OWN area damage exists where the reference uses it - the disasters' `bite` (a radial set of pieces) and
 // `tearColumn` - and the app calls THEM for area effects rather than re-inventing them (see engineDisaster).
-function engineDamage(x, y, steps = 1, splash = 0, targetId = 0) {
+// THE ENGINE'S OWN SEMANTICS, RESTORED (an independent logic audit named three defects here):
+//   (1) ONE THROW IS ONE STEP. `steps` used to be the throwable's damage, so the brick - damage 4 - took a piece from
+//       intact to gone in a single throw, which the engine never does: `hitChunk` returns one step per call (20/30/60/100).
+//   (2) NO INVENTED BLAST. A post-kill blast broke up to six random panes and 1-3 random pieces of the thing; the engine
+//       has no area damage in a throw (its only radial damage is Beyonce's `bite`).
+//   (3) THE COLLAPSE IS DEFERRED AND THE ENGINE'S OWN: `cascade(S, fx, false)` runs every third frame in its tick, one
+//       piece at a time (ft = 4); the app called `cascade(..., true)` inside the hit and dropped the structure at once.
+// The frame copy, the score and the engine's ladder stay exactly as they were (the identity gate reads 0.00% on them).
+function engineDamage(x, y) {
   const c = (typeof window !== 'undefined' && window.__engineInst) || null;
   if (!c || !world || !world.engineFrame) return false;
   try {
     if (!c.setState) c.setState = () => {};
-    let earned = 0;
-    const n = Math.max(1, Math.min(4, steps | 0));
-    for (let s = 0; s < n; s += 1) {
-      const p = c.damageAt(c.S, Math.floor(x) + 0.5, Math.floor(y) + 0.5, []);
-      if (!p) break;
-      earned += p;
-    }
-    // A DESTROYED THING EXPLODES AND LEAVES RUINS, IN THE ENGINE'S OWN TERMS: when a hit takes a piece to gone
-    // (`earned` reaches the ladder's 100-point step), a RANDOM number of that thing's panes and pieces go with it, and
-    // the engine's own `cascade` drops every piece left with nothing under it (its rule, the same one its tick runs every
-    // third frame: `cascade(S, parts, false)`). The rubble is the engine's `goneChunk` painting, not ours.
-    let exploded = 0;
-    if (earned >= 100 && c.S) {
-      const rnd = Math.random;
-      const pans = [];
-      for (let w = 0; w < (c.WN ? c.WN.length : 0); w += 1) if (c.WN[w] && c.WN[w].bid === targetId && !c.S.wb[w]) pans.push(w);
-      const k = pans.length ? 1 + Math.floor(rnd() * Math.min(6, pans.length)) : 0;
-      for (let n = 0; n < k; n += 1) {
-        const w = pans.splice(Math.floor(rnd() * pans.length), 1)[0];
-        if (w == null) break;
-        const wk = c.WN[w].pix[0];
-        if (wk != null) { c.breakWin(c.S, w, []); exploded += 1; }
-      }
-      const fill = (c.S.fills && c.S.fills[targetId]) || [];
-      const m = 1 + Math.floor(rnd() * 3);
-      for (let n = 0; n < m && fill.length; n += 1) {
-        const kk = fill[Math.floor(rnd() * fill.length)];
-        if (kk == null) break;
-        c.damageAt(c.S, (kk % c.W) + 0.5, ((kk / c.W) | 0) + 0.5, []);
-        exploded += 1;
-      }
-      // and the structure loses what it stands on
-      try { let guard = 0; while (c.cascade(c.S, [], true) && guard < 200) guard += 1; } catch (e) { /* older shapes */ }
-    }
-    world.score += earned;
+    const p = c.damageAt(c.S, Math.floor(x) + 0.5, Math.floor(y) + 0.5, []);
+    if (p) { world.score += p; }
     const scoreEl = document.getElementById('score');
     if (scoreEl) scoreEl.textContent = String(world.score);
     const live = c.S && c.S.base ? c.S.base : c.clean;
-    for (let p = 0; p < world.idx.length; p += 1) world.idx[p] = live[p];
+    for (let k = 0; k < world.idx.length; k += 1) world.idx[k] = live[k];
     world.palette = c.RGB ? c.RGB.map(([r, g, b]) => [r, g, b]) : world.palette;
-    if (typeof window !== 'undefined' && params.has('debug')) window.__lastDmg = { x, y, steps: n, targetId, earned, exploded };
+    if (typeof window !== 'undefined' && params.has('debug')) window.__lastDmg = { x, y, earned: p || 0 };
     return true;
   } catch (e) { if (typeof window !== 'undefined') window.__dmgError = String((e && e.message) || e); return false; }
+}
+
+// THE ENGINE'S OWN COLLAPSE CLOCK: its tick runs `cascade(S, parts, false)` every third frame and adds 50 per piece that
+// falls. The app has no engine tick, so the same clock runs here, on the app's own frame counter.
+let engineTickN = 0;
+function engineCollapse() {
+  const c = (typeof window !== 'undefined' && window.__engineInst) || null;
+  if (!c || !c.S || !world || !world.engineFrame) return 0;
+  engineTickN += 1;
+  if (engineTickN % 3 !== 0) return 0;
+  try {
+    const n = c.cascade(c.S, [], false) || 0;
+    if (n) {
+      world.score += n * 50;
+      const scoreEl = document.getElementById('score');
+      if (scoreEl) scoreEl.textContent = String(world.score);
+      for (let k = 0; k < world.idx.length; k += 1) world.idx[k] = c.S.base[k];
+    }
+    return n;
+  } catch { return 0; }
 }
 // THE ENGINE'S OWN DISASTER, DRIVEN FROM THE APP: `disStep(F, put, d)` takes a copy of the engine's frame, lets the
 // disaster paint into it and damage `S`, and the app shows that copy. Phases are the engine's: siren (60 frames of the
@@ -1264,7 +1259,7 @@ function hit(t, hx, hy, damage, comboTime, splash = 0) {
   if (typeof window !== 'undefined' && params.has('debug')) window.__lastHit = { damage, splash, targetId: t && (t.engineId || t.engineBid || 0), kind: t && t.kind, engineFrame: world && !!world.engineFrame };
   // AN ENGINE-PAINTED YARD TAKES THE HIT IN THE ENGINE: its D-model paints the piece, glass and debris, and the frame
   // is copied back. Our own damage art is only for the vector route.
-  if (world.engineFrame && engineDamage(hx, hy, damage, splash, t && (t.engineId || t.engineBid || 0))) {
+  if (world.engineFrame && engineDamage(hx, hy)) {
     // THE HUD COUNTS WHAT THE ENGINE PAINTED: its model keeps its own state, so the app's `hits` is moved here (a hit is
     // a hit), and a region the engine has taken to no-id is gone.
     t.hits = (t.hits || 0) + 1;
@@ -1697,6 +1692,9 @@ function frame(now) {
       tick(world, dt);
       stepBlooms(world, dt);
       for (const ev of stepWeather(weather, world, fx, dt, rnd, { x: cam.x, y: cam.y, w: cam.w, h: cam.h })) weatherSays(ev);
+      // THE DISASTER'S FRAME IS THE DISASTER'S: the collapse clock copies S.base into the picture, which would wipe the
+      // frame the disaster just painted (measured: godzilla and beyonce read 0 px changed once the clock ran).
+      if (world && world.engineFrame && !disaster) engineCollapse();
       if (disaster) {
         // AN ENGINE FRAME TAKES ITS DISASTER IN THE ENGINE: `dis_hurricane / dis_tsunami / dis_godzilla / dis_beyonce`
         // are the operator's own implementations (log-spiral bands, a Gaussian crest with a water blend LUT, a walker's
