@@ -10,7 +10,7 @@
 import { withPage } from './browser.mjs';
 
 const IDS = [['hurricane', 'УРАГАН'], ['tsunami', 'ЦУНАМИ'], ['godzilla', 'ГОДЗИЛЛА'], ['beyonce', 'БЕЙОНС']];
-const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&debug&photo=/game/photos-test/v10a.jpg';
+const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&debug&engine=1&photo=/game/photos-test/v10a.jpg';
 
 const rows = await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   const code = [

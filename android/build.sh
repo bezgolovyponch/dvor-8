@@ -19,6 +19,10 @@ rm -rf "$WORK"; mkdir -p "$WORK/assets/www" "$WORK/classes" "$WORK/gen" "$WORK/d
 # the game: exactly what the web server serves, and nothing else
 cp "$ROOT/index.html" "$ROOT/style.css" "$WORK/assets/www/"
 cp -R "$ROOT/src" "$ROOT/vendor" "$WORK/assets/www/"
+# THE FIRST SCREEN IS THE REFERENCE'S: one reference scene ships with the app (photos/demo.jpg) so it opens on the
+# operator's own frame instead of the player's unmarked photo, which the fallback renderer would paint.
+mkdir -p "$WORK/assets/www/photos"
+cp "$ROOT/photos/demo.jpg" "$WORK/assets/www/photos/demo.jpg"
 
 "$BT/aapt2" compile --dir "$HERE/res" -o "$WORK/res.zip"
 "$BT/aapt2" link -o "$WORK/base.apk" -I "$JAR" --manifest "$HERE/AndroidManifest.xml" -A "$WORK/assets" --java "$WORK/gen" \

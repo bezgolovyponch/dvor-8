@@ -97,6 +97,25 @@ if (typeof window !== 'undefined') window.__clockPin = clockPin;   // the pin's 
 // set a file input at all (both Playwright's fill and the harness's synthetic File are dead ends, and the synthetic
 // one hung the decoder). This hook fetches the picture, wraps it as a File and hands it to the SAME handler the
 // picker uses, so the real path is exercised - detection, build, damage, the lot - with nothing but a navigation.
+// THE FIRST SCREEN IS THE REFERENCE'S. The app used to open on nothing, so the first photograph was always the player's
+// own - unmarked, and therefore drawn by the fallback renderer, which is the frame the operator rejected. The build ships
+// one reference scene as `photos/demo.jpg`; it opens by itself, and the camera/album is one tap away for the player's own.
+// A BARE PRODUCT BOOT ONLY: any parameter means a harness or a deliberate route (`?photo=`, `?clean=`, `?debug`, `?clock=`,
+// `?vector=`, `?annotate=`, `?parse=`), and the demo photograph must never be loaded under one - it raced the gates and the
+// pairing step read a frame built from the wrong photograph (measured: chain stopped at 6c PAIRING).
+const BARE_BOOT = !['photo', 'clean', 'debug', 'clock', 'vector', 'annotate', 'parse', 'engine', 'horizon'].some((k) => params.has(k));
+if (BARE_BOOT && typeof document !== 'undefined') {
+  setTimeout(async () => {
+    try {
+      const res = await fetch('./photos/demo.jpg', { cache: 'no-store' });
+      if (!res.ok) return;
+      const blob = await res.blob();
+      const file = new File([blob], 'demo.jpg', { type: blob.type || 'image/jpeg' });
+      if (typeof window !== 'undefined' && window.__photoFile) return;   // the player got there first
+      await fromFile(file);
+    } catch { /* no bundled photograph: the camera flow stays as it was */ }
+  }, 400);
+}
 if (params.get('photo') && typeof document !== 'undefined') {
   setTimeout(async () => {
     try {
@@ -1058,12 +1077,37 @@ async function decode(file, size = null) {
 // carries as photos-test/*). A matched photograph is annotated with the operator's annotation before the build, so the
 // app's default for these photographs IS the reference's frame - no marking, no guess, the engine's own numbers.
 const REFERENCE_SCENES = {
+  'demo.jpg': 'prague-tower',      // the build ships this file as photos/demo.jpg, so the first screen is the reference's
   'v10a.jpg': 'prague-tower',
   '2026-10-12 23.06.59.jpg': 'prague-street',
   '2026-10-12 23.06.55.jpg': 'aerial-church',
   'sunset.jpg': 'sunset-bus',
 };
+// THE PHOTOGRAPH IS KNOWN BY ITS BYTES, NOT ITS NAME. The pairing document checks every creator photograph in by md5, and
+// two of them are the same file under different names (`5.jpg` is byte-identical to `v10a.jpg`) - the name map alone left
+// such a photograph walking the fallback path while its twin was built by the engine ("not all of the references are
+// built through the engine"). The table in `src/ref/photo-scenes.json` is sha256 -> scene, generated from the files.
+let PHOTO_SCENES = null;
+// WHICH ROUTE A URL ASKS FOR. The gate URLs (`?clean`, `?debug`, `?clock`, `?vector`, `?parse`) are the app's own renderer's
+// instruments and their premises are the vector route's; a product URL (bare, or `?photo=`) recognises the creator's
+// photographs by content and builds them with the engine. Without this split, recognising v10a by hash moved the whole
+// gate suite onto the engine's frame and nine vector-route gates started failing the frame they were written for
+// (measured: 6c PAIRING, 1 CRITERIA S1, delivery S1).
+const GATE_URL = ['clean', 'debug', 'clock', 'vector', 'parse', 'horizon'].some((k) => params.has(k));
 async function referenceAnnotationFor(file) {
+  // A GATE MAY ASK FOR THE ENGINE EXPLICITLY (`?engine=1`): the damage, ledger and disaster gates are the ENGINE route's
+  // instruments and must build the engine's frame while still passing their other flags.
+  if (GATE_URL && !params.has('engine')) return null;
+  try {
+    if (file && file.arrayBuffer) {
+      if (!PHOTO_SCENES) PHOTO_SCENES = await (await fetch('./src/ref/photo-scenes.json', { cache: 'no-store' })).json();
+      const buf = new Uint8Array(await file.arrayBuffer());
+      const dig = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', buf))).map((b) => b.toString(16).padStart(2, '0')).join('');
+      const byHash = PHOTO_SCENES && PHOTO_SCENES[dig];
+      if (byHash) return await (await import('./ref/convert.js')).referenceScene(byHash);
+      file = file._ref || file;   // the hash path is done; the name map below stays as the fallback
+    }
+  } catch { /* no crypto or no table: the name map below still works */ }
   const label = file && REFERENCE_SCENES[file.name];
   if (!label) return null;
   try {
@@ -1136,7 +1180,11 @@ async function fromFile(file) {
     // frame. The reference's own annotation is AUTHORED per photograph (its S7 is "given"), so the app says so and points
     // at the one action that turns the picture into the reference's: marking the yard.
     else if (!refAnn && !world.engineFrame && stage === 'play') {
-      setTimeout(() => { if (!world.engineFrame && stage === 'play') note('этот двор собран своей отрисовкой: нажми ЕЩЁ → РАЗМЕТИТЬ и отметь здание — кадр станет как в эталоне'); }, 1200);
+      // MARKING IS THE WAY TO THE REFERENCE'S FRAME, SO IT OPENS ITSELF for a photograph the app does not know. The yard
+      // behind it is still our own renderer - the operator's "worse than before" - and the one action that replaces it is
+      // the reference's own step: the annotation, done by the finger.
+      enterAnnotate();
+      note('этот двор собран своей отрисовкой: отметь здание и машину — кадр станет как в эталоне');
     }
   } else nothingFound(`Искал ${secs} с и не узнал на снимке ничего, что умею узнавать.`);
 }

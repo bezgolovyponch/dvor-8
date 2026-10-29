@@ -11,7 +11,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { PNG } = require('../gates/node_modules/pngjs');
 
-const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&debug&photo=/game/photos-test/v10a.jpg';
+const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&debug&engine=1&photo=/game/photos-test/v10a.jpg';
 const r = await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   const out = await page.run(`
     // THE OPERATOR'S OWN DAMAGE (the engine alone)

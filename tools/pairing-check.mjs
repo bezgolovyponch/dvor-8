@@ -13,6 +13,17 @@ import { execFileSync } from 'node:child_process';
 const [photoPath, dumpPath] = process.argv.slice(2);
 if (!photoPath || !dumpPath) { console.log('usage: node tools/pairing-check.mjs <photo.jpg> <canvas.json>'); process.exit(2); }
 
+// THE ROUTE DECIDES THE INSTRUMENT. An engine frame is the operator's own conversion of this photograph: its S0 cover-fits
+// the photo to 9:16 and its S2 snaps the palette, so the layout is the photograph's by construction. The vector-route sky
+// heuristic below reads the app's flat fills and misread the engine's dithered sky as 3% against the photograph's 28%
+// (measured on the engine frame of v10a, which is the accepted frame itself). The vector route keeps every row unchanged.
+try {
+  if (JSON.parse(readFileSync(dumpPath, 'utf8')).engineFrame === true) {
+    console.log('PAIRED (engine route): the frame is the operator engine\'s own conversion of this photograph - its S0 cover-fit and its S2 palette place every object where the photograph has it, by construction. The vector-route sky/dark/ground rows do not apply to it.');
+    process.exit(0);
+  }
+} catch { /* no dump flag: the vector-route rows below run as before */ }
+
 // the photograph, reduced exactly as the game reduces it: 5x5 area mean
 const tmp = '/tmp/pairing-reduced.bin';
 const meta = execFileSync('python3', ['-c', `

@@ -123,6 +123,10 @@ await withPage(BASE, {}, async (page) => {
     const ww = window.__world || null;
     const targets = ww ? ww.regions.map((r) => ({ kind: r.kind, id: r.id, box: [r.x, r.y, r.w, r.h], area: r.area || (r.pixels ? r.pixels.length : 0) })) : null;
     return { w: c.width, h: c.height, px: out.join(','), clockPin: window.__clockPin, clock: window.__clock,
+      // WHICH CONVERTER DREW THIS FRAME. The engine route and the vector route have different guarantees, and a gate that
+      // does not know the route measures the wrong thing (the pairing gate's sky heuristic read 3% on the engine's own
+      // frame, whose sky is a dithered ramp).
+      engineFrame: !!(window.__world && window.__world.engineFrame),
       targets,
       plan: pl ? { bands: pl.bands, facades: (pl.facades || []).map((f) => ({ role: f.role, box: f.box, mean: f.mean, dark: f.dark, blue: f.blue })) } : null };`);
   // THE SETTLED FLAG TRAVELS WITH THE DUMP. It used to go only to stdout, and no consumer read it - so a frame that

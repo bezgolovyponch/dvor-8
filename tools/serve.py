@@ -19,6 +19,6 @@ class Fresh(SimpleHTTPRequestHandler):
 
 
 if __name__ == '__main__':
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 4310
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else 4312   # the port every gate reads
     root = Path(__file__).resolve().parent.parent
     ThreadingHTTPServer(('0.0.0.0', port), partial(Fresh, directory=str(root))).serve_forever()

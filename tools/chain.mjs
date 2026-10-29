@@ -63,7 +63,12 @@ const steps = [
     // flights - whose HEADLINE IS DRAWN INTO THE CANVAS (render.js plane()/ship() write it with the 5x7 font). Without
     // news=0 the gate dumps carried a live headline across the top of the frame; measured on the same page: the
     // ticker's paper was 16% of the sky band.
-    { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5' });
+    // THE PAGE GROUP MEASURES THE APP'S OWN RENDERER, SO IT SAYS SO: `vector=1` pins the vector route on the reference
+    // photograph. Without it the creator's photographs are recognised by content and the whole group would measure the
+    // ENGINE's frame with the VECTOR route's instruments - which is exactly how 6c PAIRING and 1 CRITERIA started failing
+    // the day the photographs began to be recognised (measured). The engine route has its own gates: 0d ENGINE, 0e DAMAGE,
+    // 0g HTML, 0h DISASTER, and the engine frame itself is the reference's.
+    { BASE: process.env.BASE || 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&vector=1' });
   // THE STEP LINES ARE JSON: READ THEM AS JSON. A regex over the harness's stdout reported `left 0, console DIRTY`
   // for a page that was in fact clean (`errors: []`), which is the fourth time one of my instruments described
   // itself instead of the thing it measured. Each line the harness prints IS a JSON object; the last one for a

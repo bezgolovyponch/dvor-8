@@ -22,7 +22,7 @@ const accept = process.argv.includes('--accept');
 const reason = process.argv[process.argv.indexOf('--accept') + 1] || '';
 
 // ---- measure (one browser session: the engine's frame, then the app's frame, then the app's damaged frame) --------
-const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&debug&photo=/game/photos-test/v10a.jpg';
+const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&debug&engine=1&photo=/game/photos-test/v10a.jpg';
 const m = await withPage(BASE, { width: 412, height: 915 }, async (page) => {
   return await page.run(`
     const png = (cv) => cv.toDataURL('image/png');
