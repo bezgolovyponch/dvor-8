@@ -1990,9 +1990,14 @@ tiltEl.addEventListener('pointerup', (e) => {
   if (!press || stage !== 'play') { press = null; return; }
   const tap = !press.moved;
   press = null;
+  // THE AIM OUTLINE IS A POINTER STATE, NOT A MARK ON THE PICTURE. It was set on every move and never cleared, so after a
+  // tap the pink outline stayed drawn - the operator's "red shapes, random outlines" over the photo. It goes the moment
+  // the finger lifts.
+  if (world) world.aim = null;
   if (tap) throwAt(toWorld(e));
 });
-tiltEl.addEventListener('pointercancel', () => { press = null; });
+tiltEl.addEventListener('pointercancel', () => { press = null; if (world) world.aim = null; });
+tiltEl.addEventListener('pointerleave', () => { if (press) return; if (world) world.aim = null; });
 
 const shoot = (e) => {
   window.__shots = (window.__shots || 0) + 1;      // the page gate's instrument: did the change event arrive at all?
