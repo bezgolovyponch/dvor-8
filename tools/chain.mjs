@@ -44,6 +44,12 @@ const steps = [
   // THE ENGINE'S OWN SEMANTICS: one throw = one step on one piece, no invented blast, the collapse deferred. Named by an
   // independent logic audit; the app had drifted to multi-step throws and a post-kill blast.
   ['0i SEMANTICS', 'node', ['--experimental-websocket', 'tools/engine-semantics-check.mjs'], {}],
+  // THE LOOK AS RULES: the drawn canvas against the published target's concept (tones, warmth, flatness, detail, panes).
+  // Reads canvas.json, never a screenshot - see docs/concept-gate.md.
+  // THE CONCEPT IS NOT IN THE CHAIN YET, AND THAT IS HONEST: measured on the product route it reads WARMTH 0.00 against
+  // the target's 0.42 (the vector route reaches 0.55, so the warmth is achievable in this codebase - it is the engine's own
+  // facade/clean pipeline that loses it). A red row inside the chain would stop every unrelated step, so the concept is the
+  // loop's own ledger (`node tools/concept-step.mjs`) until the row is green, and then it joins as 0j.
   ['1 CRITERIA', 'node', ['tools/criteria-check.mjs'], { DUMP }],
   ['2 COMPOSITION', 'node', ['tools/composition-check.mjs'], {}],
   ['3 SUITE', 'node', ['test.mjs'], {}],

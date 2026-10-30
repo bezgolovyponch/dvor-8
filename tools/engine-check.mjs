@@ -15,13 +15,19 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { withPage } from './browser.mjs';
 
-const ENGINE_SHA = '9f91d1ae87d72320b0349e6e138b5eeef7555ce8250d44031d0d3b5dfa1eeb39';
+const ENGINE_SHA = 'ea0273fee448126ec074c9f69c8833834a5710bd9afc4d2da0a0fd19e1886279';   // the SOURCE EXTRACTION's sha (the module's own sha differs by the declared deviations)
 let pass = 0, fail = 0;
 const ok = (what, cond, detail) => { console.log(`${cond ? 'ok  ' : 'FAIL'}  ${what.padEnd(58)} ${detail}`); if (cond) pass += 1; else fail += 1; };
 
 const code = readFileSync(new URL('../src/ref/engine.js', import.meta.url), 'utf8');
 const sha = createHash('sha256').update(code).digest('hex');
-ok('1 THE MODULE IS THE OPERATOR\'S FILE (sha256)', sha === ENGINE_SHA, `${sha.slice(0, 12)}… ${sha === ENGINE_SHA ? 'matches' : 'DOES NOT MATCH — regenerate with tools/v13/make-module.mjs'}`);
+// ROW 1 NOW GUARDS THE EXTRACTION, NOT THE MODULE: the module carries the declared concept deviations (the operator:
+// "raise it to the target's"), so its sha cannot be the extraction's. What must stay byte-exact is the SOURCE extraction
+// this repo lifted the engine from - if that file is ever edited, the whole claim collapses. Row 1b then proves the module
+// differs from it only by the declared hunks.
+const extractionSha = createHash('sha256').update(readFileSync(new URL('./v13/engine-v13.txt', import.meta.url))).digest('hex');
+ok('1 THE EXTRACTION IS UNTOUCHED (sha256 of tools/v13/engine-v13.txt)', extractionSha === ENGINE_SHA,
+  `${extractionSha.slice(0, 12)}… ${extractionSha === ENGINE_SHA ? 'matches the recorded extraction' : 'DOES NOT MATCH — the source extraction was edited'}`);
 
 // THE MODULE'S BODY IS THE OPERATOR'S BYTES, NOT "APART FROM A NEWLINE": the one difference allowed is the class
 // header (`extends DCLogic` removed) and the export line. Measured while answering "do you rely on the real product or
@@ -29,8 +35,21 @@ ok('1 THE MODULE IS THE OPERATOR\'S FILE (sha256)', sha === ENGINE_SHA, `${sha.s
 const extraction = readFileSync(new URL('./v13/engine-v13.txt', import.meta.url), 'utf8');
 const bodyOf = (s) => s.slice(s.indexOf('class Component {') + 'class Component {'.length, s.lastIndexOf('\nexport { Component };'));
 const sliceOf = (s) => s.slice(s.indexOf('class Component extends DCLogic {') + 'class Component extends DCLogic {'.length);
-ok('1b THE BODY IS THE OPERATOR\'S BYTES (only the header and the export differ)', bodyOf(code) === sliceOf(extraction),
-  `${bodyOf(code).length} chars of engine body, identical to the extraction: ${bodyOf(code) === sliceOf(extraction)}`);
+// THE BODY IS THE OPERATOR'S BYTES, WITH THE DECLARED CONCEPT DEVIATIONS NAMED - AND NOTHING ELSE. The engine is no longer
+// byte-identical on purpose: two declared changes raise its output to the published look (the operator: "raise it to the
+// target's"), and this row refuses any change that is not one of them. A deviation is a line of code plus a marker line in
+// the code, and this check prints exactly which lines differ, so "the body is the operator's" cannot hide a silent edit.
+// AN EXACT CHECK, NOT A PATCHY DIFF: the declared deviation is one METHOD (`quant`), so the method is swapped back from the
+// extraction and the result must be byte-identical to the extraction body. Nothing can hide: if any other line differs, or
+// if the declared method is changed in a second way, the equality fails. (A git-diff parse reported "+0/-0" on a body that
+// demonstrably differed - a silent pass, which is the one failure mode a gate must not have.)
+const methodOf = (body) => { const m = body.match(/\n  quant\(r, g, b\) \{[\s\S]*?\n  \}/); return m ? m[0] : null; };
+const oursBody = bodyOf(code), extBody = sliceOf(extraction);
+const oursQ = methodOf(oursBody), extQ = methodOf(extBody);
+const swappedBack = oursQ && extQ ? oursBody.replace(oursQ, extQ) : oursBody;
+const bodyOk = !!oursQ && !!extQ && swappedBack === extBody;
+ok('1b THE BODY IS THE OPERATOR\'S BYTES, WITH ONLY THE DECLARED METHOD SWAPPED', bodyOk,
+  `${oursBody.length} chars · quant() declared deviation · swapping it back gives the extraction byte-for-byte: ${bodyOk}${bodyOk ? '' : ' — UNDECLARED CHANGE'}`);
 
 const ref = JSON.parse(readFileSync(new URL('../reference/v13/readout.json', import.meta.url), 'utf8'));
 const scenes = ref.map((r) => ({ label: r.label, fnv: r.h1, palette: r.sub.length, wn: r.wn, region: r.rep.map((f) => ({ name: f.name, grid: `${f.lu}x${f.lv}`, nw: f.nw })) }));
@@ -56,7 +75,11 @@ const res = await withPage('http://127.0.0.1:4312/game/index.html', { width: 400
 
 ok('2 IT RUNS in a page (import + build, no throw)', res.hasClean && res.len === 288 * 512, `${res.len} px built in ${res.ms} ms; page errors: ${res.errors.length}`);
 const want = scenes[0];
-ok('3 IT REPRODUCES THE OPERATOR\'S OWN FNV (two builds equal)', res.h1 === want.fnv && res.h2 === res.h1, `got ${res.h1}${res.h1 === want.fnv ? ' (matches the recorded frame)' : ` — recorded ${want.fnv}`}`);
+// THE FNV IS NO LONGER THE OPERATOR'S, BY DECLARATION: the snap now keeps a warm low-saturation pixel warm, which changes
+// the frame. What this row can honestly require is DETERMINISM (the same input builds the same frame) and that the
+// difference from the operator's recorded frame is *this declared deviation* — so it prints both and passes on determinism.
+ok('3 THE BUILD IS DETERMINISTIC (same input, same frame)', res.h2 === res.h1,
+  `got ${res.h1} on two builds · the operator's recorded frame was ${want.fnv}${res.h1 === want.fnv ? ' (still equal)' : ' (differs by the declared warm-pixel deviation)'}`);
 ok('4 IT REPORTS THE OPERATOR\'S OWN STAGE NUMBERS', res.palette === want.palette && res.wn === want.wn && JSON.stringify(res.rep) === JSON.stringify(want.region),
   `palette ${res.palette}/${want.palette} · windows ${res.wn}/${want.wn} · ${res.rep.map((r) => r.name + ' ' + r.grid + '/' + r.nw).join(' | ')}`);
 

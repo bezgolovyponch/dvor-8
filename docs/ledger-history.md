@@ -15,3 +15,9 @@ is impossible: the file is in git, and the gate refuses a regression before it c
   `damage.lostPx` (the same hit removes ≥ 100 pixels of it — measured 149). The numbers are read from the damage gate,
   one instrument, not a second implementation. The engine rows (FNV, palette, windows, grids) and the intact identity
   are unchanged.
+
+- 2026-10-30T10:46:56.101Z — ledger re-locked: the declared concept deviation in the engine's quant() (a warm low-saturation pixel keeps its warmth - the published look's bronze mullions): the frame FNV moves from 7204df6f to 5df02351 and the concept gate WARMTH rises 0.10 -> 0.55 against the target's 0.42; the extraction is untouched (ea0273fe...) and swapping quant() back is byte-identical
+  engine.fnv=5df02351 · engine.palette=12 · engine.windows=1321 · engine.grid.tower=10x11 · engine.grid.checker=6x7 · app.intactPx=0 · app.damagedPx=0
+
+- 2026-10-30T10:56:25.790Z — ledger re-locked: the declared quant() deviation is REVERTED: measured on the PRODUCT route it did not move the warm row at all (0.00 before and after) - the 0.55 I first saw came from the vector route's dump, the same wrong-route mistake docs/PROCESS.md names. The engine is byte-identical to the extraction again and the operator's FNV 7204df6f is restored
+  engine.fnv=7204df6f · engine.palette=12 · engine.windows=1321 · engine.grid.tower=10x11 · engine.grid.checker=6x7 · app.intactPx=0 · app.damagedPx=0

@@ -81,12 +81,16 @@ for (const [key, row] of Object.entries(ledger.rows)) {
   if (!ok) failed += 1;
   console.log(`${pad(key, 22)} ${pad(row.value, 10)} ${pad(v, 10)} ${ok ? 'ok' : 'REGRESSED'}`);
 }
-if (failed) {
+// THE DECISION IS THE OPERATOR'S TO RECORD, SO `--accept` MUST BE ABLE TO REACH IT. The first version refused on any
+// regression BEFORE the accept branch, so a deliberate change could never be recorded - the gate had no legitimate way to
+// move a lock, only to fail forever (found while trying to record the declared engine deviation).
+if (failed && !accept) {
   console.log(`\nLEDGER FAILED: ${failed} verified number(s) are worse than the lock.`);
   console.log('A regression is not shipped: fix it, or accept the new value with a recorded reason:');
   console.log('  node tools/ledger-check.mjs --accept "<what got worse and why it is acceptable>"');
   process.exit(1);
 }
+if (failed && accept) console.log(`\n${failed} row(s) differ from the lock and are being re-locked by an explicit --accept.`);
 if (accept) {
   if (!reason) { console.log('REFUSED: --accept needs a reason'); process.exit(2); }
   for (const [key, row] of Object.entries(ledger.rows)) if (key in now) row.value = now[key];
