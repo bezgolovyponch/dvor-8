@@ -135,3 +135,41 @@ target look** — only to reproduce the extracted engine's own output exactly (0
 Rows 2–4 were fixed by writing the gate **first** (`tools/engine-semantics-check.mjs`, chain step `0i SEMANTICS`), watching
 it fail on the old tree (`2 pieces changed; states 00204000000`), then changing the code, then watching it pass
 (`1 piece; states 00001000000`; ladder 1→1→2→2).
+
+## 8. The target CONCEPT (not one photo) — rules extracted, first iteration of the loop
+
+The flaw the operator named: *"you have to first gather the understanding of the target concept, not just the particular
+photo."* A concept is a set of rules, so `tools/concept-audit.mjs` extracts them from any image and prints them side by side
+(tones in use at ≥ 0.2 % share, warm-pixel share, adjacent-pixel detail, sky-band detail), at the art's own size so crops of
+different sizes cannot be compared.
+
+### 8.1 The rules, measured
+
+| rule | `reference/TARGET.webp` | our engine frame | photo |
+|---|---|---|---|
+| tones in use (≥ 0.2 %) | **32** | 30 | — |
+| detail (adjacent-pixel diff, 288×512) | **44.62** | 43.50 | — |
+| sky detail (top third) | **40.98** | 43.43 | — |
+| **warm-pixel share, whole frame** | **1.76 %** | **0.00 %** | 0.16 % |
+
+The first three say the target's *density* is already matched — the engine's detail level is not the gap (an earlier reading
+of "half the window density" was an artefact of comparing different scales). The gap is one row: **the published look
+amplifies warm tones to eleven times the photograph's own share** (1.76 % against 0.16 %): the visual audit saw the same
+thing as "warm bronze mullions, autumn foliage, the lit shop window". Our frame carries **none** of it.
+
+### 8.2 The hypothesis, tested and REFUTED (this is what a loop is for)
+
+Hypothesis: the warm tones are lost in the palette (S2 keeps the 12 most-used entries). Two declared engine deviations were
+made and measured:
+
+1. the working-palette cap raised (12 → 32);
+2. a guarantee that a warm family is never dropped from the set.
+
+Measured after both: **warm share 0.00 %, tones 30 — unchanged.** Both were **reverted**, because an engine deviation that
+does not move the concept row is a risk with no payoff (the engine is byte-identical to the extraction again; `0d ENGINE`
+reads 5 of 5).
+
+Why they did not help: the warm pixels never reach the palette stage — the *facade's mullion/frame colour* is chosen
+elsewhere (the engine's facade analysis and its frame-class paint, S8/S10), and that is where the target's bronze lives.
+**Next iteration of the loop targets that**, with the concept row (warm share ≥ the target's 1.76 % at equal detail) as its
+gate — written before the change, per `docs/PROCESS.md` step 4.
