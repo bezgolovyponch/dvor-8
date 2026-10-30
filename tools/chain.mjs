@@ -18,7 +18,25 @@ const run = (cmd, args, env = {}) => { try { return { out: execFileSync(cmd, arg
 // measurements OF A FRAME (palette table, stray share, sky band, the photograph deciding the road), and the gate
 // used to be called with no frame at all - so it reported a failure of the picture when it had been handed nothing.
 // The PAGE block below runs before these steps and writes exactly this dump.
+//
+// IT DID NOT. The PAGE block sits at step 6 and step 1 already read its dump, so step 1 measured the PREVIOUS run's frame
+// (or nothing): a gate passing on yesterday's picture is exactly the false confirmation the operator called out. The dump
+// is now produced HERE, once, before any step reads it, and the freshness is printed with its age so a stale file cannot
+// be mistaken for a measured one.
 const DUMP = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
+{
+  const { existsSync, statSync, rmSync } = await import('node:fs');
+  try { rmSync(DUMP, { force: true }); } catch { /* nothing to remove */ }
+  const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&vector=1';
+  const r = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', process.env.PAGE_OUT || '/tmp/chain-page', process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'], { BASE });
+  if (!existsSync(DUMP)) {
+    console.log('FAIL  0k FRAME      the page harness produced no dump - every frame gate below would measure nothing');
+    console.log(r.out.split('\n').slice(-4).join('\n'));
+    process.exit(1);
+  }
+  const age = Math.round((Date.now() - statSync(DUMP).mtimeMs) / 1000);
+  console.log(`ok    0k FRAME      a fresh drawn frame for every gate below: ${DUMP} (${age}s old, ${JSON.parse(require('node:fs').readFileSync(DUMP, 'utf8')).w}x${JSON.parse(require('node:fs').readFileSync(DUMP, 'utf8')).h})`);
+}
 const steps = [
   ['0 PREFLIGHT', 'node', ['tools/preflight.mjs'], {}],
   ['0b IMPORTS', 'node', ['tools/undefined-check.mjs'], {}],
