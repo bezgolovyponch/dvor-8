@@ -173,3 +173,15 @@ Why they did not help: the warm pixels never reach the palette stage — the *fa
 elsewhere (the engine's facade analysis and its frame-class paint, S8/S10), and that is where the target's bronze lives.
 **Next iteration of the loop targets that**, with the concept row (warm share ≥ the target's 1.76 % at equal detail) as its
 gate — written before the change, per `docs/PROCESS.md` step 4.
+
+### 8.3 Where the warmth is lost — located, not yet fixed
+
+The engine's own S2 (line 15) snaps every pixel with a **two-class rule**: *grey pixels (sat < 0.26) → the nearest neutral
+by luma; colour pixels → the nearest chromatic entry*. The published look's bronze mullions are low-saturation warm greys
+(the tower's lit frame), so that rule classifies them as **neutral** and maps them to pure greys — which is exactly the row
+that reads 0.00 % warm while the photograph carries 0.16 % and the target 1.76 %.
+
+So the next change is in the snap's neutral branch (keep a warm neutral warm, using the palette's own warm low-saturation
+entries `#4c2f22 / #6e4a36 / #9e6b47 / #bf8f63`), and its gate is **`tools/concept-check.mjs` row 3** — written now, red
+now (`WARMTH target 0.42 ours 0.00 needs 0.21`), for the change to turn green. Rows 1 and 2 already pass
+(`DENSITY 44.62 vs 43.50`, `TONES 32 vs 30`).
