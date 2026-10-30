@@ -11,17 +11,39 @@ import { join } from 'node:path';
 
 const CHROME = process.env.CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-export async function withPage(url, { width = 412, height = 915 } = {}, fn) {
+// A LAUNCH THAT FAILS MUST SAY WHY. The launcher used to swallow the browser's stderr (`stdio: 'ignore'`) and throw the
+// bare "Chrome did not start", which is what every flaky run reported - a message that names neither the cause nor the
+// browser. It now keeps the tail of stderr, reports the exit code, and retries once on a fresh port, because a machine
+// running other browsers can lose the race for the DevTools endpoint.
+async function launch(width, height) {
   const port = 9300 + Math.floor(Math.random() * 500);
-  const chrome = spawn(CHROME, ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', `--remote-debugging-port=${port}`, `--user-data-dir=${mkdtempSync(join(tmpdir(), 'dvor8-'))}`,
-    `--window-size=${width},${height}`, '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: 'ignore' });
+  const dir = mkdtempSync(join(tmpdir(), 'dvor8-'));
+  const chrome = spawn(CHROME, ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`,
+    `--window-size=${width},${height}`, '--hide-scrollbars', '--autoplay-policy=no-user-gesture-required', 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+  let tail = '';
+  chrome.stderr.on('data', (b) => { tail = (tail + String(b)).slice(-600); });
+  let target = null;
+  for (let i = 0; i < 75 && !target; i += 1) {
+    await new Promise((r) => setTimeout(r, 200));
+    if (chrome.exitCode != null) break;
+    try { target = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).find((t) => t.type === 'page'); } catch { /* not up yet */ }
+  }
+  if (!target) { try { chrome.kill('SIGKILL'); } catch { /* gone */ } return { ok: false, port, dir, why: `exit ${chrome.exitCode} ${tail.replace(/\s+/g, ' ').slice(0, 240)}` }; }
+  return { ok: true, chrome, port, dir };
+}
+export async function withPage(url, { width = 412, height = 915 } = {}, fn) {
+  let launchInfo = await launch(width, height);
+  if (!launchInfo.ok) {
+    // ONE RETRY, on a fresh port and profile: the failure mode on a busy machine is a lost race, not a broken browser.
+    await new Promise((r) => setTimeout(r, 1500));
+    const again = await launch(width, height);
+    if (!again.ok) throw new Error(`Chrome did not start (two attempts). First: ${launchInfo.why}. Second: ${again.why}`);
+    launchInfo = again;
+  }
+  const { port } = launchInfo, chrome = launchInfo.chrome;
   try {
-    let target;
-    for (let i = 0; i < 50 && !target; i += 1) {
-      await new Promise((r) => setTimeout(r, 200));
-      try { target = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).find((t) => t.type === 'page'); } catch { /* not up yet */ }
-    }
-    if (!target) throw new Error('Chrome did not start');
+    let target = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).find((t) => t.type === 'page');
+    if (!target) throw new Error('the DevTools endpoint came up but listed no page');
     const ws = new WebSocket(target.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
     let seq = 0;

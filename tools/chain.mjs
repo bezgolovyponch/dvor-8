@@ -25,17 +25,25 @@ const run = (cmd, args, env = {}) => { try { return { out: execFileSync(cmd, arg
 // be mistaken for a measured one.
 const DUMP = (process.env.PAGE_OUT || '/tmp/chain-page') + '/canvas.json';
 {
-  const { existsSync, statSync, rmSync } = await import('node:fs');
-  try { rmSync(DUMP, { force: true }); } catch { /* nothing to remove */ }
+  // THE PAGE BLOCK ABOVE RUNS FIRST AND WRITES THE DUMP; this step GUARANTEES it is fresh instead of re-creating it (the
+  // first version deleted the good dump and re-ran the harness, so a failed second launch threw away a dump that had just
+  // been written - measured). Fresh = written during this run.
+  const { existsSync, statSync } = await import('node:fs');
+  const { readFileSync } = await import('node:fs');
+  const START = globalThis.__CHAIN_START || (globalThis.__CHAIN_START = Date.now());
+  const fresh = () => existsSync(DUMP) && statSync(DUMP).mtimeMs >= START - 2000;
   const BASE = 'http://127.0.0.1:4312/game/index.html?clean=1&news=0&clock=7.5&vector=1';
-  const r = run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', process.env.PAGE_OUT || '/tmp/chain-page', process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'], { BASE });
-  if (!existsSync(DUMP)) {
-    console.log('FAIL  0k FRAME      the page harness produced no dump - every frame gate below would measure nothing');
-    console.log(r.out.split('\n').slice(-4).join('\n'));
+  for (let attempt = 1; attempt <= 3 && !fresh(); attempt += 1) {
+    if (attempt > 1) { console.log(`     0k FRAME      attempt ${attempt} of 3 (no fresh dump yet)`); execFileSync('sleep', ['6']); }
+    run('node', ['--experimental-websocket', 'tools/photo-shot.mjs', process.env.PAGE_OUT || '/tmp/chain-page', process.env.PHOTO || 'photos-test/v10a.jpg', 'ЦУНАМИ'], { BASE });
+  }
+  if (!fresh()) {
+    console.log('FAIL  0k FRAME      no fresh drawn frame for the gates below - every frame gate would measure a stale file or nothing');
     process.exit(1);
   }
+  const d0 = JSON.parse(readFileSync(DUMP, 'utf8'));
   const age = Math.round((Date.now() - statSync(DUMP).mtimeMs) / 1000);
-  console.log(`ok    0k FRAME      a fresh drawn frame for every gate below: ${DUMP} (${age}s old, ${JSON.parse(require('node:fs').readFileSync(DUMP, 'utf8')).w}x${JSON.parse(require('node:fs').readFileSync(DUMP, 'utf8')).h})`);
+  console.log(`ok    0k FRAME      a fresh drawn frame for every gate below: ${DUMP} (${age}s old, ${d0.w}x${d0.h}, engineFrame ${d0.engineFrame})`);
 }
 const steps = [
   ['0 PREFLIGHT', 'node', ['tools/preflight.mjs'], {}],
