@@ -614,7 +614,11 @@ export function draw(ctx, buf, world, fx, { filter, mode, seconds, scanY, motion
   }
   for (const r of fx.rocks) {
     const t = Math.min(1, r.t / r.dur);
-    const arc = Math.sin(t * Math.PI) * Math.min(24, r.dur * 90);   // a slow throw rises higher
+    // Weight affects the arc: heavier objects (higher weight) drop faster = lower arc.
+    // Weight is pixels per second of flight; the peak arc is inversely proportional to weight.
+    const baseArc = Math.min(24, r.dur * 90);
+    const weightFactor = r.weight ? Math.max(0.3, 1 - r.weight / 200) : 1;   // heavier = lower arc
+    const arc = Math.sin(t * Math.PI) * baseArc * weightFactor;
     const x = Math.round(r.x0 + (r.tx - r.x0) * t), y = Math.round(r.y0 + (r.ty - r.y0) * t - arc);
     anchored(ctx, x, y, () => (THINGS[r.kind] || THINGS.stone)(ctx, x, y, Math.floor(seconds * 14) % 2 === 0, r));
   }

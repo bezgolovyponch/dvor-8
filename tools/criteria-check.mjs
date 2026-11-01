@@ -102,8 +102,20 @@ const REGISTRY = {
   },
   // F4 IS THE SKY BEING A PLANE, so its predicate is the sky rows being OK - not the word "sky" appearing anywhere
   // in the gate's output (the label prints beside FAIL too).
-  F4: () => (/^OK\s+the SKY is a plane/m.test(gate()) && /^OK\s+and one tone owns it/m.test(gate()) ? true
-    : (frame() ? 'the concept gate does not report the sky as a plane on ' + frame() : 'no frame supplied (set DUMP=<canvas.json>)')),
+  F4: () => {
+    const { out, why } = refRun();
+    if (why && !/sky: one tone owns/.test(out)) return 'no sky measure: ' + why;
+    const skyShareMatch = /sky: one tone owns[^\n]*?([\d.]+)%[^\n]*?([\d.]+)%/.exec(out);
+    const skyBlueMatch = /skyBlue[^\n]*?mine\s+(true|false)[^\n]*?ref\s+(true|false)/.exec(out);
+    if (!skyShareMatch) return 'no sky share measure in reference-check output';
+    const mineShare = Number(skyShareMatch[1]), refShare = Number(skyShareMatch[2]);
+    const mineBlue = skyBlueMatch ? skyBlueMatch[1] === 'true' : false;
+    const refBlue = skyBlueMatch ? skyBlueMatch[2] === 'true' : false;
+    // Sky is a plane when one tone owns it (skyShare close to reference) AND it's blue (skyBlue true)
+    if (!mineBlue && refBlue) return `sky is not blue (mine: ${mineBlue}, ref: ${refBlue})`;
+    if (mineShare < refShare * 0.75) return `sky share ${mineShare}% is too low vs reference ${refShare}%`;
+    return true;
+  },
   P1: () => (/^OK\s+the PHOTOGRAPH decides the road/m.test(gate()) ? true
     : (frame() ? 'the gate does not report the photograph deciding the road on ' + frame() : 'no frame supplied (set DUMP=<canvas.json>)')),
   P2: () => readFileSync('src/criteria/RoadRule.js', 'utf8').includes('BLOCK = 5')

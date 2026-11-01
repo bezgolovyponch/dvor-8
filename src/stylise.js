@@ -121,8 +121,159 @@ export function styliseVector(rgba, w, h, opts = {}) {
   // turns into things with hit points.
   const what = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) what[i] = st.idx[i] === out ? OTHER : (st.skyline[i % w] > ((i / w) | 0) ? SKY : OTHER);
+
+  // Build proper regions from trace output (wallParts, structures, sky, foliage) so the game
+  // reads a region list identical in contract to the flat route.
   const label = new Int32Array(n).fill(-1);
-  const regions = { label, rampOf: [], role: new Uint8Array(0), nr: 0, size: [], box: [], cx: [], cy: [] };
+  const rampOf = [];
+  const role = [];
+  const size = [];
+  const box = [];
+  const cx = [];
+  const cy = [];
+  const luma = [];
+  const ink = [];
+  const toneOf = [];
+
+  // Region roles matching flat.js: 0 = other/ground, 1 = sky, 2 = foliage, 3 = pane/window
+  const ROLE_OTHER = 0;
+  const ROLE_SKY = 1;
+  const ROLE_FOLIAGE = 2;
+  const ROLE_PANE = 3;
+
+  let regionId = 0;
+
+  // Sky region (from sky mask and skyline)
+  if (st.skyN && st.skyN > 0) {
+    const skyPixels = [];
+    for (let i = 0; i < n; i += 1) {
+      const y = (i / w) | 0, x = i % w;
+      if (y < st.skyline[x]) { skyPixels.push(i); }
+    }
+    if (skyPixels.length > 0) {
+      let minX = w, maxX = 0, minY = h, maxY = 0;
+      let sumLuma = 0;
+      for (const p of skyPixels) {
+        const x = p % w, y = (p / w) | 0;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+        label[p] = regionId;
+        const r = rgba[p * 4], g = rgba[p * 4 + 1], b = rgba[p * 4 + 2];
+        sumLuma += r * 0.299 + g * 0.587 + b * 0.114;
+      }
+      rampOf.push(st.ramps?.sky ?? 0);
+      role.push(ROLE_SKY);
+      size.push(skyPixels.length);
+      box.push([minX, minY, maxX + 1, maxY + 1]);
+      cx.push((minX + maxX) / 2);
+      cy.push((minY + maxY) / 2);
+      luma.push(sumLuma / skyPixels.length);
+      ink.push(false);
+      // toneOf: sky is typically painted at tone 3-5 (lighter tones), compute from mean luma
+      const skyTone = Math.min(5, Math.max(0, Math.round((sumLuma / skyPixels.length - 100) / 40)));
+      toneOf.push(skyTone);
+      regionId += 1;
+    }
+  }
+
+  // Building/wall regions from wallParts (facade planes)
+  if (st.wallParts) {
+    for (const part of st.wallParts) {
+      if (!part.pixels || part.pixels.length < 40) continue;
+      let sumLuma = 0;
+      let sumIdx = 0;
+      for (const p of part.pixels) {
+        label[p] = regionId;
+        const r = rgba[p * 4], g = rgba[p * 4 + 1], b = rgba[p * 4 + 2];
+        sumLuma += r * 0.299 + g * 0.587 + b * 0.114;
+        sumIdx += st.idx[p];
+      }
+      const meanIdx = sumIdx / part.pixels.length;
+      rampOf.push(st.ramps?.wall ?? 1);
+      role.push(ROLE_OTHER); // walls are "other" role (0) in flat.js
+      size.push(part.pixels.length);
+      box.push([part.x, part.y, part.x + part.w, part.y + part.h]);
+      cx.push(part.x + part.w / 2);
+      cy.push(part.y + part.h / 2);
+      luma.push(sumLuma / part.pixels.length);
+      ink.push(false);
+      // toneOf: extract tone from mean palette index (index % STEPS)
+      toneOf.push(Math.floor(meanIdx) % 6);
+      regionId += 1;
+    }
+  }
+
+  // Foliage regions from structures (if they have foliage role) or separate foliage data
+  // Check structures for foliage-like masses
+  if (st.structures) {
+    for (const struct of st.structures) {
+      if (!struct.pixels || struct.pixels.length < 14) continue;
+      // Heuristic: check if this structure is foliage by mean color
+      let sumR = 0, sumG = 0, sumB = 0;
+      let sumIdx = 0;
+      for (const p of struct.pixels) {
+        sumR += rgba[p * 4]; sumG += rgba[p * 4 + 1]; sumB += rgba[p * 4 + 2];
+        sumIdx += st.idx[p];
+      }
+      const meanR = sumR / struct.pixels.length;
+      const meanG = sumG / struct.pixels.length;
+      const meanB = sumB / struct.pixels.length;
+      const meanIdx = sumIdx / struct.pixels.length;
+      const sat = Math.max(meanR, meanG, meanB) ? (Math.max(meanR, meanG, meanB) - Math.min(meanR, meanG, meanB)) / Math.max(meanR, meanG, meanB) : 0;
+      const isFoliage = sat > 0.30 && meanG > meanR && meanG > meanB;
+
+      let sumLuma = 0;
+      for (const p of struct.pixels) {
+        if (label[p] === -1) label[p] = regionId; // only label unassigned
+        const r = rgba[p * 4], g = rgba[p * 4 + 1], b = rgba[p * 4 + 2];
+        sumLuma += r * 0.299 + g * 0.587 + b * 0.114;
+      }
+      rampOf.push(isFoliage ? (st.ramps?.foliage ?? 2) : (st.ramps?.wall ?? 1));
+      role.push(isFoliage ? ROLE_FOLIAGE : ROLE_OTHER);
+      size.push(struct.pixels.length);
+      box.push([struct.x, struct.y, struct.x + struct.w, struct.y + struct.h]);
+      cx.push(struct.x + struct.w / 2);
+      cy.push(struct.y + struct.h / 2);
+      luma.push(sumLuma / struct.pixels.length);
+      ink.push(false);
+      toneOf.push(Math.floor(meanIdx) % 6);
+      regionId += 1;
+    }
+  }
+
+  // Ground/other region for remaining unlabelled pixels
+  const otherPixels = [];
+  let sumLumaOther = 0;
+  let sumIdxOther = 0;
+  for (let i = 0; i < n; i += 1) {
+    if (label[i] === -1) {
+      label[i] = regionId;
+      otherPixels.push(i);
+      const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2];
+      sumLumaOther += r * 0.299 + g * 0.587 + b * 0.114;
+      sumIdxOther += st.idx[i];
+    }
+  }
+  if (otherPixels.length > 0) {
+    let minX = w, maxX = 0, minY = h, maxY = 0;
+    for (const p of otherPixels) {
+      const x = p % w, y = (p / w) | 0;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+    rampOf.push(st.ramps?.wall ?? 1);
+    role.push(ROLE_OTHER);
+    size.push(otherPixels.length);
+    box.push([minX, minY, maxX + 1, maxY + 1]);
+    cx.push((minX + maxX) / 2);
+    cy.push((minY + maxY) / 2);
+    luma.push(sumLumaOther / otherPixels.length);
+    ink.push(false);
+    toneOf.push(Math.floor(sumIdxOther / otherPixels.length) % 6);
+    regionId += 1;
+  }
+
+  const regions = { label, rampOf, role: new Uint8Array(role), nr: regionId, size, box, cx, cy, luma, ink, toneOf };
   // THE STYLE'S REGISTER, APPLIED LAST. The conversion copies the photograph's own darkness; the style (measured
   // from the accepted frame: dominant grey rgb(89,85,95), lightness 0.35) uses the palette's MIDDLE register and
   // reserves the darkest tones for outlines. This is the last write to the frame, so nothing can undo it.
@@ -175,10 +326,22 @@ export function styliseVector(rgba, w, h, opts = {}) {
   // 43 tones with the reduction inside `trace`, 21 with it here).
   const working = reduceToWorkingPalette(st.idx, st.palette, 22);
   if (typeof window !== 'undefined') window.__workingPalette = working;
+
+  // Build env object matching flat route contract: label, rampOf, role, nr, rampName
+  // Match flat.js RAMPS order: sky, foliage, earth, stone, metal, warm, dusk, sand
+  const rampNames = ['sky', 'foliage', 'earth', 'stone', 'metal', 'warm', 'dusk', 'sand'];
+  const env = {
+    label: regions.label,
+    rampOf: regions.rampOf,
+    role: regions.role,
+    nr: regions.nr,
+    rampName: rampNames
+  };
+
   return {
     idx: st.idx, palette: st.palette, smooth: rgba,
     surfaces: { what, horizon: 0, skyShare: st.skyShare },
-    regions, env: null,
+    regions, env,
     windows: st.windows || [],
     structures: st.structures || [],
     outlinePixels: st.linePixels,

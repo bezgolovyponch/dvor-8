@@ -9,7 +9,7 @@
 
 import { sceneParse } from './scene-parse.js';   // stage 1+2: what is on the screen, and where the sky is
 import { downscaleContrast, expandContrast } from './pieces/downscale.js';   // the published reduction logic (PixelOE), confirmed by its own check
-import { styliseVector } from './stylise.js';
+import { styliseVector, styliseFlat } from './stylise.js';
 import { toRegions, TARGETS } from './objects.js';
 import { loadDetector, detectAll, DETECT_LONG } from './detect.js';
 import { left, makeWorld, pick, strike, tick } from './world.js';
@@ -626,7 +626,10 @@ async function build(rgba, w, h, dets, big = null) {
     window.__skylineY = rows.length ? rows[Math.min(rows.length - 1, Math.floor(rows.length * 0.9))] : null;
     window.__skylineCols = parse.horizon.filter((v) => v > 0).length;
   }
-  const st = styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
+  // WHICH PAINTER: ?style=vector (default, product route) or ?style=flat (comparison).
+  // Both return the same contract so downstream code is unchanged.
+  const useFlat = params.get('style') === 'flat';
+  const st = (useFlat ? styliseFlat : styliseVector)(rgba, w, h, { marks: dets, fundamentals: true, parse, horizonProbe: params.get('horizon') === '1' });
   // ===== THE OPERATOR'S ENGINE AS THE CONVERTER (docs/PLAN-REAL-PRODUCT.md §3) ==========================
   //
   // When an annotation is present - `?engine=<scene label>` for the reference's own scenes, or an annotation object

@@ -48,7 +48,7 @@ export function makeFx(world) {
 export function throwThing(fx, world, item, id, tx, ty, region, from = null) {
   fx.rocks.push({
     x0: from ? from.x : fx.hand.x, y0: from ? from.y : fx.hand.y, tx, ty, t: 0, dur: from ? HOP_TIME : item.flight,
-    kind: id, region, damage: item.damage, splash: item.splash, hops: from ? from.hops : item.chain, touched: from ? from.touched : new Set(),
+    weight: item.weight || 0, kind: id, region, damage: item.damage, splash: item.splash, hops: from ? from.hops : item.chain, touched: from ? from.touched : new Set(),
   });
   if (!from) { fx.rings.push({ x: tx, y: ty, t: 0, r: fx.lastRing || 1 }); fx.cool = item.cooldown; }   // the tap is answered in the same frame
 }
