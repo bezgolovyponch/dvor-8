@@ -1012,8 +1012,16 @@ check('the game paints the yard with the CONSTRUCTIVE route, and no longer per p
 // ---- which route the product renders with, and why (row 40) ------------------------------------------
 {
   const mainSrc = readFileSync(new URL('./src/main.js', import.meta.url), 'utf8');
-  check('the product renders CONSTRUCTIVELY, and the painted route is not reachable from it at all',
-    /styliseVector\(rgba, w, h/.test(mainSrc) && !/styliseFlat\(/.test(mainSrc), 'one renderer: constructive');
+  // THE PRODUCT RENDERS CONSTRUCTIVELY BY DEFAULT, AND THE PAINTED ROUTE IS BEHIND AN EXPLICIT FLAG. The guard used to
+  // forbid any reachable second painter; the operator's commit `74c3631` adds `?style=flat` deliberately, as a COMPARISON
+  // route (its own words: "WHICH PAINTER: ?style=vector (default, product route) or ?style=flat (comparison)"). So the guard
+  // now asserts the thing that actually matters: the default is constructive, and the comparison painter is reachable only
+  // through that parameter - never as the product's own path.
+  check('the product renders CONSTRUCTIVELY by default, and the painted route sits behind ?style=flat only',
+    /styliseVector\b/.test(mainSrc)
+      && /params\.get\('style'\) === 'flat'/.test(mainSrc)
+      && /\(useFlat \? styliseFlat : styliseVector\)/.test(mainSrc),
+    'default constructive · comparison behind ?style=flat');
   check('and the reason is written where the choice was made, with the numbers that decided it',
     /10-18%\s*\n?\s*\/\/ flat against the constructive route's 56-81%/.test(mainSrc) || /flat against the constructive route/.test(mainSrc),
     'measured, not preferred');

@@ -79,8 +79,11 @@ const ROWS = [
   // (`get('style') || 'vector'`) and a comment; the selector is gone because there is ONE RENDERER now (main.js says
   // so at the call site), so the row reads that call: the constructive route, by default, with the parse and the
   // fundamentals it measures from.
+  // The operator's commit 74c3631 puts the painted route behind `?style=flat` as a COMPARISON route; the row asserts the
+  // thing that matters - the default expression picks the constructive painter (the ternary), with the flag as the only way
+  // to the other one.
   ['L1 The product renders constructively by default, on measurement', 'src/main.js',
-    () => has(src('main.js'), 'styliseVector(rgba, w, h, { marks: dets, fundamentals: true, parse')],
+    () => has(src('main.js'), 'useFlat ? styliseFlat : styliseVector') && has(src('main.js'), "params.get('style') === 'flat'")],
   ['L1 The gate reads the DRAWN canvas, not a screenshot', 'tools/photo-shot.mjs + tools/concept-check.mjs',
     () => has(read('tools/photo-shot.mjs'), 'canvas.json', 'getImageData') && has(read('tools/concept-check.mjs'), "endsWith('.json')")],
   ['L1 The layer-3 model is chosen by MEASUREMENT, with its licence and size', 'docs/knowledge-base.md',
