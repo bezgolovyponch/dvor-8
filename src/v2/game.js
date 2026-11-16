@@ -49,6 +49,7 @@ async function loadImage(src) {
 }
 
 const FRAME_W = 288, FRAME_H = 512;
+const LOOK = new Set((params.get('look') || '').split(',').filter(Boolean));
 const CRACK = 48;
 
 function cropTo916(img) {
@@ -85,13 +86,13 @@ function engineCars(comp, bg, cls) {
       const k = y * W + x;
       if (S.ID[k] !== id) continue;
       const j = (y - y0) * w + x - x0;
-      px[j] = S.base[k] === CRACK || panes.has(k) ? S.base[k] : snap(comp, k);
+      px[j] = !LOOK.has('resnap') || S.base[k] === CRACK || panes.has(k) ? S.base[k] : snap(comp, k);
       if (panes.has(k)) glass[j] = 1;
       bg[k] = S.back[k];
       cls[k] = S.backID[k] >= 1 && S.backID[k] < 10 ? CLASS.BUILDING : CLASS.ROAD;
       n += 1;
     }
-    if (h < SPRITE_CAR_H) simplifyCar({ px, glass, w, h, darker: comp.RGB.map((_, i) => comp.scrape(i)), outline: CRACK });
+    if (LOOK.has('carsprite') && h < SPRITE_CAR_H) simplifyCar({ px, glass, w, h, darker: comp.RGB.map((_, i) => comp.scrape(i)), outline: CRACK });
     sprites.push({ id, label: 'car', x0, y0, w, h, px, glass, n0: n, n, state: 'whole', heat: 0, flash: 0 });
   }
   return sprites;
@@ -137,7 +138,7 @@ function fromEngine(comp, seg, scene) {
   const wallAt = (k, fallback) => (comp.chunkOf[k] >= 0 && walls[comp.chunkOf[k]] >= 0 ? walls[comp.chunkOf[k]] : fallback);
   for (const rep of comp.REP || []) {
     const bd = scene.buildings.find((b) => b.id === rep.id);
-    if (!bd || rep.kind !== 'facade' || (rep.glassDom && paneBlue(comp, rep.id) > PANE_BLUE)) continue;
+    if (!LOOK.has('redraw') || !bd || rep.kind !== 'facade' || (rep.glassDom && paneBlue(comp, rep.id) > PANE_BLUE)) continue;
     const colours = { ...FACADE, outline: CRACK, wall: (k) => wallAt(k, rep.wall), slab: (k) => comp.scrape(wallAt(k, rep.wall)) };
     facadeWins.set(rep.id, drawFacade({ W, H, ID: S.ID, base: S.base, id: rep.id, quad: bd.quad, rows: rep.rows, cols: rep.cols, colours }));
   }
@@ -150,16 +151,16 @@ function fromEngine(comp, seg, scene) {
   }
   for (let k = 0; k < N; k += 1) {
     if (S.ID[k]) continue;
-    const segSky = seg[k] === CLASS.SKY;
+    const segSky = LOOK.has('skyfix') ? seg[k] === CLASS.SKY : Boolean(comp.sky[k]);
     if (comp.sky[k] && !segSky) { S.base[k] = comp.q[k]; bg[k] = comp.q[k]; cls[k] = seg[k]; comp.sky[k] = 0; }
     else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
-    if (cls[k] !== CLASS.SKY) { const v = snap(comp, k); S.base[k] = v; bg[k] = v; }
+    if (LOOK.has('resnap') && cls[k] !== CLASS.SKY) { const v = snap(comp, k); S.base[k] = v; bg[k] = v; }
   }
   const sprites = engineCars(comp, bg, cls);
   const mute = muteTable(palette, (r, g, b) => comp.lab(r, g, b));
   const isGround = (k) => cls[k] !== CLASS.SKY && cls[k] !== CLASS.BUILDING;
-  for (let k = 0; k < N; k += 1) if (isGround(k)) bg[k] = mute[bg[k]];
-  bg.set(calm(bg, (k) => isGround(k) && S.ID[k] === 0, W, H, GROUND_CALM.radius, GROUND_CALM.passes));
+  if (LOOK.has('mute')) for (let k = 0; k < N; k += 1) if (isGround(k)) bg[k] = mute[bg[k]];
+  if (LOOK.has('calm')) bg.set(calm(bg, (k) => isGround(k) && S.ID[k] === 0, W, H, GROUND_CALM.radius, GROUND_CALM.passes));
   const wallPieces = comp.CH.map((c, i) => ({ c, i })).filter(({ c }) => isWall(c.bid));
   const indexOf = new Map(wallPieces.map(({ i }, j) => [i, j]));
   const chunkOf = new Int32Array(N).fill(-1);
@@ -203,14 +204,14 @@ export async function build(img, label = null) {
   const ground = cls.map((c) => (c === CLASS.ROAD || c === CLASS.TERRAIN ? 1 : 0));
   const cars = carInstances(found.all, carMask, W, H, lab, ground);
   const { GameEngine } = await import('./engine.js');
-  const comp = new GameEngine();
+  const { Component } = await import('../ref/engine.js');
+  const comp = LOOK.has('palette') ? new GameEngine() : new Component();
   const hand = label && params.get('scene') === 'hand' ? (comp.SCENES || []).find((s) => s.id === label) : null;
-  const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H });
-  if (!hand) scene.sky = skyTheme(skyPixels(lab, cls));
+  const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H, L: lab.filter((_, i) => i % 3 === 0) });
   $('note').textContent = 'рисую…';
-  const cropImg = await loadImage(crop.toDataURL('image/jpeg', 0.95));
   comp.tok += 1; comp.S = null;
-  comp.build(cropImg, scene, 8);
+  comp.build(img, scene, 8);
+  state.comp = comp;
   state.world = fromEngine(comp, cls, scene);
   state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);
@@ -371,6 +372,7 @@ window.__v2tick = (n) => { for (let i = 0; i < n; i += 1) advance(); draw(); };
 window.__v2throw = (x, y) => tap(x, y);
 window.__v2round = () => ({ ...state.round, loot: state.round.loot, onGround: state.world.loot.map((p) => ({ x: p.x, y: p.y, kind: p.kind, rest: p.rest })) });
 window.__v2world = () => state.world;
+window.__v2rep = () => (state.comp ? state.comp.REP.map((r) => ({ id: r.id, kind: r.kind, corr: +r.corr.toFixed(2), bf: +r.bf.toFixed(2), glass: r.glassDom })) : null);
 
 const PHOTOS = [
   ['parking.jpg', 'ПАРКОВКА', null], ['5.jpg', 'ПРАГА · БАШНЯ', 'prague-tower'],

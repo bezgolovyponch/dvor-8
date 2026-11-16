@@ -39,9 +39,50 @@ export function fitLine(points) {
   return (x) => my + slope * (x - mx);
 }
 
-export function facadeOf(cols) {
+const EDGE_MIN = 0.04;
+const EDGE_RATIO = 2;
+const MAX_SLOPE = 0.6;
+
+export function edgeSlopes(cols, L, W, H) {
+  const half = (cols.reduce((t, c) => t + c.top + c.bottom, 0) / cols.length) / 2;
+  const upper = [], lower = [];
+  for (const c of cols) for (let y = c.top + 1; y < c.bottom; y += 1) {
+    const x = c.x;
+    if (x < 1 || x >= W - 1 || y < 1 || y >= H - 1) continue;
+    const at = (dx, dy) => L[(y + dy) * W + x + dx];
+    const gx = at(1, -1) + 2 * at(1, 0) + at(1, 1) - at(-1, -1) - 2 * at(-1, 0) - at(-1, 1);
+    const gy = at(-1, 1) + 2 * at(0, 1) + at(1, 1) - at(-1, -1) - 2 * at(0, -1) - at(1, -1);
+    const m = Math.hypot(gx, gy);
+    if (m < EDGE_MIN || Math.abs(gy) < EDGE_RATIO * Math.abs(gx)) continue;
+    const slope = -gx / gy;
+    if (Math.abs(slope) > MAX_SLOPE) continue;
+    (y < half ? upper : lower).push([slope, m]);
+  }
+  const wmedian = (arr) => {
+    if (!arr.length) return null;
+    arr.sort((a, b) => a[0] - b[0]);
+    const total = arr.reduce((t, a) => t + a[1], 0);
+    let acc = 0;
+    for (const [v, w] of arr) { acc += w; if (acc >= total / 2) return v; }
+    return arr[arr.length - 1][0];
+  };
+  return { top: wmedian(upper), bottom: wmedian(lower) };
+}
+
+const ROOF_SHARE = 0.1;
+const BASE_SHARE = 0.5;
+
+const support = (cols, slope, key, share) => {
+  const v = cols.map((c) => c[key] - slope * c.x).sort((a, b) => a - b);
+  const b = v[Math.floor((v.length - 1) * share)];
+  return (x) => b + slope * x;
+};
+
+export function facadeOf(cols, L = null, W = 0, H = 0) {
   const xa = cols[0].x, xb = cols[cols.length - 1].x + 1;
-  const top = fitLine(cols.map((c) => [c.x, c.top])), bottom = fitLine(cols.map((c) => [c.x, c.bottom + 1]));
+  const slopes = L ? edgeSlopes(cols, L, W, H) : { top: null, bottom: null };
+  const top = slopes.top === null ? fitLine(cols.map((c) => [c.x, c.top])) : support(cols, slopes.top, 'top', ROOF_SHARE);
+  const bottom = slopes.bottom === null ? fitLine(cols.map((c) => [c.x, c.bottom + 1])) : support(cols.map((c) => ({ ...c, bottom: c.bottom + 1 })), slopes.bottom, 'bottom', BASE_SHARE);
   const quad = [[xa, top(xa)], [xb, top(xb)], [xb, bottom(xb)], [xa, bottom(xa)]].map(([x, y]) => [Math.round(x), Math.round(y)]);
   const upper = cols.filter((_, i) => i % CLIP_STEP === 0 || i === cols.length - 1);
   const clip = [
@@ -51,7 +92,7 @@ export function facadeOf(cols) {
   return { quad, clip, bottom: Math.round(Math.max(bottom(xa), bottom(xb))) };
 }
 
-export function autoScene({ cls, cars = [], W, H }) {
+export function autoScene({ cls, cars = [], W, H, L = null }) {
   const isWall = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i += 1) if (cls[i] === CLASS.BUILDING) isWall[i] = 1;
   const buildings = [];
@@ -59,19 +100,53 @@ export function autoScene({ cls, cars = [], W, H }) {
     if (px.length < BUILDING_MIN_AREA) continue;
     for (const part of splitAtSteps(columnProfile(px, W))) {
       if (part.length < BUILDING_MIN_WIDTH) continue;
-      const f = facadeOf(part);
+      const f = facadeOf(part, L, W, H);
       buildings.push({ id: buildings.length + 1, name: 'ДОМ', kind: 'auto', quad: f.quad, clip: f.clip, bottom: f.bottom });
     }
   }
-  const kept = buildings.slice(0, 9);
+  const real = cars.filter(isCarBox);
+  const gy = groundRow(cls, W, H, real);
+  const kept = buildings.map((b) => standOnGround(b, gy, real, H)).filter((b) => b && Math.min(...b.quad.map((p) => p[1])) < gy - RISE_MIN).slice(0, 9);
   return {
-    id: 'auto', label: 'ДВОР', gy: horizonRow(cls, W, H), sky: 'auto',
-    buildings: kept.map(({ bottom, ...b }) => ({ ...b, ground: bottom })),
-    cars: cars.slice(0, MAX_CARS).map((c) => ({ x: c.x0, y: c.y0, w: c.x1 - c.x0 + 1, h: c.y1 - c.y0 + 1, type: 'box', name: 'МАШИНА' })),
+    id: 'auto', label: 'ДВОР', gy, sky: 'auto',
+    buildings: kept.map(({ bottom, ...b }, i) => ({ ...b, id: i + 1, ground: bottom })),
+    cars: real.slice(0, MAX_CARS).map((c) => ({ x: c.x0, y: c.y0, w: c.x1 - c.x0 + 1, h: c.y1 - c.y0 + 1, type: 'box', name: 'МАШИНА' })),
   };
 }
 
 const HORIZON_SHARE = 0.9;
+const RISE_MIN = 8;
+const NEAR_FACADE_SHARE = 0.6;
+
+export function standOnGround(b, gy, cars, H) {
+  const ys = b.quad.map((p) => p[1]), top = Math.min(...ys), x0 = b.quad[0][0], x1 = b.quad[1][0];
+  if (b.bottom - top > H * NEAR_FACADE_SHARE) return b;
+  const hidden = cars.some((c) => c.x1 >= x0 && c.x0 <= x1 && c.y0 <= b.bottom + 2 && c.y1 >= b.bottom);
+  if (b.bottom <= gy && !hidden) return b;
+  const quad = b.quad.map((p, i) => (i >= 2 ? [p[0], gy] : p));
+  const clip = b.clip.map((p) => [p[0], Math.min(p[1], gy)]).map((p, i, a) => (i >= a.length - 2 ? [p[0], gy] : p));
+  return { ...b, quad, clip, bottom: gy };
+}
+const CAR_MIN = { w: 8, h: 5 };
+const CAR_ASPECT = [0.3, 4];
+
+export function isCarBox(c) {
+  const w = c.x1 - c.x0 + 1, h = c.y1 - c.y0 + 1;
+  return w >= CAR_MIN.w && h >= CAR_MIN.h && w / h >= CAR_ASPECT[0] && w / h <= CAR_ASPECT[1];
+}
+
+export function groundRow(cls, W, H, cars = []) {
+  const bottoms = [];
+  for (let x = 0; x < W; x += 1) {
+    let b = -1;
+    for (let y = 0; y < H; y += 1) if (cls[y * W + x] === CLASS.BUILDING) b = y;
+    if (b >= 0) bottoms.push(b + 1);
+  }
+  const candidates = [];
+  if (bottoms.length) { bottoms.sort((a, c) => a - c); candidates.push(bottoms[bottoms.length >> 1]); }
+  if (cars.length) candidates.push(Math.min(...cars.map((c) => c.y1 + 1)));
+  return candidates.length ? Math.min(...candidates) : horizonRow(cls, W, H);
+}
 
 export function horizonRow(cls, W, H) {
   const lowest = [];
