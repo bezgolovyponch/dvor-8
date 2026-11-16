@@ -6,7 +6,7 @@ const photo = process.argv[3] || 'photos-test/parking.jpg';
 const BASE = process.env.BASE || 'http://127.0.0.1:4320/';
 mkdirSync(out, { recursive: true });
 
-await withPage(`${BASE}v2.html?photo=${encodeURIComponent(photo)}`, { width: 412, height: 860 }, async (page) => {
+await withPage(`${BASE}v2.html?photo=${encodeURIComponent(photo)}${process.env.PAL ? `&pal=${process.env.PAL}` : ''}`, { width: 412, height: 860 }, async (page) => {
   const frame = async (name) => {
     const url = await page.run("return document.getElementById('screen').toDataURL('image/png')");
     writeFileSync(`${out}/${name}.frame.png`, Buffer.from(url.split(',')[1], 'base64'));

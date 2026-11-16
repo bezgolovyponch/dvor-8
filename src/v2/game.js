@@ -6,6 +6,8 @@ import { CLASS, classMap, downsample } from './classes.js';
 import { carInstances } from './instances.js';
 import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
 import { createRuin } from './ruin.js';
+import { restyle } from './restyle.js';
+import { STANDARD } from './standard-palettes.js';
 import { autoScene, skyTheme } from './scene.js';
 import { EMPTY } from './sprites.js';
 
@@ -81,12 +83,10 @@ function engineCars(comp, bg, cls) {
   return sprites;
 }
 
-function fromEngine(comp, seg, scene) {
+function fromEngine(comp, seg, scene, lab) {
   const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
-  const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
-  const darker = palette.map((_, i) => comp.scrape(i));
-  const bg = Uint16Array.from(S.base);
   const cls = new Uint8Array(N).fill(CLASS.ROAD);
+  const sky = new Uint8Array(N);
   const isWall = (id) => id >= 1 && id < 10;
   for (let k = 0; k < N; k += 1) {
     if (isWall(S.ID[k])) cls[k] = CLASS.BUILDING;
@@ -95,17 +95,36 @@ function fromEngine(comp, seg, scene) {
   for (let k = 0; k < N; k += 1) {
     if (S.ID[k]) continue;
     const segSky = seg[k] === CLASS.SKY;
-    if (comp.sky[k] && !segSky) { S.base[k] = comp.q[k]; bg[k] = comp.q[k]; cls[k] = seg[k]; comp.sky[k] = 0; }
-    else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
+    if (comp.sky[k] && !segSky) { cls[k] = seg[k]; comp.sky[k] = 0; }
+    else if (!comp.sky[k] && segSky) { S.base[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
+    sky[k] = segSky ? 1 : 0;
   }
+  const facades = scene.buildings.map((bd) => ({ bd, rep: (comp.REP || []).find((r) => r.id === bd.id) }))
+    .filter(({ rep }) => !rep || rep.kind !== 'checker')
+    .map(({ bd, rep }) => ({ id: bd.id, quad: bd.quad, glass: Boolean(rep && rep.glassDom), rows: rep ? rep.rows : 0, cols: rep ? rep.cols : 0 }));
+  const cars = comp.CARIDS.map((id) => ({ id, glass: new Set(comp.carGlass[id] || []) }));
+  const styled = restyle({ W, H, lab, ID: S.ID, sky, base: S.base, back: S.back, rgb: comp.RGB, standard: STANDARD[params.get('pal')] || STANDARD['aap-64'], buildings: facades, cars, outline: CRACK });
+  S.base = styled.base; S.back = styled.back;
+  for (let k = 0; k < N; k += 1) if (styled.dropped.has(S.ID[k])) { S.ID[k] = 0; cls[k] = seg[k] === CLASS.SKY ? CLASS.TERRAIN : seg[k]; }
+  const bg = Uint16Array.from(S.base);
+  const palette = styled.palette.rgb;
+  const darker = styled.palette.darker(comp.RGB.map((_, i) => comp.scrape(i)), CRACK);
   const sprites = engineCars(comp, bg, cls);
-  const wallPieces = comp.CH.map((c, i) => ({ c, i })).filter(({ c }) => isWall(c.bid));
+  const wallPieces = comp.CH.map((c, i) => ({ c, i })).filter(({ c }) => isWall(c.bid) && !styled.dropped.has(c.bid));
   const indexOf = new Map(wallPieces.map(({ i }, j) => [i, j]));
   const chunkOf = new Int32Array(N).fill(-1);
+  const redrawn = new Set(facades.map((f) => f.id));
+  wallPieces.forEach(({ c }, j) => { for (const k of c.pix) chunkOf[k] = j; });
+  const byChunk = new Map();
+  for (const [, wins] of styled.windows) for (const w of wins) {
+    const parts = new Map();
+    for (const k of w) if (chunkOf[k] >= 0) (parts.get(chunkOf[k]) || parts.set(chunkOf[k], []).get(chunkOf[k])).push(k);
+    for (const [j, px] of parts) (byChunk.get(j) || byChunk.set(j, []).get(j)).push(px);
+  }
+  const winsOf = (c, j) => (redrawn.has(c.bid) ? byChunk.get(j) || [] : c.wins.map((w) => comp.WN[w].pix));
   const chunks = wallPieces.map(({ c }, j) => {
-    for (const k of c.pix) chunkOf[k] = j;
     return {
-      index: j, pix: c.pix, wins: c.wins.map((w) => comp.WN[w].pix), sup: c.sup.map((i) => indexOf.get(i)).filter((i) => i !== undefined),
+      index: j, pix: c.pix, wins: winsOf(c, j), sup: c.sup.map((i) => indexOf.get(i)).filter((i) => i !== undefined),
       gy: groundOf(scene, c.bid, c.gy), x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, near: [],
     };
   });
@@ -139,7 +158,7 @@ export async function build(img, label = null) {
   const cropImg = await loadImage(crop.toDataURL('image/jpeg', 0.95));
   comp.tok += 1; comp.S = null;
   comp.build(cropImg, scene, 8);
-  state.world = fromEngine(comp, cls, scene);
+  state.world = fromEngine(comp, cls, scene, lab);
   state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);
   window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask), scene });
