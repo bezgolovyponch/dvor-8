@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createWorld, strike, step, WEAPONS, hitPointsFor } from '../../src/v2/destruct.js';
 import { EMPTY } from '../../src/v2/sprites.js';
-import { CLASS } from '../../src/v2/pixelate.js';
+import { CLASS } from '../../src/v2/classes.js';
 import { mulberry32 } from '../../src/rng.js';
 
 function yard() {

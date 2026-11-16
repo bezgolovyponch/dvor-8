@@ -1,5 +1,6 @@
-import { CLASS } from './pixelate.js';
+import { CLASS } from './classes.js';
 import { EMPTY } from './sprites.js';
+import { hitFacade, stepRuin, drawRuin, roomColour } from './ruin.js';
 
 export const WEAPONS = {
   stone: { radius: 2.6, push: 1.8, shake: 3, damage: 1 },
@@ -29,12 +30,12 @@ const GLASS = [[220, 244, 255], [150, 206, 236]];
 
 export const hitPointsFor = (pixels) => Math.max(MIN_HP, Math.min(MAX_HP, Math.round(pixels / PIXELS_PER_HIT_POINT) + 2));
 
-export function createWorld({ W, H, background, palette, darker, cls, sprites }) {
+export function createWorld({ W, H, background, palette, darker, cls, sprites, ruin = null }) {
   for (const s of sprites) { s.hp0 = hitPointsFor(s.n0); s.hp = s.hp0; }
   return {
     W, H, bg: background, palette, darker, cls, sprites,
     rubble: new Int32Array(W * H).fill(-1), interior: new Uint8Array(W * H),
-    particles: [], blasts: [], score: 0, shake: 0, popups: [], frame: 0, wrecked: 0,
+    ruin, roomOf: new Map(), particles: [], blasts: [], score: 0, shake: 0, popups: [], frame: 0, wrecked: 0,
   };
 }
 
@@ -62,6 +63,7 @@ export function strike(world, x, y, weapon, rng) {
   if (sprite) return { target: 'car', ...hitCar(world, sprite, x - sprite.x0, y - sprite.y0, weapon, rng) };
   const i = Math.round(y) * world.W + Math.round(x);
   const c = world.cls[i];
+  if (world.ruin && world.ruin.chunkOf[i] >= 0) return { target: 'building', ...hitFacade(world, i, weapon, rng) };
   if (c === CLASS.BUILDING || c === CLASS.THING) return { target: 'building', removed: crater(world, x, y, weapon, rng) };
   if (c === CLASS.SKY) return { target: 'sky', removed: 0 };
   dust(world, x, y, rng);
@@ -249,6 +251,7 @@ export function step(world, rng) {
     }
   }
   world.particles = alive;
+  if (world.ruin) stepRuin(world, rng);
   for (const b of world.blasts) b.t += 1;
   world.blasts = world.blasts.filter((b) => b.t < BLAST_FRAMES);
 }
@@ -257,7 +260,7 @@ export function compose(world, out) {
   const { W, H, palette } = world;
   const put = (i, r, g, b) => { out[i * 4] = r; out[i * 4 + 1] = g; out[i * 4 + 2] = b; out[i * 4 + 3] = 255; };
   for (let i = 0; i < W * H; i += 1) {
-    const c = world.interior[i] ? interiorShade(i, W) : palette[world.bg[i]];
+    const c = world.interior[i] ? roomAt(world, i) : palette[world.bg[i]];
     put(i, c[0], c[1], c[2]);
     const rb = world.rubble[i];
     if (rb >= 0) put(i, (rb >> 16) & 255, (rb >> 8) & 255, rb & 255);
@@ -273,6 +276,7 @@ export function compose(world, out) {
       put(i, c[0], c[1], c[2]);
     }
   }
+  if (world.ruin) drawRuin(world, put);
   for (const b of world.blasts) drawBlast(b, put, W, H);
   for (const p of world.particles) {
     const x = Math.round(p.x), y = Math.round(p.y);
@@ -320,3 +324,8 @@ function drawBlast(b, put, W, H) {
 
 const INTERIOR = [[28, 24, 36], [40, 34, 48]];
 const interiorShade = (i, W) => INTERIOR[(((i / W) | 0) >> 1) % 2];
+
+function roomAt(world, i) {
+  const piece = world.ruin && world.ruin.chunkOf[i] >= 0 ? world.ruin.pieces[world.ruin.chunkOf[i]] : null;
+  return piece ? roomColour(piece, i % world.W, (i / world.W) | 0) : interiorShade(i, world.W);
+}

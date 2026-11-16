@@ -1,4 +1,4 @@
-import { CLASS } from './pixelate.js';
+import { CLASS } from './classes.js';
 
 const EMPTY = -1;
 const FILL_REACH = 40;

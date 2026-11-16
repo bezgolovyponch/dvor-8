@@ -2,12 +2,13 @@ import { detectAll } from '../detect.js';
 import { sceneParse } from '../scene-parse.js';
 import { mulberry32 } from '../rng.js';
 import { oklabToRgb } from './oklab.js';
-import { CLASS, classMap, downsample, pixelate } from './pixelate.js';
+import { CLASS, classMap, downsample } from './classes.js';
 import { carInstances } from './instances.js';
-import { cutSprites } from './sprites.js';
 import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
+import { createRuin } from './ruin.js';
+import { autoScene, skyTheme } from './scene.js';
+import { cutSprites } from './sprites.js';
 
-const W = 180;
 const DETECT_LONG = 1600;
 const FLIGHT_FRAMES = 16;
 const CLASS_TINT = [[120, 180, 255], [200, 120, 220], [60, 200, 90], [200, 170, 90], [120, 120, 130], [255, 60, 60], [255, 220, 0], [255, 140, 200]];
@@ -32,36 +33,107 @@ async function loadImage(src) {
   return img;
 }
 
-export async function build(img) {
+const FRAME_W = 288, FRAME_H = 512;
+const CRACK = 48;
+
+function cropTo916(img) {
+  const iw = img.naturalWidth, ih = img.naturalHeight;
+  let sw = iw, sh = ih;
+  if (iw / ih > 9 / 16) sw = ih * 9 / 16; else sh = iw * 16 / 9;
+  const s = Math.min(1, DETECT_LONG / sh);
+  const c = document.createElement('canvas');
+  c.width = Math.round(sw * s); c.height = Math.round(sh * s);
+  c.getContext('2d').drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, c.width, c.height);
+  return c;
+}
+
+const groundOf = (scene, id, fallback) => {
+  const b = (scene.buildings || []).find((q) => q.id === id);
+  return b && b.ground ? b.ground : fallback;
+};
+
+function skyPixels(lab, cls) {
+  const out = [];
+  for (let i = 0; i < cls.length; i += 3) if (cls[i] === CLASS.SKY) out.push(oklabToRgb(lab[i * 3], lab[i * 3 + 1], lab[i * 3 + 2]));
+  return out;
+}
+
+function fromEngine(comp, seg, cars, scene) {
+  const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
+  const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
+  const darker = palette.map((_, i) => comp.scrape(i));
+  const bg = Uint16Array.from(S.base);
+  const cls = new Uint8Array(N).fill(CLASS.ROAD);
+  const isWall = (id) => id >= 1 && id < 10;
+  for (let k = 0; k < N; k += 1) {
+    if (isWall(S.ID[k])) cls[k] = CLASS.BUILDING;
+    else if (comp.sky[k]) cls[k] = CLASS.SKY;
+  }
+  for (let k = 0; k < N; k += 1) {
+    if (S.ID[k]) continue;
+    const segSky = seg[k] === CLASS.SKY;
+    if (comp.sky[k] && !segSky) { S.base[k] = comp.q[k]; bg[k] = comp.q[k]; cls[k] = seg[k]; comp.sky[k] = 0; }
+    else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
+  }
+  for (let k = 0; k < N; k += 1) if (cars.inst[k] >= 0) bg[k] = comp.q[k];
+  const cut = cutSprites({ idx: bg, palette, cls: seg, inst: cars.inst, list: cars.list, W, H });
+  bg.set(cut.background);
+  const sprites = cut.sprites;
+  const wallPieces = comp.CH.map((c, i) => ({ c, i })).filter(({ c }) => isWall(c.bid));
+  const indexOf = new Map(wallPieces.map(({ i }, j) => [i, j]));
+  const chunkOf = new Int32Array(N).fill(-1);
+  const chunks = wallPieces.map(({ c }, j) => {
+    for (const k of c.pix) chunkOf[k] = j;
+    return {
+      index: j, pix: c.pix, wins: c.wins.map((w) => comp.WN[w].pix), sup: c.sup.map((i) => indexOf.get(i)).filter((i) => i !== undefined),
+      gy: groundOf(scene, c.bid, c.gy), x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, near: [],
+    };
+  });
+  for (const a of chunks) {
+    a.near = chunks.filter((b) => b !== a && b.x0 <= a.x1 + 2 && b.x1 >= a.x0 - 2 && b.y0 <= a.y1 + 2 && b.y1 >= a.y0 - 2).map((b) => b.index);
+  }
+  const ruin = createRuin({ W, chunks, chunkOf, crackColour: CRACK });
+  return createWorld({ W, H, background: bg, palette, darker, cls, sprites, ruin });
+}
+
+export async function build(img, label = null) {
   const t0 = performance.now();
-  const H = Math.round((W * img.naturalHeight) / img.naturalWidth);
-  const big = canvasOf(img, DETECT_LONG);
+  const W = FRAME_W, H = FRAME_H;
+  const crop = cropTo916(img);
   $('note').textContent = 'ищу машины…';
-  const found = await detectAll(big);
+  const found = await detectAll(crop);
   $('note').textContent = 'размечаю двор…';
-  const parse = await sceneParse(big, W, H, big.width, big.height).catch(() => null);
+  const parse = await sceneParse(crop, W, H, crop.width, crop.height).catch(() => null);
   const cls = classMap(parse && parse.masks, W * H);
   const carMask = cls.map((c) => (c === CLASS.CAR ? 1 : 0));
-  const rgba = big.getContext('2d').getImageData(0, 0, big.width, big.height).data;
-  const lab = downsample(rgba, big.width, big.height, W, H);
+  const rgba = crop.getContext('2d').getImageData(0, 0, crop.width, crop.height).data;
+  const lab = downsample(rgba, crop.width, crop.height, W, H);
   const ground = cls.map((c) => (c === CLASS.ROAD || c === CLASS.TERRAIN ? 1 : 0));
   const cars = carInstances(found.all, carMask, W, H, lab, ground);
-  const pix = pixelate({ lab, cls, inst: cars.inst, W, H });
-  const cut = cutSprites({ idx: pix.idx, palette: pix.palette, cls, inst: cars.inst, list: cars.list, W, H });
-  state.world = createWorld({ W, H, background: cut.background, palette: pix.palette, darker: pix.darker, cls, sprites: cut.sprites });
-  state.cls = cls;
-  window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask) });
+  const { Component } = await import('../ref/engine.js');
+  const comp = new Component();
+  const hand = label && params.get('scene') === 'hand' ? (comp.SCENES || []).find((s) => s.id === label) : null;
+  const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, W, H });
+  if (!hand) scene.sky = skyTheme(skyPixels(lab, cls));
+  $('note').textContent = 'рисую…';
+  const cropImg = await loadImage(crop.toDataURL('image/jpeg', 0.95));
+  comp.tok += 1; comp.S = null;
+  comp.build(cropImg, scene, 8);
+  state.world = fromEngine(comp, cls, cars, scene);
+  state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);
+  window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask), scene });
   state.canvas.width = W; state.canvas.height = H;
   state.ctx = state.canvas.getContext('2d');
   state.image = state.ctx.createImageData(W, H);
-  const classesSeen = [...new Set(cls)].sort();
   window.__v2 = {
-    ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), classesSeen,
-    detections: found.all.length, vehicleBoxes: cars.boxes.length, cars: cars.list.length, palette: pix.palette.length,
-    sprites: cut.sprites.map((s) => ({ id: s.id, x0: s.x0, y0: s.y0, w: s.w, h: s.h, n: s.n0, label: s.label })),
+    ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), scene: hand ? 'hand' : 'auto',
+    buildings: scene.buildings.length, pieces: state.world.ruin.pieces.length, windows: comp.WN.length, theme: comp.SKY && comp.SKY.theme,
+    detections: found.all.length, cars: state.world.sprites.length, palette: comp.SUB.length,
+    sprites: state.world.sprites.map((s) => ({ id: s.id, x0: s.x0, y0: s.y0, w: s.w, h: s.h, n: s.n0 })),
+    facades: state.world.ruin.pieces.slice(0, 400).filter((_, i) => i % 7 === 0).map((p) => ({ x: (p.x0 + p.x1) / 2, y: (p.y0 + p.y1) / 2 })),
   };
-  $('note').textContent = parse ? `машин: ${cars.list.length}` : 'сегментатор не загрузился';
+  $('note').textContent = `машин: ${state.world.sprites.length} · домов: ${scene.buildings.length}`;
   paintHud();
 }
 
@@ -161,8 +233,27 @@ window.__v2tick = (n) => { for (let i = 0; i < n; i += 1) advance(); draw(); };
 window.__v2throw = (x, y) => throwAt(x, y);
 window.__v2world = () => state.world;
 
+const PHOTOS = [
+  ['parking.jpg', 'ПАРКОВКА', null], ['5.jpg', 'ПРАГА · БАШНЯ', 'prague-tower'],
+  ['2026-10-12 23.06.59.jpg', 'ПРАГА · УЛИЦА', 'prague-street'], ['2026-10-12 23.06.55.jpg', 'ХРАМ · СВЕРХУ', 'aerial-church'],
+  ['sunset.jpg', 'ЗАКАТ · АВТОБУС', 'sunset-bus'], ['yard2.jpg', 'ДВОР 2', null], ['a.jpg', 'СНИМОК A', null],
+  ['b.jpg', 'СНИМОК B', null], ['web1.jpg', 'УЛИЦА 1', null], ['web2.jpg', 'УЛИЦА 2', null],
+];
+const pick = $('photo');
+for (const [file, name] of PHOTOS) pick.add(new Option(name, file));
+const current = params.get('photo') || 'photos-test/parking.jpg';
+pick.value = current.replace('photos-test/', '');
+pick.addEventListener('change', () => { location.search = `?photo=photos-test/${encodeURIComponent(pick.value)}`; });
+const reference = (PHOTOS.find(([f]) => `photos-test/${f}` === current) || [])[2];
+$('ref').hidden = !reference;
+$('ref').addEventListener('click', () => {
+  const img = $('refimg');
+  img.src = `reference/v13/${reference}.png`;
+  img.hidden = !img.hidden;
+});
+
 requestAnimationFrame(loop);
-build(await loadImage(params.get('photo') || 'photos-test/parking.jpg')).catch((e) => {
+build(await loadImage(current), reference).catch((e) => {
   window.__v2 = { ready: false, error: String((e && e.stack) || e) };
   $('note').textContent = `ошибка: ${e && e.message}`;
 });
