@@ -32,3 +32,18 @@
 | Facades | Homography rectification (Heckbert 1989), procedural window grid (Müller et al. 2007) | `src/v2/facade.js` |
 | Background calm | Majority (mode) filter | `src/v2/roles.js` |
 | Renderer | v13 engine, byte-exact (`tools/engine-check.mjs` passes); v2 changes live in the `GameEngine` subclass | `src/v2/engine.js` |
+
+## Level mode (default on `v2.html`; `?mode=photo` keeps the photo route)
+
+The photo is read only for an inventory (`src/level/inventory.js`): which buildings (relative size, glass or not), which cars (car, truck, bus), how many trees, which sky. A street is laid out from it (`src/level/layout.js`), and every object is drawn from CC0 art:
+
+| Element | Source |
+|---|---|
+| Cars, vans, trucks, bus (side view) | Kenney Pixel Vehicle Pack, CC0 (`assets/kenney/vehicles`) |
+| Facade tiles, doors, windows, trees | Kenney RPG Urban Pack, CC0 (`assets/kenney/urban`) |
+| Sky | v13 sky themes (engine `skyStyle`, flat bands) |
+| Car views for later angled work | Devil's Work.shop 2D Car Pack, CC0 on OpenGameArt (`assets/devilsworkshop`) |
+
+Colours never come from the photo. `src/level/colours.js` gives each object a ramp by role (sky, road, walk, plant, building, glass, car), draws every sprite in 3 shades of one ramp plus outline (the NES 3-colours-per-sprite rule), and assigns ramps greedily so that each object reaches a WCAG contrast ratio of 3:1 against what is behind it and differs from its neighbours by at least 20 CIEDE2000.
+
+Goal: clear every car and building. A building that has lost 45% of its pieces collapses (Rampage). Stones: 10 + 3 per car + 4 per building, gems add more.

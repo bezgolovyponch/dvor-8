@@ -5,15 +5,21 @@ import { oklabToRgb } from './oklab.js';
 import { CLASS, classMap, downsample } from './classes.js';
 import { carInstances } from './instances.js';
 import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
-import { createRuin } from './ruin.js';
+import { createRuin, detach } from './ruin.js';
 import { autoScene, skyTheme } from './scene.js';
 import { EMPTY } from './sprites.js';
 import { AIM_COLOUR, silhouette, targetAt } from './aim.js';
 import { collectAt, dropLoot, drawLoot, stepLoot } from './loot.js';
 import { addLoot, checkOver, createRound, registerStrike, spendThrow, tick } from './round.js';
-import { calm, muteTable, simplifyCar } from './roles.js';
+import { calm, muteTable } from './roles.js';
 import { drawFacade } from './facade.js';
-import { CLASS_TINT, CSS_ROLES, PAL, ROLE } from './theme.js';
+import { FRONT_TILES, SIDE_FILES, carColour, cropTiles, isGlass, pickSprite, recolour, scaleFor, trim, upscale } from './vehicles.js';
+import { CLASS_TINT, CSS_ROLES, PAL, ROLE, step as rampStep } from './theme.js';
+import { GAME_PALETTE } from './engine.js';
+import { inventory } from '../level/inventory.js';
+import { buildLevel, VEHICLE_FILES } from '../level/build.js';
+import { TILES, tilePixels } from '../level/art.js';
+import { STREET } from '../level/layout.js';
 import { backdrop } from './backdrop.js';
 import { projectileCells } from './projectile.js';
 
@@ -22,16 +28,16 @@ const FLIGHT_FRAMES = 16;
 const AIM_FRAMES = 45;
 const DROPS = { wreck: { coins: 3, gems: 1 }, piece: { coins: 1, gems: 0 } };
 const PIECE_GEM_CHANCE = 0.1;
-const SPRITE_CAR_H = 26;
 const GROUND_CALM = { radius: 2, passes: 2 };
 const FACADE = { pane: 0, paneRim: 2, paneLit: 4 };
 const PANE_BLUE = 10;
+const COLLAPSE_SHARE = 0.45;
 for (const [name, i] of Object.entries(CSS_ROLES)) document.documentElement.style.setProperty(`--${name}`, PAL[i]);
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const rng = mulberry32(8);
-const state = { world: null, canvas: $('screen'), ctx: null, image: null, flights: [], weapon: 'stone', view: params.get('view') || 'game', cls: null, pops: [], aim: null, round: createRound() };
+const state = { world: null, canvas: $('screen'), ctx: null, image: null, flights: [], weapon: 'stone', view: params.get('view') || 'game', cls: null, pops: [], aim: null, round: null };
 
 function canvasOf(img, long) {
   const s = Math.min(1, long / Math.max(img.naturalWidth, img.naturalHeight));
@@ -49,6 +55,21 @@ async function loadImage(src) {
 }
 
 const FRAME_W = 288, FRAME_H = 512;
+const MODE = params.get('mode') || 'level';
+
+async function levelWorld(comp, inv) {
+  const urban = await imagePixels('assets/kenney/urban/tilemap.png');
+  const art = Object.fromEntries(Object.entries(TILES).map(([k, t]) => [k, tilePixels(urban, t)]));
+  const names = [...new Set(Object.values(VEHICLE_FILES).flat())];
+  const vehicles = Object.fromEntries(await Promise.all(names.map(async (n) => [n, trim(await imagePixels(`assets/kenney/vehicles/${n}.png`))])));
+  comp.initPal();
+  comp.SKY = { ...comp.SKYTHEMES[inv.sky] || comp.SKYTHEMES.day, s: STREET.ground / 327, theme: inv.sky };
+  const level = buildLevel({ inv, palette: GAME_PALETTE.hex, sky: (x, y) => comp.skyStyle(x, y), art, vehicles });
+  const palette = GAME_PALETTE.hex.map((h) => [1, 3, 5].map((j) => parseInt(h.slice(j, j + 2), 16)));
+  const darker = palette.map((_, i) => rampStep(i, -1));
+  const ruin = createRuin({ W: level.W, chunks: level.pieces, chunkOf: level.chunkOf, crackColour: CRACK });
+  return createWorld({ W: level.W, H: level.H, background: level.bg, palette, darker, cls: level.cls, sprites: level.sprites, ruin, behind: level.behind });
+}
 const CRACK = 48;
 
 function cropTo916(img) {
@@ -73,25 +94,52 @@ function skyPixels(lab, cls) {
   return out;
 }
 
-function engineCars(comp, bg, cls) {
-  const W = FRAME_W, S = comp.S, sprites = [];
+async function imagePixels(url) {
+  const img = await loadImage(url);
+  const c = document.createElement('canvas');
+  c.width = img.naturalWidth; c.height = img.naturalHeight;
+  const g = c.getContext('2d');
+  g.drawImage(img, 0, 0);
+  return { w: c.width, h: c.height, rgba: g.getImageData(0, 0, c.width, c.height).data };
+}
+
+let catalogCache = null;
+async function vehicleCatalog() {
+  if (catalogCache) return catalogCache;
+  const urban = await imagePixels('assets/kenney/urban/tilemap.png');
+  const front = FRONT_TILES.map((tiles) => ({ view: 'front', ...cropTiles(urban, tiles) }));
+  const side = await Promise.all(SIDE_FILES.map(async (f) => ({ view: 'side', ...trim(await imagePixels(`assets/kenney/vehicles/${f}.png`)) })));
+  catalogCache = [...front, ...side].filter((s) => s.w > 0);
+  return catalogCache;
+}
+
+function engineCars(comp, bg, cls, scene, catalog) {
+  const W = FRAME_W, H = FRAME_H, S = comp.S, sprites = [];
   for (const id of comp.CARIDS) {
-    const box = S.bb[id];
+    const box = scene.cars[id - 10];
     if (!box) continue;
-    const [x0, y0, x1, y1] = box, w = x1 - x0 + 1, h = y1 - y0 + 1;
-    const px = new Int32Array(w * h).fill(EMPTY), glass = new Uint8Array(w * h), panes = new Set(comp.carGlass[id] || []);
-    let n = 0;
-    for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
-      const k = y * W + x;
+    const photo = [];
+    for (let k = 0; k < S.ID.length; k += 1) {
       if (S.ID[k] !== id) continue;
-      const j = (y - y0) * w + x - x0;
-      px[j] = S.base[k] === CRACK || panes.has(k) ? S.base[k] : snap(comp, k);
-      if (panes.has(k)) glass[j] = 1;
+      photo.push([comp.R[k], comp.G[k], comp.B[k]]);
       bg[k] = S.back[k];
       cls[k] = S.backID[k] >= 1 && S.backID[k] < 10 ? CLASS.BUILDING : CLASS.ROAD;
+    }
+    if (!photo.length) continue;
+    const base = pickSprite(catalog, box.w, box.h);
+    const art = upscale(recolour(base, carColour(photo)), scaleFor(base, box.w, box.h));
+    const x0 = Math.max(0, Math.round(box.x + box.w / 2 - art.w / 2)), y0 = Math.max(0, box.y + box.h - art.h);
+    const w = Math.min(art.w, W - x0), h = Math.min(art.h, H - y0);
+    const px = new Int32Array(w * h).fill(EMPTY), glass = new Uint8Array(w * h);
+    let n = 0;
+    for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
+      const i = (y * art.w + x) * 4;
+      if (art.rgba[i + 3] < 128) continue;
+      const rgb = [art.rgba[i], art.rgba[i + 1], art.rgba[i + 2]];
+      px[y * w + x] = comp.quant(...rgb);
+      if (isGlass(rgb)) glass[y * w + x] = 1;
       n += 1;
     }
-    if (h < SPRITE_CAR_H) simplifyCar({ px, glass, w, h, darker: comp.RGB.map((_, i) => comp.scrape(i)), outline: CRACK });
     sprites.push({ id, label: 'car', x0, y0, w, h, px, glass, n0: n, n, state: 'whole', heat: 0, flash: 0 });
   }
   return sprites;
@@ -129,7 +177,7 @@ function pieceWalls(comp) {
   });
 }
 
-function fromEngine(comp, seg, scene) {
+function fromEngine(comp, seg, scene, catalog) {
   const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
   const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
   const darker = palette.map((_, i) => comp.scrape(i));
@@ -155,7 +203,7 @@ function fromEngine(comp, seg, scene) {
     else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
     if (cls[k] !== CLASS.SKY) { const v = snap(comp, k); S.base[k] = v; bg[k] = v; }
   }
-  const sprites = engineCars(comp, bg, cls);
+  const sprites = engineCars(comp, bg, cls, scene, catalog);
   const mute = muteTable(palette, (r, g, b) => comp.lab(r, g, b));
   const isGround = (k) => cls[k] !== CLASS.SKY && cls[k] !== CLASS.BUILDING;
   for (let k = 0; k < N; k += 1) if (isGround(k)) bg[k] = mute[bg[k]];
@@ -208,23 +256,28 @@ export async function build(img, label = null) {
   const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H });
   if (!hand) scene.sky = skyTheme(skyPixels(lab, cls));
   $('note').textContent = 'рисую…';
-  const cropImg = await loadImage(crop.toDataURL('image/jpeg', 0.95));
-  comp.tok += 1; comp.S = null;
-  comp.build(cropImg, scene, 8);
-  state.world = fromEngine(comp, cls, scene);
+  if (MODE === 'level') {
+    const inv = inventory({ W, H, cls, lab, cars: cars.list, buildings: scene.buildings, sky: scene.sky });
+    state.world = await levelWorld(comp, inv);
+    state.inv = inv;
+  } else {
+    const cropImg = await loadImage(crop.toDataURL('image/jpeg', 0.95));
+    comp.tok += 1; comp.S = null;
+    comp.build(cropImg, scene, 8);
+    state.world = fromEngine(comp, cls, scene, await vehicleCatalog());
+  }
   state.cls = state.world.cls;
+  state.round = createRound(MODE === 'level' ? 10 + 3 * state.world.sprites.length + 4 * new Set(state.world.ruin.pieces.map((p) => p.bid)).size : undefined);
   state.photo = labToRgba(lab, W * H);
   window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask), scene });
   state.canvas.width = W; state.canvas.height = H;
   state.ctx = state.canvas.getContext('2d');
   state.image = state.ctx.createImageData(W, H);
   window.__v2 = {
-    ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), scene: hand ? 'hand' : 'auto',
-    buildings: scene.buildings.length, pieces: state.world.ruin.pieces.length, windows: comp.WN.length, theme: comp.SKY && comp.SKY.theme,
-    rep: (comp.REP || []).map((r) => ({ id: r.id, kind: r.kind, glass: r.glassDom, nw: r.nw, bf: +r.bf.toFixed(2), cover: +r.cover.toFixed(2), fcls: r.fcls, pb: Math.round(r.paneBlue) })),
-    detections: found.all.length, cars: state.world.sprites.length, palette: comp.SUB.length,
+    ready: true, W, H, ms: Math.round(performance.now() - t0), mode: MODE, segmenter: Boolean(parse),
+    buildings: scene.buildings.length, pieces: state.world.ruin.pieces.length, detections: found.all.length, cars: state.world.sprites.length,
     sprites: state.world.sprites.map((s) => ({ id: s.id, x0: s.x0, y0: s.y0, w: s.w, h: s.h, n: s.n0 })),
-    facades: state.world.ruin.pieces.slice(0, 400).filter((_, i) => i % 7 === 0).map((p) => ({ x: (p.x0 + p.x1) / 2, y: (p.y0 + p.y1) / 2 })),
+    inventory: state.inv ? { buildings: state.inv.buildings.length, cars: state.inv.cars.length, trees: state.inv.trees.length, sky: state.inv.sky } : null,
   };
   $('note').textContent = `машин: ${state.world.sprites.length} · домов: ${scene.buildings.length}`;
   paintHud();
@@ -271,6 +324,8 @@ function advance() {
   }
   stepLoot(w);
   tick(state.round, w.frame, w.score);
+  if (MODE === 'level') collapse(w);
+  if (MODE === 'level' && w.sprites.every((q) => q.state === 'wreck') && w.ruin.pieces.every((p) => p.gone) && !state.round.over) { state.round.won = true; state.round.over = true; }
   const busy = state.flights.length > 0 || w.loot.length > 0 || w.sprites.some((q) => q.fuse > 0) || (w.ruin && w.ruin.blocks.length > 0);
   if (checkOver(state.round, busy)) showEnd();
   for (const p of state.pops) p.t -= 1;
@@ -344,9 +399,21 @@ function tap(x, y) {
   throwAt(x, y);
 }
 
+function collapse(w) {
+  const byBuilding = new Map();
+  for (const p of w.ruin.pieces) (byBuilding.get(p.bid) || byBuilding.set(p.bid, []).get(p.bid)).push(p);
+  for (const pieces of byBuilding.values()) {
+    const gone = pieces.filter((p) => p.gone).length;
+    if (gone === pieces.length || gone / pieces.length < COLLAPSE_SHARE) continue;
+    const next = pieces.filter((p) => !p.gone).sort((a, b) => b.y1 - a.y1)[0];
+    if (w.frame % 3 === 0) detach(w, next, rng);
+  }
+}
+
 function showEnd() {
   const r = state.round, w = state.world;
   if (!$('end').hidden) return;
+  $('endtitle').textContent = r.won ? 'ДВОР ЗАЧИЩЕН!' : 'КАМНИ КОНЧИЛИСЬ';
   $('endscore').textContent = String(r.score);
   $('endstats').textContent = `машин разбито ${w.wrecked}/${w.sprites.length} · лучшее комбо x${r.best} · трофеев ${r.loot}`;
   $('end').hidden = false;
