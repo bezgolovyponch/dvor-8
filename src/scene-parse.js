@@ -29,7 +29,7 @@ export async function loadSceneParse() {
     // a relative '../vendor/' resolved to /vendor/ and the model was never found. The game is served under /game.
     env.allowRemoteModels = false;              // the model is ours, on disk, and nothing is fetched from the net
     env.allowLocalModels = true;
-    env.localModelPath = '/game/vendor/';
+    env.localModelPath = new URL('../vendor/', import.meta.url).href;
     // THE EXACT FILE, NAMED. Left to itself the runtime guesses among several builds (threaded / simd / plain) and a
     // wrong guess is a silent hang, not a 404. The threaded build is named explicitly; single-threaded variants are
     // vendored beside it as fallbacks.
@@ -42,7 +42,7 @@ export async function loadSceneParse() {
     // THE DIRECTORY, BOTH HALVES. This ort-web version loads its wasm through an .mjs glue it fetches from
     // wasmPaths, so the path must be the FOLDER containing ort-wasm-simd-threaded.mjs and ort-wasm-simd-threaded.wasm
     // - naming only the .wasm left the glue unfound and the backend reported "no available backend found".
-    env.backends.onnx.wasm.wasmPaths = '/game/vendor/tjs/';
+    env.backends.onnx.wasm.wasmPaths = new URL('../vendor/tjs/', import.meta.url).href;
     // SINGLE-THREADED, ALWAYS. The threaded WASM backend needs SharedArrayBuffer, which a browser only grants to a
     // cross-origin-isolated page (COOP/COEP). Without it the runtime neither runs nor errors - it HANGS, which is
     // exactly what the probe did for a minute. One thread is slower and always works.
