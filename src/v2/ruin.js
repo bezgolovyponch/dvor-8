@@ -5,6 +5,7 @@ const CRACK_STEPS = 14;
 const CHIPS_PER_HIT = 10;
 const DUST_PUFFS = 3;
 const POINTS = { pane: 15, crack: 20, piece: 120 };
+const SHARD_SHARE = 0.2;
 const SLAB = [132, 128, 136];
 const ROOM = [[52, 44, 62], [40, 34, 50]];
 const CEILING = [20, 18, 28];
@@ -46,7 +47,7 @@ function breakPanes(world, piece, rng) {
     for (const k of pane) {
       if (world.interior[k]) continue;
       const x = k % world.W, y = (k / world.W) | 0;
-      if (rng() < 0.6) world.particles.push({ kind: 'spark', x, y, vx: (rng() - 0.5) * 1.6, vy: -rng() * 1.4, c: SHARD[n % 2], ground: piece.gy, life: 40 + rng() * 30 });
+      if (rng() < SHARD_SHARE) world.particles.push({ kind: 'spark', x, y, vx: (rng() - 0.5) * 1.6, vy: -rng() * 1.4, c: SHARD[n % 2], ground: piece.gy, life: 40 + rng() * 30 });
       world.interior[k] = 2;
       n += 1;
     }
@@ -78,6 +79,7 @@ export function detach(world, piece, rng = Math.random) {
     world.roomOf.set(k, piece.index);
   }
   crumbleRim(world, piece, rng);
+  (world.events || (world.events = [])).push({ type: 'piece', x: (piece.x0 + piece.x1) / 2, y: piece.y0, ground: piece.gy });
   if (px.length) world.ruin.blocks.push({ px, dx: 0, dy: 0, vx: 0, vy: 0.4, bottom: piece.y1, ground: piece.gy, piece: piece.index });
   world.score += POINTS.piece;
 }

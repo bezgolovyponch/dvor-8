@@ -9,16 +9,25 @@ import { createRuin } from './ruin.js';
 import { autoScene, skyTheme } from './scene.js';
 import { EMPTY } from './sprites.js';
 import { AIM_COLOUR, silhouette, targetAt } from './aim.js';
+import { collectAt, dropLoot, drawLoot, stepLoot } from './loot.js';
+import { addLoot, checkOver, createRound, registerStrike, spendThrow, tick } from './round.js';
+import { calm, muteTable, simplifyCar } from './roles.js';
+import { drawFacade } from './facade.js';
 
 const DETECT_LONG = 1600;
 const FLIGHT_FRAMES = 16;
 const AIM_FRAMES = 45;
+const DROPS = { wreck: { coins: 3, gems: 1 }, piece: { coins: 1, gems: 0 } };
+const PIECE_GEM_CHANCE = 0.1;
+const SPRITE_CAR_H = 26;
+const GROUND_CALM = { radius: 2, passes: 2 };
+const FACADE = { pane: 0, paneRim: 2, paneLit: 4 };
 const CLASS_TINT = [[120, 180, 255], [200, 120, 220], [60, 200, 90], [200, 170, 90], [120, 120, 130], [255, 60, 60], [255, 220, 0], [255, 140, 200]];
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const rng = mulberry32(8);
-const state = { world: null, canvas: $('screen'), ctx: null, image: null, flights: [], weapon: 'stone', view: params.get('view') || 'game', cls: null, pops: [], aim: null };
+const state = { world: null, canvas: $('screen'), ctx: null, image: null, flights: [], weapon: 'stone', view: params.get('view') || 'game', cls: null, pops: [], aim: null, round: createRound() };
 
 function canvasOf(img, long) {
   const s = Math.min(1, long / Math.max(img.naturalWidth, img.naturalHeight));
@@ -78,15 +87,44 @@ function engineCars(comp, bg, cls) {
       cls[k] = S.backID[k] >= 1 && S.backID[k] < 10 ? CLASS.BUILDING : CLASS.ROAD;
       n += 1;
     }
+    if (h < SPRITE_CAR_H) simplifyCar({ px, glass, w, h, darker: comp.RGB.map((_, i) => comp.scrape(i)), outline: CRACK });
     sprites.push({ id, label: 'car', x0, y0, w, h, px, glass, n0: n, n, state: 'whole', heat: 0, flash: 0 });
   }
   return sprites;
+}
+
+function pieceWalls(comp) {
+  const S = comp.S, panes = new Set(), counts = comp.CH.map(() => new Map());
+  for (const w of comp.WN) for (const k of w.pix) panes.add(k);
+  for (let k = 0; k < S.ID.length; k += 1) {
+    const c = comp.chunkOf[k];
+    if (c < 0 || panes.has(k) || S.base[k] >= 48) continue;
+    counts[c].set(S.base[k], (counts[c].get(S.base[k]) || 0) + 1);
+  }
+  const near = (a, b) => a.bid === b.bid && b.x0 <= a.x1 + 2 && b.x1 >= a.x0 - 2 && b.y0 <= a.y1 + 2 && b.y1 >= a.y0 - 2;
+  return comp.CH.map((a, i) => {
+    const vote = new Map();
+    comp.CH.forEach((b, j) => {
+      if (i !== j && !near(a, b)) return;
+      const best = [...counts[j]].sort((x, y) => y[1] - x[1])[0];
+      if (best) vote.set(best[0], (vote.get(best[0]) || 0) + (i === j ? 2 : 1));
+    });
+    return vote.size ? [...vote].sort((x, y) => y[1] - x[1])[0][0] : -1;
+  });
 }
 
 function fromEngine(comp, seg, scene) {
   const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
   const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
   const darker = palette.map((_, i) => comp.scrape(i));
+  const facadeWins = new Map(), walls = pieceWalls(comp);
+  const wallAt = (k, fallback) => (comp.chunkOf[k] >= 0 && walls[comp.chunkOf[k]] >= 0 ? walls[comp.chunkOf[k]] : fallback);
+  for (const rep of comp.REP || []) {
+    const bd = scene.buildings.find((b) => b.id === rep.id);
+    if (!bd || rep.kind !== 'facade' || rep.glassDom) continue;
+    const colours = { ...FACADE, outline: CRACK, wall: (k) => wallAt(k, rep.wall), slab: (k) => comp.scrape(wallAt(k, rep.wall)) };
+    facadeWins.set(rep.id, drawFacade({ W, H, ID: S.ID, base: S.base, id: rep.id, quad: bd.quad, rows: rep.rows, cols: rep.cols, colours }));
+  }
   const bg = Uint16Array.from(S.base);
   const cls = new Uint8Array(N).fill(CLASS.ROAD);
   const isWall = (id) => id >= 1 && id < 10;
@@ -101,13 +139,24 @@ function fromEngine(comp, seg, scene) {
     else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
   }
   const sprites = engineCars(comp, bg, cls);
+  const mute = muteTable(palette, (r, g, b) => comp.lab(r, g, b));
+  const isGround = (k) => cls[k] !== CLASS.SKY && cls[k] !== CLASS.BUILDING;
+  for (let k = 0; k < N; k += 1) if (isGround(k)) bg[k] = mute[bg[k]];
+  bg.set(calm(bg, (k) => isGround(k) && S.ID[k] === 0, W, H, GROUND_CALM.radius, GROUND_CALM.passes));
   const wallPieces = comp.CH.map((c, i) => ({ c, i })).filter(({ c }) => isWall(c.bid));
   const indexOf = new Map(wallPieces.map(({ i }, j) => [i, j]));
   const chunkOf = new Int32Array(N).fill(-1);
+  wallPieces.forEach(({ c }, j) => { for (const k of c.pix) chunkOf[k] = j; });
+  const byChunk = new Map();
+  for (const wins of facadeWins.values()) for (const win of wins) {
+    const parts = new Map();
+    for (const k of win) if (chunkOf[k] >= 0) (parts.get(chunkOf[k]) || parts.set(chunkOf[k], []).get(chunkOf[k])).push(k);
+    for (const [j, px] of parts) (byChunk.get(j) || byChunk.set(j, []).get(j)).push(px);
+  }
+  const winsOf = (c, j) => (facadeWins.has(c.bid) ? byChunk.get(j) || [] : c.wins.map((w) => comp.WN[w].pix));
   const chunks = wallPieces.map(({ c }, j) => {
-    for (const k of c.pix) chunkOf[k] = j;
     return {
-      index: j, pix: c.pix, wins: c.wins.map((w) => comp.WN[w].pix), sup: c.sup.map((i) => indexOf.get(i)).filter((i) => i !== undefined),
+      index: j, pix: c.pix, wins: winsOf(c, j), sup: c.sup.map((i) => indexOf.get(i)).filter((i) => i !== undefined),
       bid: c.bid, gy: groundOf(scene, c.bid, c.gy), x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, near: [],
     };
   });
@@ -170,10 +219,12 @@ function labToRgba(lab, n) {
 }
 
 function paintHud() {
-  const w = state.world;
+  const w = state.world, r = state.round;
   if (!w) return;
   const left = w.sprites.filter((s) => s.state !== 'wreck').length;
-  $('score').textContent = String(w.score).padStart(6, '0');
+  $('score').textContent = String(r.score).padStart(6, '0');
+  $('throws').textContent = String(r.throws);
+  $('combo').textContent = r.mult > 1 ? `x${r.mult}` : '–';
   $('left').textContent = `${left}/${w.sprites.length}`;
 }
 
@@ -188,10 +239,19 @@ function advance() {
   for (const f of state.flights) f.t += 1;
   for (const f of state.flights.filter((q) => q.t >= FLIGHT_FRAMES)) {
     const res = strike(w, f.x, f.y, WEAPONS[state.weapon], rng);
+    registerStrike(state.round, w.frame, (res.target === 'car' || res.target === 'building') && res.points > 0);
     if (res.points) state.pops.push({ x: f.x, y: f.y, text: res.destroyed ? `ВДРЕБЕЗГИ +${res.points}` : `+${res.points}`, t: 40 });
   }
   state.flights = state.flights.filter((q) => q.t < FLIGHT_FRAMES);
   step(w, rng);
+  for (const e of w.events.splice(0)) {
+    const drop = DROPS[e.type];
+    if (drop) dropLoot(w, { ...e, coins: drop.coins, gems: drop.gems + (e.type === 'piece' && rng() < PIECE_GEM_CHANCE ? 1 : 0) }, rng);
+  }
+  stepLoot(w);
+  tick(state.round, w.frame, w.score);
+  const busy = state.flights.length > 0 || w.loot.length > 0 || w.sprites.some((q) => q.fuse > 0) || (w.ruin && w.ruin.blocks.length > 0);
+  if (checkOver(state.round, busy)) showEnd();
   for (const p of state.pops) p.t -= 1;
   state.pops = state.pops.filter((p) => p.t > 0);
 }
@@ -200,6 +260,7 @@ function draw() {
   const w = state.world;
   const data = state.image.data;
   compose(w, data);
+  drawLoot(w, (i, r, g, b) => { data[i * 4] = r; data[i * 4 + 1] = g; data[i * 4 + 2] = b; });
   if (state.view === 'photo') data.set(state.photo);
   if (state.view === 'class') {
     for (let i = 0; i < w.W * w.H; i += 1) {
@@ -247,12 +308,28 @@ function aimAt(x, y, frames) {
   const target = targetAt(state.world, x, y);
   state.aim = target ? { target, t: frames } : null;
 }
-state.canvas.addEventListener('pointerdown', (ev) => {
-  if (!state.world) return;
-  const [x, y] = toFrame(ev);
+function tap(x, y) {
+  if (!state.world || state.round.over) return;
+  const got = collectAt(state.world, x, y);
+  if (got.n) {
+    addLoot(state.round, got);
+    state.pops.push({ x, y, text: got.throws ? `+${got.throws} КАМНЯ` : `+${got.value * state.round.mult}`, t: 40 });
+    return;
+  }
+  if (!spendThrow(state.round)) return;
   aimAt(x, y, AIM_FRAMES);
   throwAt(x, y);
-});
+}
+
+function showEnd() {
+  const r = state.round, w = state.world;
+  if (!$('end').hidden) return;
+  $('endscore').textContent = String(r.score);
+  $('endstats').textContent = `машин разбито ${w.wrecked}/${w.sprites.length} · лучшее комбо x${r.best} · трофеев ${r.loot}`;
+  $('end').hidden = false;
+}
+$('again').addEventListener('click', () => location.reload());
+state.canvas.addEventListener('pointerdown', (ev) => tap(...toFrame(ev)));
 state.canvas.addEventListener('pointermove', (ev) => { if (state.world && ev.pointerType === 'mouse') aimAt(...toFrame(ev), Infinity); });
 state.canvas.addEventListener('pointerleave', () => { state.aim = null; });
 $('weapon').addEventListener('click', () => {
@@ -268,7 +345,8 @@ $('file').addEventListener('change', async (ev) => {
 });
 
 window.__v2tick = (n) => { for (let i = 0; i < n; i += 1) advance(); draw(); };
-window.__v2throw = (x, y) => { aimAt(x, y, AIM_FRAMES); throwAt(x, y); };
+window.__v2throw = (x, y) => tap(x, y);
+window.__v2round = () => ({ ...state.round, loot: state.round.loot, onGround: state.world.loot.map((p) => ({ x: p.x, y: p.y, kind: p.kind, rest: p.rest })) });
 window.__v2world = () => state.world;
 
 const PHOTOS = [

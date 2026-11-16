@@ -19,6 +19,10 @@ const MIN_HP = 3;
 const MAX_HP = 6;
 const EXPLODE_FLY_SHARE = 0.3;
 const WRECK_BURN_FRAMES = 420;
+const CHAIN_REACH = 1.6;
+const CHAIN_DAMAGE = 2;
+const CHAIN_WALL_SHARE = 0.5;
+const FUSE_FRAMES = 18;
 const POINTS = { pixel: 10, glass: 5, wall: 3, wreck: 500 };
 const CHAR = [[18, 16, 20], [36, 34, 40], [56, 54, 60], [82, 78, 82]];
 const HULK_EDGE = -2;
@@ -35,7 +39,7 @@ export function createWorld({ W, H, background, palette, darker, cls, sprites, r
   return {
     W, H, bg: background, palette, darker, cls, sprites,
     rubble: new Int32Array(W * H).fill(-1), interior: new Uint8Array(W * H),
-    ruin, roomOf: new Map(), particles: [], blasts: [], score: 0, shake: 0, popups: [], frame: 0, wrecked: 0,
+    ruin, roomOf: new Map(), particles: [], blasts: [], events: [], loot: [], score: 0, shake: 0, popups: [], frame: 0, wrecked: 0,
   };
 }
 
@@ -130,6 +134,27 @@ function shatterPanes(world, s, seeds, rng) {
   return n;
 }
 
+export function emit(world, event) {
+  (world.events || (world.events = [])).push(event);
+}
+
+function chain(world, x, y, reach, source, rng) {
+  for (const o of world.sprites) {
+    if (o === source || o.state === 'wreck' || o.fuse > 0) continue;
+    if (Math.hypot(o.x0 + o.w / 2 - x, o.y0 + o.h / 2 - y) > reach) continue;
+    o.hp -= CHAIN_DAMAGE;
+    o.flash = 3;
+    if (o.hp <= 0) o.fuse = FUSE_FRAMES;
+    else if (o.hp <= o.hp0 / 3) o.state = 'burning';
+    else o.state = 'smoking';
+  }
+  if (!world.ruin) return;
+  for (const p of world.ruin.pieces) {
+    if (p.gone || Math.hypot((p.x0 + p.x1) / 2 - x, (p.y0 + p.y1) / 2 - y) > reach * CHAIN_WALL_SHARE) continue;
+    hitFacade(world, p.pix[p.pix.length >> 1], WEAPONS.stone, rng);
+  }
+}
+
 export function explode(world, s, rng) {
   const cx = s.w / 2, cy = s.h * 0.6;
   for (let by = 0; by < s.h; by += 2) for (let bx = 0; bx < s.w; bx += 2) {
@@ -153,6 +178,8 @@ export function explode(world, s, rng) {
   }
   s.state = 'wreck';
   s.heat = WRECK_BURN_FRAMES;
+  emit(world, { type: 'wreck', x: s.x0 + cx, y: s.y0 + cy, ground: s.y0 + s.h - 1 });
+  chain(world, s.x0 + cx, s.y0 + cy, Math.max(s.w, s.h) * 0.75 * CHAIN_REACH, s, rng);
   world.shake = 9;
   world.score += POINTS.wreck;
   world.wrecked += 1;
@@ -212,6 +239,7 @@ export function step(world, rng) {
   world.frame += 1;
   world.shake *= 0.82;
   for (const s of world.sprites) {
+    if (s.fuse > 0 && --s.fuse === 0 && s.state !== 'wreck') explode(world, s, rng);
     if (s.flash > 0) s.flash -= 1;
     const burning = s.state === 'burning' || (s.state === 'wreck' && s.heat > 0);
     if (s.state === 'wreck' && s.heat > 0) s.heat -= 1;
