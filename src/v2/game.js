@@ -26,6 +26,14 @@ const SPRITE_CAR_H = 26;
 const GROUND_CALM = { radius: 2, passes: 2 };
 const FACADE = { pane: 0, paneRim: 2, paneLit: 4 };
 const PANE_BLUE = 10;
+const CAR_HUE_SHARE = 0.3;
+const SKY_AGREE = 0.85;
+const GROUND_SPECKLE = 0.07;
+const WALL_GREY_CHROMA = 15;
+const BLUE_RAMP_END = 6;
+const CAST_STRIDE = 5;
+const LEAF_PASSES = 2;
+const LEAF_SPECKLE = 0.12;
 for (const [name, i] of Object.entries(CSS_ROLES)) document.documentElement.style.setProperty(`--${name}`, PAL[i]);
 
 const $ = (id) => document.getElementById(id);
@@ -49,7 +57,7 @@ async function loadImage(src) {
 }
 
 const FRAME_W = 288, FRAME_H = 512;
-const LOOK = new Set((params.get('look') || '').split(',').filter(Boolean));
+const LOOK = new Set((params.get('look') ?? 'glassfix,carhue,skyrepair,leafcalm,greyground,groundcalm').split(',').filter(Boolean));
 const CRACK = 48;
 
 function cropTo916(img) {
@@ -81,12 +89,14 @@ function engineCars(comp, bg, cls) {
     if (!box) continue;
     const [x0, y0, x1, y1] = box, w = x1 - x0 + 1, h = y1 - y0 + 1;
     const px = new Int32Array(w * h).fill(EMPTY), glass = new Uint8Array(w * h), panes = new Set(comp.carGlass[id] || []);
+    const hue = LOOK.has('carhue') ? carHue(comp, px, id) : -1;
     let n = 0;
     for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
       const k = y * W + x;
       if (S.ID[k] !== id) continue;
       const j = (y - y0) * w + x - x0;
-      px[j] = !LOOK.has('resnap') || S.base[k] === CRACK || panes.has(k) ? S.base[k] : snap(comp, k);
+      const v = snap(comp, k);
+      px[j] = S.base[k] === CRACK || panes.has(k) ? S.base[k] : LOOK.has('resnap') || (hue >= 0 && Math.floor(v / 6) === hue) ? v : S.base[k];
       if (panes.has(k)) glass[j] = 1;
       bg[k] = S.back[k];
       cls[k] = S.backID[k] >= 1 && S.backID[k] < 10 ? CLASS.BUILDING : CLASS.ROAD;
@@ -130,7 +140,104 @@ function pieceWalls(comp) {
   });
 }
 
-function fromEngine(comp, seg, scene) {
+function skyAgreement(comp, seg) {
+  let inter = 0, uni = 0;
+  for (let k = 0; k < seg.length; k += 1) { const a = comp.sky[k], b = seg[k] === CLASS.SKY; if (a && b) inter += 1; if (a || b) uni += 1; }
+  return uni ? inter / uni : 1;
+}
+
+function repairSky(comp, seg, lab) {
+  if (skyAgreement(comp, seg) >= SKY_AGREE) return;
+  const S = comp.S, theme = skyTheme(skyPixels(lab, seg));
+  comp.SKY = { ...comp.SKY, ...comp.SKYTHEMES[theme], theme };
+  for (let k = 0; k < seg.length; k += 1) {
+    if (S.ID[k]) continue;
+    const isSky = seg[k] === CLASS.SKY;
+    if (isSky) { comp.skyL[k] = comp.skyStyle(k % FRAME_W, (k / FRAME_W) | 0); S.base[k] = comp.skyL[k]; }
+    else if (comp.sky[k]) S.base[k] = comp.q[k];
+    comp.sky[k] = isSky ? 1 : 0;
+  }
+}
+
+export function speckle(values, inside, W, H) {
+  let n = 0, odd = 0;
+  for (let k = W; k < values.length - W; k += 1) {
+    if (!inside(k) || k % W === 0 || k % W === W - 1) continue;
+    n += 1;
+    const v = values[k];
+    if (values[k - 1] !== v && values[k + 1] !== v && values[k - W] !== v && values[k + W] !== v) odd += 1;
+  }
+  return n ? odd / n : 0;
+}
+
+function calmLeaves(comp, seg) {
+  const S = comp.S, inside = (k) => seg[k] === CLASS.GREEN && !S.ID[k] && !comp.sky[k];
+  state.leafSpeckle = speckle(S.base, inside, FRAME_W, FRAME_H);
+  if (state.leafSpeckle > LEAF_SPECKLE) S.base.set(calm(S.base, inside, FRAME_W, FRAME_H, 1, LEAF_PASSES));
+}
+
+function calmGround(comp) {
+  const S = comp.S, inside = (k) => !S.ID[k] && !comp.sky[k];
+  state.groundSpeckle = speckle(S.base, inside, FRAME_W, FRAME_H);
+  if (state.groundSpeckle > GROUND_SPECKLE) S.base.set(calm(S.base, inside, FRAME_W, FRAME_H, 1, 1));
+}
+
+function castOf(comp) {
+  if (comp.cast) return comp.cast;
+  const a = [], b = [];
+  for (let k = 0; k < comp.S.ID.length; k += CAST_STRIDE) {
+    if (comp.sky[k]) continue;
+    const lb = comp.lab(comp.R[k], comp.G[k], comp.B[k]);
+    a.push(lb[1]); b.push(lb[2]);
+  }
+  const med = (v) => v.sort((x, y) => x - y)[v.length >> 1] || 0;
+  comp.cast = [med(a), med(b)];
+  return comp.cast;
+}
+
+function isPhotoGrey(comp, k) {
+  const [ca, cb] = castOf(comp), lb = comp.lab(comp.R[k], comp.G[k], comp.B[k]);
+  return Math.hypot(lb[1] - ca, lb[2] - cb) < WALL_GREY_CHROMA;
+}
+
+function greyOf(comp, L) {
+  let best = comp.NEU[0], bd = Infinity;
+  for (const i of comp.NEU) { const d = Math.abs(comp.LUM[i] - L); if (d < bd) { bd = d; best = i; } }
+  return best;
+}
+
+function greyGround(comp) {
+  const S = comp.S;
+  if (comp.SKY && comp.SKY.theme === 'sunset') return;
+  for (let k = 0; k < S.ID.length; k += 1) {
+    if (S.ID[k] || comp.sky[k] || S.base[k] >= BLUE_RAMP_END) continue;
+    if (isPhotoGrey(comp, k)) S.base[k] = greyOf(comp, comp.Lp[k]);
+  }
+}
+
+function unglaze(comp) {
+  const S = comp.S;
+  for (const rep of comp.REP || []) {
+    if (!rep.glassDom || rep.kind !== 'facade' || paneBlue(comp, rep.id) > PANE_BLUE) continue;
+    const panes = new Set();
+    for (const w of comp.WN) if (w.bid === rep.id) for (const k of w.pix) panes.add(k);
+    for (let k = 0; k < S.ID.length; k += 1) {
+      if (S.ID[k] !== rep.id || S.base[k] === CRACK) continue;
+      if (isPhotoGrey(comp, k)) S.base[k] = greyOf(comp, comp.Lp[k]);
+      else if (panes.has(k)) S.base[k] = comp.q[k];
+    }
+  }
+}
+
+function carHue(comp, px, id) {
+  const S = comp.S, kept = new Set(comp.SUB.map((i) => Math.floor(i / 6)));
+  const count = new Map();
+  for (let k = 0; k < S.ID.length; k += 1) if (S.ID[k] === id) { const f = Math.floor(snap(comp, k) / 6); if (f < 8) count.set(f, (count.get(f) || 0) + 1); }
+  const chromatic = [...count].filter(([f]) => f !== 3 && f !== 4).sort((a, b) => b[1] - a[1])[0];
+  return chromatic && !kept.has(chromatic[0]) && chromatic[1] > CAR_HUE_SHARE * [...count.values()].reduce((t, v) => t + v, 0) ? chromatic[0] : -1;
+}
+
+function fromEngine(comp, seg, scene, lab) {
   const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
   const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
   const darker = palette.map((_, i) => comp.scrape(i));
@@ -142,6 +249,11 @@ function fromEngine(comp, seg, scene) {
     const colours = { ...FACADE, outline: CRACK, wall: (k) => wallAt(k, rep.wall), slab: (k) => comp.scrape(wallAt(k, rep.wall)) };
     facadeWins.set(rep.id, drawFacade({ W, H, ID: S.ID, base: S.base, id: rep.id, quad: bd.quad, rows: rep.rows, cols: rep.cols, colours }));
   }
+  if (LOOK.has('glassfix')) unglaze(comp);
+  if (LOOK.has('skyrepair')) repairSky(comp, seg, lab);
+  if (LOOK.has('leafcalm')) calmLeaves(comp, seg);
+  if (LOOK.has('greyground')) greyGround(comp);
+  if (LOOK.has('groundcalm')) calmGround(comp);
   const bg = Uint16Array.from(S.base);
   const cls = new Uint8Array(N).fill(CLASS.ROAD);
   const isWall = (id) => id >= 1 && id < 10;
@@ -205,14 +317,15 @@ export async function build(img, label = null) {
   const cars = carInstances(found.all, carMask, W, H, lab, ground);
   const { GameEngine } = await import('./engine.js');
   const { Component } = await import('../ref/engine.js');
-  const comp = LOOK.has('palette') ? new GameEngine() : new Component();
+  const { V13Snap } = await import('./v13-snap.js');
+  const comp = LOOK.has('palette') ? new GameEngine() : LOOK.has('snap') ? new V13Snap(Object.fromEntries(['grey', 'match'].map((k) => [k, params.get(k)]).filter(([, v]) => v).concat(params.get('cool') ? [['coolGreys', true]] : []))) : new Component();
   const hand = label && params.get('scene') === 'hand' ? (comp.SCENES || []).find((s) => s.id === label) : null;
   const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H, L: lab.filter((_, i) => i % 3 === 0) });
   $('note').textContent = 'рисую…';
   comp.tok += 1; comp.S = null;
   comp.build(img, scene, 8);
   state.comp = comp;
-  state.world = fromEngine(comp, cls, scene);
+  state.world = fromEngine(comp, cls, scene, lab);
   state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);
   window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask), scene });
@@ -220,7 +333,7 @@ export async function build(img, label = null) {
   state.ctx = state.canvas.getContext('2d');
   state.image = state.ctx.createImageData(W, H);
   window.__v2 = {
-    ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), scene: hand ? 'hand' : 'auto',
+    leafSpeckle: state.leafSpeckle, groundSpeckle: state.groundSpeckle, ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), scene: hand ? 'hand' : 'auto',
     buildings: scene.buildings.length, pieces: state.world.ruin.pieces.length, windows: comp.WN.length, theme: comp.SKY && comp.SKY.theme,
     rep: (comp.REP || []).map((r) => ({ id: r.id, kind: r.kind, glass: r.glassDom, nw: r.nw, bf: +r.bf.toFixed(2), cover: +r.cover.toFixed(2), fcls: r.fcls, pb: Math.round(r.paneBlue) })),
     detections: found.all.length, cars: state.world.sprites.length, palette: comp.SUB.length,
@@ -372,6 +485,7 @@ window.__v2tick = (n) => { for (let i = 0; i < n; i += 1) advance(); draw(); };
 window.__v2throw = (x, y) => tap(x, y);
 window.__v2round = () => ({ ...state.round, loot: state.round.loot, onGround: state.world.loot.map((p) => ({ x: p.x, y: p.y, kind: p.kind, rest: p.rest })) });
 window.__v2world = () => state.world;
+window.__v2comp = () => state.comp;
 window.__v2rep = () => (state.comp ? state.comp.REP.map((r) => ({ id: r.id, kind: r.kind, corr: +r.corr.toFixed(2), bf: +r.bf.toFixed(2), glass: r.glassDom })) : null);
 
 const PHOTOS = [
