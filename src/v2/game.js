@@ -8,15 +8,17 @@ import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
 import { createRuin } from './ruin.js';
 import { autoScene, skyTheme } from './scene.js';
 import { EMPTY } from './sprites.js';
+import { AIM_COLOUR, silhouette, targetAt } from './aim.js';
 
 const DETECT_LONG = 1600;
 const FLIGHT_FRAMES = 16;
+const AIM_FRAMES = 45;
 const CLASS_TINT = [[120, 180, 255], [200, 120, 220], [60, 200, 90], [200, 170, 90], [120, 120, 130], [255, 60, 60], [255, 220, 0], [255, 140, 200]];
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const rng = mulberry32(8);
-const state = { world: null, canvas: $('screen'), ctx: null, image: null, flights: [], weapon: 'stone', view: params.get('view') || 'game', cls: null, pops: [] };
+const state = { world: null, canvas: $('screen'), ctx: null, image: null, flights: [], weapon: 'stone', view: params.get('view') || 'game', cls: null, pops: [], aim: null };
 
 function canvasOf(img, long) {
   const s = Math.min(1, long / Math.max(img.naturalWidth, img.naturalHeight));
@@ -106,7 +108,7 @@ function fromEngine(comp, seg, scene) {
     for (const k of c.pix) chunkOf[k] = j;
     return {
       index: j, pix: c.pix, wins: c.wins.map((w) => comp.WN[w].pix), sup: c.sup.map((i) => indexOf.get(i)).filter((i) => i !== undefined),
-      gy: groundOf(scene, c.bid, c.gy), x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, near: [],
+      bid: c.bid, gy: groundOf(scene, c.bid, c.gy), x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, near: [],
     };
   });
   for (const a of chunks) {
@@ -149,6 +151,7 @@ export async function build(img, label = null) {
   window.__v2 = {
     ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), scene: hand ? 'hand' : 'auto',
     buildings: scene.buildings.length, pieces: state.world.ruin.pieces.length, windows: comp.WN.length, theme: comp.SKY && comp.SKY.theme,
+    rep: (comp.REP || []).map((r) => ({ id: r.id, kind: r.kind, glass: r.glassDom, nw: r.nw, bf: +r.bf.toFixed(2), cover: +r.cover.toFixed(2), fcls: r.fcls, pb: Math.round(r.paneBlue) })),
     detections: found.all.length, cars: state.world.sprites.length, palette: comp.SUB.length,
     sprites: state.world.sprites.map((s) => ({ id: s.id, x0: s.x0, y0: s.y0, w: s.w, h: s.h, n: s.n0 })),
     facades: state.world.ruin.pieces.slice(0, 400).filter((_, i) => i % 7 === 0).map((p) => ({ x: (p.x0 + p.x1) / 2, y: (p.y0 + p.y1) / 2 })),
@@ -204,6 +207,10 @@ function draw() {
       for (let c = 0; c < 3; c += 1) data[i * 4 + c] = (data[i * 4 + c] + t[c]) >> 1;
     }
   }
+  if (state.aim && state.aim.t > 0) {
+    state.aim.t -= 1;
+    for (const k of silhouette(w, state.aim.target)) data.set(AIM_COLOUR, k * 4);
+  }
   for (const f of state.flights) {
     const k = f.t / FLIGHT_FRAMES;
     const x = Math.round(f.x0 + (f.x - f.x0) * k), y = Math.round(f.y0 + (f.y - f.y0) * k - Math.sin(k * Math.PI) * 30);
@@ -236,7 +243,18 @@ function toFrame(ev) {
   return [((ev.clientX - r.left) / r.width) * state.world.W, ((ev.clientY - r.top) / r.height) * state.world.H];
 }
 
-state.canvas.addEventListener('pointerdown', (ev) => { if (state.world) throwAt(...toFrame(ev)); });
+function aimAt(x, y, frames) {
+  const target = targetAt(state.world, x, y);
+  state.aim = target ? { target, t: frames } : null;
+}
+state.canvas.addEventListener('pointerdown', (ev) => {
+  if (!state.world) return;
+  const [x, y] = toFrame(ev);
+  aimAt(x, y, AIM_FRAMES);
+  throwAt(x, y);
+});
+state.canvas.addEventListener('pointermove', (ev) => { if (state.world && ev.pointerType === 'mouse') aimAt(...toFrame(ev), Infinity); });
+state.canvas.addEventListener('pointerleave', () => { state.aim = null; });
 $('weapon').addEventListener('click', () => {
   state.weapon = state.weapon === 'stone' ? 'brick' : 'stone';
   $('weapon').textContent = state.weapon === 'stone' ? 'КАМЕНЬ' : 'КИРПИЧ';
@@ -250,7 +268,7 @@ $('file').addEventListener('change', async (ev) => {
 });
 
 window.__v2tick = (n) => { for (let i = 0; i < n; i += 1) advance(); draw(); };
-window.__v2throw = (x, y) => throwAt(x, y);
+window.__v2throw = (x, y) => { aimAt(x, y, AIM_FRAMES); throwAt(x, y); };
 window.__v2world = () => state.world;
 
 const PHOTOS = [

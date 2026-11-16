@@ -132,7 +132,7 @@ class Component {
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let bv = 1e9, br = 0, bg2 = 0, bb2 = 0; for (const [ox, oy] of [[-2, -2], [0, -2], [-2, 0], [0, 0]]) { let sr = 0, sg = 0, sb = 0, sl = 0, sl2 = 0, n = 0; for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) { const xx = Math.min(W - 1, Math.max(0, x + ox + i)), yy = Math.min(H - 1, Math.max(0, y + oy + j)), kk = yy * W + xx; sr += R[kk]; sg += G[kk]; sb += B[kk]; sl += Lp[kk]; sl2 += Lp[kk] * Lp[kk]; n++; } const v = sl2 / n - (sl / n) ** 2; if (v < bv) { bv = v; br = sr / n; bg2 = sg / n; bb2 = sb / n; } } const k = y * W + x; Rk[k] = br; Gk[k] = bg2; Bk[k] = bb2; Lk[k] = .299 * br + .587 * bg2 + .114 * bb2; }
     // S2 working palette: v10 two-class snap, then popularity reduction to the 12 most used entries (rare entries → nearest kept entry in Lab)
     const q0 = new Uint8Array(N), hc = new Float64Array(50); for (let k = 0; k < N; k++) { q0[k] = this.quant(R[k], G[k], B[k]); if (!sky[k]) hc[q0[k]]++; }
-    const PL = this.PLAB || (this.PLAB = this.RGB.map((c) => this.lab(c[0], c[1], c[2]))), SUB = [...hc.keys()].filter((i) => hc[i] > 0 && i < 48).sort((x, y) => hc[y] - hc[x]).slice(0, 12), REMAP = new Uint8Array(50);
+    const PL = this.PLAB || (this.PLAB = this.RGB.map((c) => this.lab(c[0], c[1], c[2]))), SUB = this.keepHues(hc,  [...hc.keys()].filter((i) => hc[i] > 0 && i < 48).sort((x, y) => hc[y] - hc[x]).slice(0, 12)), REMAP = new Uint8Array(50);
     for (let i = 0; i < 50; i++) { if (SUB.includes(i) || i >= 48) { REMAP[i] = i; continue; } let bi = SUB[0], bd = 1e9; for (const j of SUB) { const p = PL[i], o = PL[j], d = (p[0] - o[0]) ** 2 + (p[1] - o[1]) ** 2 + (p[2] - o[2]) ** 2; if (d < bd) { bd = d; bi = j; } } REMAP[i] = bi; }
     const q = new Uint8Array(N); for (let k = 0; k < N; k++) q[k] = REMAP[q0[k]];
     const qc = q.slice(); this.maj(qc, 1); this.maj(q, 2); this.SUB = SUB; const qf = q.slice(); this.maj(qf, 2);
@@ -167,7 +167,9 @@ class Component {
       const auto = Math.abs(corr) > .3 && bf >= .3 ? 'checker' : 'facade', kind = bd.kind && bd.kind !== 'auto' ? bd.kind : auto;
       // S10 windows = holes of the facade frame: Otsu split of the smoothed facade luma → 4-connected components → the class owning the largest component is the frame (wall / mullions) → compact components of the other class that never touch the facade outline are panes
       const D = new Float32Array(N), SD = new Float32Array(N); MP.forEach((k) => { const x = k % W, y = (k / W) | 0; let s = 0, s2 = 0, c = 0; for (let j = -7; j <= 7; j++) for (let i = -7; i <= 7; i++) { const xx = x + i, yy = y + j; if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue; const kk = yy * W + xx; if (inM[kk]) { s += Lk[kk]; s2 += Lk[kk] * Lk[kk]; c++; } } const m = s / c; D[k] = Lk[k] - m; SD[k] = Math.sqrt(Math.max(0, s2 / c - m * m)); });
-      const bluePx = MP.filter((k) => B[k] - R[k] > 10).length / Math.max(1, MP.length), glassDom = bluePx >= .3 || bf >= .5;
+      const hist0 = new Float64Array(256); MP.forEach((k) => hist0[Math.min(255, Math.max(0, Lk[k] | 0))]++); const T0 = this.otsu(hist0, MP.length);
+      let sb1 = 0, n1 = 0, sb0 = 0, n0 = 0; MP.forEach((k) => { if (Lk[k] > T0) { sb1 += B[k] - R[k]; n1++; } else { sb0 += B[k] - R[k]; n0++; } }); const paneBlue = sb1 / Math.max(1, n1) - sb0 / Math.max(1, n0);
+      const bluePx = MP.filter((k) => B[k] - R[k] > 10).length / Math.max(1, MP.length), glassDom = (bluePx >= .3 || bf >= .5) && paneBlue > this.PANE_BLUE;
       const hist = new Float64Array(256); MP.forEach((k) => hist[Math.min(255, Math.max(0, Lk[k] | 0))]++);
       let tot = MP.length, sAll = 0; for (let i = 0; i < 256; i++) sAll += i * hist[i]; let wB = 0, sB = 0, best = -1, T = 128; for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB) continue; const wF = tot - wB; if (!wF) break; sB += i * hist[i]; const mB = sB / wB, mF = (sAll - sB) / wF, v = wB * wF * (mB - mF) ** 2; if (v > best) { best = v; T = i; } }
       const cls = new Int8Array(N).fill(-1); MP.forEach((k) => (cls[k] = glassDom ? (Lk[k] > T ? 1 : 0) : (D[k] < -Math.max(6, .5 * SD[k]) ? 0 : 1)));
@@ -204,7 +206,7 @@ class Component {
           set(x, y, col, id); frame[k] = fr; chK[k] = id * 1e6 + (ci + 100) * 1000 + (ri + 100); wnK[k] = wi !== undefined ? id * 1e6 + 500000 + wi : -1; np++; });
         lu = Math.round(RU / Math.max(1, uB.length + 1)); lv = Math.round(RV / Math.max(1, vB.length + 1));
       }
-      REP.push({ id, name: bd.name, kind, auto, corr, pf, bf, lu, lv, gu, gv, cols: kind === 'facade' ? colsW.length : Math.round(RU / lu), rows: kind === 'facade' ? floors.length : Math.round(RV / lv), np, wall: wt, nw: wins.length, cands, cover, T, fcls, glassDom });
+      REP.push({ id, name: bd.name, kind, auto, corr, pf, bf, lu, lv, gu, gv, cols: kind === 'facade' ? colsW.length : Math.round(RU / lu), rows: kind === 'facade' ? floors.length : Math.round(RV / lv), np, paneBlue, wall: wt, nw: wins.length, cands, cover, T, fcls, glassDom });
     }
     for (let k = W; k < N - W; k++) { const id = ID[k]; if (!id || id >= 10) continue; if ((ID[k - 1] === 0 && sky[k - 1]) || (ID[k + 1] === 0 && sky[k + 1]) || (ID[k - W] === 0 && sky[k - W])) { base[k] = OUT; frame[k] = 1; wnK[k] = -1; } }
     sc.buildings.forEach((bd) => { const b = bb[bd.id]; if (!b) return; let t = 0, s = 0; for (let x = b[0]; x <= b[2]; x++) for (let y = b[1]; y <= b[3]; y++) if (ID[y * W + x] === bd.id) { t++; if (y > 0 && sky[(y - 1) * W + x]) s++; break; } this.REVEAL[bd.id] = t > 0 && s / t >= .4; this.INT[bd.id] = b[3] - Math.max(3, Math.round((b[3] - b[1]) * .15)); this.BGY[bd.id] = bd.gy || (GY - b[3] > 0 && GY - b[3] < 60 ? GY : b[3] + 1); });
@@ -487,11 +489,25 @@ class Component {
     this.WATER = [[29, .8], [4, .65], [3, .5], [2, .55]].map(([wc, a]) => { const w = this.RGB[wc]; return Uint8Array.from(this.RGB.map((q) => near(q[0] * (1 - a) + w[0] * a, q[1] * (1 - a) + w[1] * a, q[2] * (1 - a) + w[2] * a))); });
     this.SIREN = Uint8Array.from(this.PAL.map((h, i) => (i < 6 ? 36 + i : i)));
   }
+  GREY_CHROMA = 12; HUE_WEIGHT = 2; PANE_BLUE = 10; HUE_SHARE = .01; HUE_KEEP = 2;
+  otsu(hist, tot) {
+    let sAll = 0; for (let i = 0; i < 256; i++) sAll += i * hist[i];
+    let wB = 0, sB = 0, best = -1, T = 128;
+    for (let i = 0; i < 256; i++) { wB += hist[i]; if (!wB) continue; const wF = tot - wB; if (!wF) break; sB += i * hist[i]; const v = wB * wF * (sB / wB - (sAll - sB) / wF) ** 2; if (v > best) { best = v; T = i; } }
+    return T;
+  }
+  keepHues(hc, top) {
+    const all = hc.reduce((t, v, i) => (i < 48 ? t + v : t), 0), keep = new Set(top);
+    for (let f = 0; f < 8; f++) { const ramp = [0, 1, 2, 3, 4, 5].map((j) => f * 6 + j).filter((i) => hc[i] > 0); if (ramp.reduce((t, i) => t + hc[i], 0) < all * this.HUE_SHARE) continue; ramp.sort((x, y) => hc[y] - hc[x]).slice(0, this.HUE_KEEP).forEach((i) => keep.add(i)); }
+    return [...keep];
+  }
   quant(r, g, b) {
-    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), L = .299 * r + .587 * g + .114 * b, sat = mx > 0 ? (mx - mn) / mx : 0;
+    const mx = Math.max(r, g, b), L = .299 * r + .587 * g + .114 * b;
     let best = 0, bd = 1e9;
-    if (sat < .26 || mx < 45) { for (const i of this.NEU) { const d = Math.abs(this.LUM[i] - L); if (d < bd) { bd = d; best = i; } } return best; }
-    for (const i of this.CHR) { const p = this.RGB[i], dr = p[0] - r, dg = p[1] - g, db = p[2] - b, d = 2 * dr * dr + 4 * dg * dg + 3 * db * db; if (d < bd) { bd = d; best = i; } }
+    const lb = this.lab(r, g, b), chroma = Math.hypot(lb[1], lb[2]);
+    if (chroma < this.GREY_CHROMA || mx < 45) { for (const i of this.NEU) { const d = Math.abs(this.LUM[i] - L); if (d < bd) { bd = d; best = i; } } return best; }
+    const PL = this.PLAB || (this.PLAB = this.RGB.map((c) => this.lab(c[0], c[1], c[2])));
+    for (let i = 0; i < 48; i++) { const p = PL[i], d = (p[0] - lb[0]) ** 2 + this.HUE_WEIGHT * ((p[1] - lb[1]) ** 2 + (p[2] - lb[2]) ** 2); if (d < bd) { bd = d; best = i; } }
     return best;
   }
   bayer(x, y) { return ([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5][(y & 3) * 4 + (x & 3)] + .5) / 16; }
