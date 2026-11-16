@@ -1,5 +1,5 @@
 import { CLASS } from './classes.js';
-import { EMPTY } from './carsprite.js';
+import { EMPTY } from './sprites.js';
 import { hitFacade, stepRuin, drawRuin, roomColour } from './ruin.js';
 
 export const WEAPONS = {

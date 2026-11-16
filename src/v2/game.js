@@ -6,10 +6,8 @@ import { CLASS, classMap, downsample } from './classes.js';
 import { carInstances } from './instances.js';
 import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
 import { createRuin } from './ruin.js';
-import { kuwahara } from './convert.js';
-import { celShade } from './cel.js';
-import { carSprite } from './carsprite.js';
-import { tilePieces } from './pieces.js';
+import { autoScene, skyTheme } from './scene.js';
+import { EMPTY } from './sprites.js';
 
 const DETECT_LONG = 1600;
 const FLIGHT_FRAMES = 16;
@@ -35,79 +33,127 @@ async function loadImage(src) {
   return img;
 }
 
-const FRAME_W = 180, FRAME_H = 320;
-const SOURCE_SCALE = 4;
+const FRAME_W = 288, FRAME_H = 512;
+const CRACK = 48;
 
-function cropTo916(img, long) {
+function cropTo916(img) {
   const iw = img.naturalWidth, ih = img.naturalHeight;
   let sw = iw, sh = ih;
   if (iw / ih > 9 / 16) sw = ih * 9 / 16; else sh = iw * 16 / 9;
-  const s = Math.min(1, long / sh);
+  const s = Math.min(1, DETECT_LONG / sh);
   const c = document.createElement('canvas');
   c.width = Math.round(sw * s); c.height = Math.round(sh * s);
   c.getContext('2d').drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, c.width, c.height);
   return c;
 }
 
-const PAINT_SHARE = 0.5;
+const groundOf = (scene, id, fallback) => {
+  const b = (scene.buildings || []).find((q) => q.id === id);
+  return b && b.ground ? b.ground : fallback;
+};
 
-export function bodyOf(id, inst, lab) {
-  const px = [];
-  for (let i = 0; i < inst.length; i += 1) if (inst[i] === id) px.push([lab[i * 3], lab[i * 3 + 1], lab[i * 3 + 2]]);
-  if (!px.length) return [150, 150, 155];
-  px.sort((p, q) => q[0] - p[0]);
-  const paint = px.slice(0, Math.max(1, Math.round(px.length * PAINT_SHARE)));
-  const med = (k) => paint.map((p) => p[k]).sort((a, b) => a - b)[paint.length >> 1];
-  return oklabToRgb(med(0), med(1), med(2));
+function skyPixels(lab, cls) {
+  const out = [];
+  for (let i = 0; i < cls.length; i += 3) if (cls[i] === CLASS.SKY) out.push(oklabToRgb(lab[i * 3], lab[i * 3 + 1], lab[i * 3 + 2]));
+  return out;
 }
 
+function engineCars(comp, bg, cls) {
+  const W = FRAME_W, S = comp.S, sprites = [];
+  for (const id of comp.CARIDS) {
+    const box = S.bb[id];
+    if (!box) continue;
+    const [x0, y0, x1, y1] = box, w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const px = new Int32Array(w * h).fill(EMPTY), glass = new Uint8Array(w * h), panes = new Set(comp.carGlass[id] || []);
+    let n = 0;
+    for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
+      const k = y * W + x;
+      if (S.ID[k] !== id) continue;
+      const j = (y - y0) * w + x - x0;
+      px[j] = S.base[k];
+      if (panes.has(k)) glass[j] = 1;
+      bg[k] = S.back[k];
+      cls[k] = S.backID[k] >= 1 && S.backID[k] < 10 ? CLASS.BUILDING : CLASS.ROAD;
+      n += 1;
+    }
+    sprites.push({ id, label: 'car', x0, y0, w, h, px, glass, n0: n, n, state: 'whole', heat: 0, flash: 0 });
+  }
+  return sprites;
+}
 
-export async function build(img) {
+function fromEngine(comp, seg, scene) {
+  const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
+  const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
+  const darker = palette.map((_, i) => comp.scrape(i));
+  const bg = Uint16Array.from(S.base);
+  const cls = new Uint8Array(N).fill(CLASS.ROAD);
+  const isWall = (id) => id >= 1 && id < 10;
+  for (let k = 0; k < N; k += 1) {
+    if (isWall(S.ID[k])) cls[k] = CLASS.BUILDING;
+    else if (comp.sky[k]) cls[k] = CLASS.SKY;
+  }
+  for (let k = 0; k < N; k += 1) {
+    if (S.ID[k]) continue;
+    const segSky = seg[k] === CLASS.SKY;
+    if (comp.sky[k] && !segSky) { S.base[k] = comp.q[k]; bg[k] = comp.q[k]; cls[k] = seg[k]; comp.sky[k] = 0; }
+    else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
+  }
+  const sprites = engineCars(comp, bg, cls);
+  const wallPieces = comp.CH.map((c, i) => ({ c, i })).filter(({ c }) => isWall(c.bid));
+  const indexOf = new Map(wallPieces.map(({ i }, j) => [i, j]));
+  const chunkOf = new Int32Array(N).fill(-1);
+  const chunks = wallPieces.map(({ c }, j) => {
+    for (const k of c.pix) chunkOf[k] = j;
+    return {
+      index: j, pix: c.pix, wins: c.wins.map((w) => comp.WN[w].pix), sup: c.sup.map((i) => indexOf.get(i)).filter((i) => i !== undefined),
+      gy: groundOf(scene, c.bid, c.gy), x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1, near: [],
+    };
+  });
+  for (const a of chunks) {
+    a.near = chunks.filter((b) => b !== a && b.x0 <= a.x1 + 2 && b.x1 >= a.x0 - 2 && b.y0 <= a.y1 + 2 && b.y1 >= a.y0 - 2).map((b) => b.index);
+  }
+  const ruin = createRuin({ W, chunks, chunkOf, crackColour: CRACK });
+  return createWorld({ W, H, background: bg, palette, darker, cls, sprites, ruin });
+}
+
+export async function build(img, label = null) {
   const t0 = performance.now();
   const W = FRAME_W, H = FRAME_H;
-  const crop = cropTo916(img, DETECT_LONG);
+  const crop = cropTo916(img);
   $('note').textContent = 'ищу машины…';
   const found = await detectAll(crop);
   $('note').textContent = 'размечаю двор…';
   const parse = await sceneParse(crop, W, H, crop.width, crop.height).catch(() => null);
   const cls = classMap(parse && parse.masks, W * H);
   const carMask = cls.map((c) => (c === CLASS.CAR ? 1 : 0));
-  const big = crop.getContext('2d').getImageData(0, 0, crop.width, crop.height).data;
-  const lab = downsample(big, crop.width, crop.height, W, H);
+  const rgba = crop.getContext('2d').getImageData(0, 0, crop.width, crop.height).data;
+  const lab = downsample(rgba, crop.width, crop.height, W, H);
   const ground = cls.map((c) => (c === CLASS.ROAD || c === CLASS.TERRAIN ? 1 : 0));
   const cars = carInstances(found.all, carMask, W, H, lab, ground);
+  const { Component } = await import('../ref/engine.js');
+  const comp = new Component();
+  const hand = label && params.get('scene') === 'hand' ? (comp.SCENES || []).find((s) => s.id === label) : null;
+  const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H });
+  if (!hand) scene.sky = skyTheme(skyPixels(lab, cls));
   $('note').textContent = 'рисую…';
-  const sw = W * SOURCE_SCALE, sh = H * SOURCE_SCALE;
-  const src = document.createElement('canvas');
-  src.width = sw; src.height = sh;
-  src.getContext('2d').drawImage(crop, 0, 0, sw, sh);
-  const rgba = src.getContext('2d').getImageData(0, 0, sw, sh).data;
-  const flatLab = downsample(kuwahara(rgba, sw, sh), sw, sh, W, H);
-  const backdrop = cls.map((c) => (c === CLASS.CAR ? CLASS.ROAD : c));
-  const cel = celShade({ lab: flatLab, cls: backdrop, W, H });
-  const colours = cel.palette;
-  const darker = new Array(colours.length);
-  for (const r of cel.regionRamp) { darker[r.first] = r.ink; darker[r.first + 1] = r.first; darker[r.first + 2] = r.first + 1; darker[r.ink] = r.ink; }
-  const sprites = cars.list.map((c) => carSprite({ id: c.id, x0: c.x0, y0: c.y0, w: c.x1 - c.x0 + 1, h: c.y1 - c.y0 + 1, body: bodyOf(c.id, cars.inst, flatLab), palette: colours, darker }));
-  const lightness = colours.map(([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b) / 255);
-  const { chunks, chunkOf } = tilePieces({ cls: backdrop, idx: cel.idx, lightness, W, H });
-  const ruin = createRuin({ W, chunks, chunkOf, crackColour: darker[cel.idx[0]] ?? 0 });
-  state.world = createWorld({ W, H, background: cel.idx, palette: colours, darker, cls: backdrop, sprites, ruin });
-  const cut = { sprites };
-  const palette = { rgb: colours };
-  state.cls = cls;
+  const cropImg = await loadImage(crop.toDataURL('image/jpeg', 0.95));
+  comp.tok += 1; comp.S = null;
+  comp.build(cropImg, scene, 8);
+  state.world = fromEngine(comp, cls, scene);
+  state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);
-  window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask) });
+  window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask), scene });
   state.canvas.width = W; state.canvas.height = H;
   state.ctx = state.canvas.getContext('2d');
   state.image = state.ctx.createImageData(W, H);
   window.__v2 = {
-    ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), colours: colours.length,
-    pieces: chunks.length, detections: found.all.length, cars: cut.sprites.length,
-    sprites: cut.sprites.map((s) => ({ id: s.id, x0: s.x0, y0: s.y0, w: s.w, h: s.h, n: s.n0 })),
-    facades: chunks.filter((_, i) => i % 5 === 0).map((p) => ({ x: (p.x0 + p.x1) / 2, y: (p.y0 + p.y1) / 2 })),
+    ready: true, W, H, ms: Math.round(performance.now() - t0), segmenter: Boolean(parse), scene: hand ? 'hand' : 'auto',
+    buildings: scene.buildings.length, pieces: state.world.ruin.pieces.length, windows: comp.WN.length, theme: comp.SKY && comp.SKY.theme,
+    detections: found.all.length, cars: state.world.sprites.length, palette: comp.SUB.length,
+    sprites: state.world.sprites.map((s) => ({ id: s.id, x0: s.x0, y0: s.y0, w: s.w, h: s.h, n: s.n0 })),
+    facades: state.world.ruin.pieces.slice(0, 400).filter((_, i) => i % 7 === 0).map((p) => ({ x: (p.x0 + p.x1) / 2, y: (p.y0 + p.y1) / 2 })),
   };
-  $('note').textContent = `машин: ${cut.sprites.length} · цветов: ${palette.rgb.length}`;
+  $('note').textContent = `машин: ${state.world.sprites.length} · домов: ${scene.buildings.length}`;
   paintHud();
 }
 
@@ -227,7 +273,7 @@ $('ref').addEventListener('click', () => {
 });
 
 requestAnimationFrame(loop);
-build(await loadImage(current)).catch((e) => {
+build(await loadImage(current), reference).catch((e) => {
   window.__v2 = { ready: false, error: String((e && e.stack) || e) };
   $('note').textContent = `ошибка: ${e && e.message}`;
 });
