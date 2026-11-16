@@ -1,3 +1,5 @@
+import { COLOURS } from './theme.js';
+import { skeleton } from './backdrop.js';
 const PIECE_HP = 3;
 const CASCADE_DELAY = 7;
 const GRAVITY = 0.14;
@@ -6,11 +8,10 @@ const CHIPS_PER_HIT = 10;
 const DUST_PUFFS = 3;
 const POINTS = { pane: 15, crack: 20, piece: 120 };
 const SHARD_SHARE = 0.2;
-const SLAB = [132, 128, 136];
-const ROOM = [[52, 44, 62], [40, 34, 50]];
-const CEILING = [20, 18, 28];
-const DUST = [[196, 186, 170], [160, 152, 142]];
-const SHARD = [[214, 240, 252], [150, 200, 230]];
+const SLAB = COLOURS.slab;
+const ROOM = COLOURS.interior;
+const DUST = COLOURS.dust;
+const SHARD = COLOURS.glass;
 
 export function createRuin({ W, chunks, chunkOf, crackColour }) {
   return {
@@ -21,9 +22,8 @@ export function createRuin({ W, chunks, chunkOf, crackColour }) {
 }
 
 export function roomColour(piece, x, y) {
-  if (y === piece.y1 || y === piece.y1 - 1) return SLAB;
-  if (y === piece.y0) return CEILING;
-  return ROOM[(x - piece.x0) % 9 === 0 ? 1 : 0];
+  const frame = skeleton(piece, x, y);
+  return frame >= 0 ? SLAB[frame] : ROOM[y === piece.y0 ? 1 : 0];
 }
 
 function crack(world, piece, hx, hy, rng) {
@@ -73,6 +73,7 @@ export function detach(world, piece, rng = Math.random) {
   for (const k of piece.pix) {
     if (world.interior[k] === 1) continue;
     const x = k % world.W, y = (k / world.W) | 0;
+    if (skeleton(piece, x, y) >= 0) { world.interior[k] = 1; continue; }
     const c = world.interior[k] === 2 ? roomColour(piece, x, y) : world.palette[world.bg[k]];
     px.push({ x, y, c });
     world.interior[k] = 1;

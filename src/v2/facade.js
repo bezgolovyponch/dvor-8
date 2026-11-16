@@ -1,3 +1,5 @@
+import { outlineOf } from './outline.js';
+
 const FLOOR_PX = [9, 16];
 const COLUMN_PX = [7, 14];
 const WINDOW = { u: [0.22, 0.78], v: [0.3, 0.78] };
@@ -52,8 +54,7 @@ export function drawFacade({ W, H, ID, base, id, quad, rows, cols, colours }) {
   }
   const windows = new Map();
   for (const k of pix) {
-    const x = k % W, y = (k / W) | 0;
-    if (x === 0 || y === 0 || x === W - 1 || y === H - 1 || !has(k - 1) || !has(k + 1) || !has(k - W) || !has(k + W)) { base[k] = colours.outline; continue; }
+    if (outlineOf(has, W, H, k)) { base[k] = colours.outline; continue; }
     const cell = cellOf.get(k);
     if (cell === undefined) { base[k] = colours.wall(k); continue; }
     if (cell === -1) { base[k] = colours.slab(k); continue; }

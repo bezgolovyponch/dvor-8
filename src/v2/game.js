@@ -13,6 +13,9 @@ import { collectAt, dropLoot, drawLoot, stepLoot } from './loot.js';
 import { addLoot, checkOver, createRound, registerStrike, spendThrow, tick } from './round.js';
 import { calm, muteTable, simplifyCar } from './roles.js';
 import { drawFacade } from './facade.js';
+import { CLASS_TINT, CSS_ROLES, PAL, ROLE } from './theme.js';
+import { backdrop } from './backdrop.js';
+import { projectileCells } from './projectile.js';
 
 const DETECT_LONG = 1600;
 const FLIGHT_FRAMES = 16;
@@ -22,7 +25,8 @@ const PIECE_GEM_CHANCE = 0.1;
 const SPRITE_CAR_H = 26;
 const GROUND_CALM = { radius: 2, passes: 2 };
 const FACADE = { pane: 0, paneRim: 2, paneLit: 4 };
-const CLASS_TINT = [[120, 180, 255], [200, 120, 220], [60, 200, 90], [200, 170, 90], [120, 120, 130], [255, 60, 60], [255, 220, 0], [255, 140, 200]];
+const PANE_BLUE = 10;
+for (const [name, i] of Object.entries(CSS_ROLES)) document.documentElement.style.setProperty(`--${name}`, PAL[i]);
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -81,7 +85,7 @@ function engineCars(comp, bg, cls) {
       const k = y * W + x;
       if (S.ID[k] !== id) continue;
       const j = (y - y0) * w + x - x0;
-      px[j] = S.base[k];
+      px[j] = S.base[k] === CRACK || panes.has(k) ? S.base[k] : snap(comp, k);
       if (panes.has(k)) glass[j] = 1;
       bg[k] = S.back[k];
       cls[k] = S.backID[k] >= 1 && S.backID[k] < 10 ? CLASS.BUILDING : CLASS.ROAD;
@@ -93,13 +97,25 @@ function engineCars(comp, bg, cls) {
   return sprites;
 }
 
+const snap = (comp, k) => comp.quant(comp.R[k], comp.G[k], comp.B[k]);
+
+function paneBlue(comp, id) {
+  const S = comp.S, pix = [];
+  for (let k = 0; k < S.ID.length; k += 1) if (S.ID[k] === id) pix.push(k);
+  const L = pix.map((k) => comp.Lp[k]).sort((a, b) => a - b), cut = L[L.length >> 1];
+  let light = 0, nl = 0, dark = 0, nd = 0;
+  for (const k of pix) { const d = comp.B[k] - comp.R[k]; if (comp.Lp[k] > cut) { light += d; nl += 1; } else { dark += d; nd += 1; } }
+  return light / Math.max(1, nl) - dark / Math.max(1, nd);
+}
+
 function pieceWalls(comp) {
   const S = comp.S, panes = new Set(), counts = comp.CH.map(() => new Map());
   for (const w of comp.WN) for (const k of w.pix) panes.add(k);
   for (let k = 0; k < S.ID.length; k += 1) {
     const c = comp.chunkOf[k];
-    if (c < 0 || panes.has(k) || S.base[k] >= 48) continue;
-    counts[c].set(S.base[k], (counts[c].get(S.base[k]) || 0) + 1);
+    if (c < 0 || panes.has(k)) continue;
+    const v = snap(comp, k);
+    counts[c].set(v, (counts[c].get(v) || 0) + 1);
   }
   const near = (a, b) => a.bid === b.bid && b.x0 <= a.x1 + 2 && b.x1 >= a.x0 - 2 && b.y0 <= a.y1 + 2 && b.y1 >= a.y0 - 2;
   return comp.CH.map((a, i) => {
@@ -121,7 +137,7 @@ function fromEngine(comp, seg, scene) {
   const wallAt = (k, fallback) => (comp.chunkOf[k] >= 0 && walls[comp.chunkOf[k]] >= 0 ? walls[comp.chunkOf[k]] : fallback);
   for (const rep of comp.REP || []) {
     const bd = scene.buildings.find((b) => b.id === rep.id);
-    if (!bd || rep.kind !== 'facade' || rep.glassDom) continue;
+    if (!bd || rep.kind !== 'facade' || (rep.glassDom && paneBlue(comp, rep.id) > PANE_BLUE)) continue;
     const colours = { ...FACADE, outline: CRACK, wall: (k) => wallAt(k, rep.wall), slab: (k) => comp.scrape(wallAt(k, rep.wall)) };
     facadeWins.set(rep.id, drawFacade({ W, H, ID: S.ID, base: S.base, id: rep.id, quad: bd.quad, rows: rep.rows, cols: rep.cols, colours }));
   }
@@ -137,6 +153,7 @@ function fromEngine(comp, seg, scene) {
     const segSky = seg[k] === CLASS.SKY;
     if (comp.sky[k] && !segSky) { S.base[k] = comp.q[k]; bg[k] = comp.q[k]; cls[k] = seg[k]; comp.sky[k] = 0; }
     else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
+    if (cls[k] !== CLASS.SKY) { const v = snap(comp, k); S.base[k] = v; bg[k] = v; }
   }
   const sprites = engineCars(comp, bg, cls);
   const mute = muteTable(palette, (r, g, b) => comp.lab(r, g, b));
@@ -164,7 +181,11 @@ function fromEngine(comp, seg, scene) {
     a.near = chunks.filter((b) => b !== a && b.x0 <= a.x1 + 2 && b.x1 >= a.x0 - 2 && b.y0 <= a.y1 + 2 && b.y1 >= a.y0 - 2).map((b) => b.index);
   }
   const ruin = createRuin({ W, chunks, chunkOf, crackColour: CRACK });
-  return createWorld({ W, H, background: bg, palette, darker, cls, sprites, ruin });
+  const behind = backdrop({
+    W, H, isBuilding: (k) => isWall(S.ID[k]), isGround: (k) => cls[k] !== CLASS.SKY && cls[k] !== CLASS.BUILDING && S.ID[k] === 0,
+    ground: bg, sky: comp.skyL, horizon: comp.SKY ? comp.SKY.h0 : H / 2,
+  });
+  return createWorld({ W, H, background: bg, palette, darker, cls, sprites, ruin, behind });
 }
 
 export async function build(img, label = null) {
@@ -181,8 +202,8 @@ export async function build(img, label = null) {
   const lab = downsample(rgba, crop.width, crop.height, W, H);
   const ground = cls.map((c) => (c === CLASS.ROAD || c === CLASS.TERRAIN ? 1 : 0));
   const cars = carInstances(found.all, carMask, W, H, lab, ground);
-  const { Component } = await import('../ref/engine.js');
-  const comp = new Component();
+  const { GameEngine } = await import('./engine.js');
+  const comp = new GameEngine();
   const hand = label && params.get('scene') === 'hand' ? (comp.SCENES || []).find((s) => s.id === label) : null;
   const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H });
   if (!hand) scene.sky = skyTheme(skyPixels(lab, cls));
@@ -231,7 +252,7 @@ function paintHud() {
 function throwAt(x, y) {
   const w = state.world;
   if (!w) return;
-  state.flights.push({ x0: w.W / 2, y0: w.H + 4, x, y, t: 0 });
+  state.flights.push({ x0: w.W / 2, y0: w.H + 4, x, y, t: 0, kind: state.weapon });
 }
 
 function advance() {
@@ -275,18 +296,20 @@ function draw() {
   for (const f of state.flights) {
     const k = f.t / FLIGHT_FRAMES;
     const x = Math.round(f.x0 + (f.x - f.x0) * k), y = Math.round(f.y0 + (f.y - f.y0) * k - Math.sin(k * Math.PI) * 30);
-    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
-      const i = ((y + dy) * w.W + x + dx) * 4;
-      if (i >= 0 && i < data.length) { data[i] = 30; data[i + 1] = 26; data[i + 2] = 30; }
+    for (const { dx, dy, c } of projectileCells(f.kind, k, w.frame)) {
+      const px = x + dx, py = y + dy;
+      if (px < 0 || py < 0 || px >= w.W || py >= w.H) continue;
+      const i = (py * w.W + px) * 4;
+      data[i] = c[0]; data[i + 1] = c[1]; data[i + 2] = c[2];
     }
   }
-  state.ctx.putImageData(state.image, 0, 0);
+state.ctx.putImageData(state.image, 0, 0);
   state.ctx.font = '7px monospace';
   state.ctx.textAlign = 'center';
   for (const p of state.pops) {
-    state.ctx.fillStyle = '#000';
+    state.ctx.fillStyle = PAL[ROLE.outline];
     state.ctx.fillText(p.text, p.x + 1, p.y - (40 - p.t) * 0.4 + 1);
-    state.ctx.fillStyle = p.text.startsWith('ВДРЕБЕЗГИ') ? '#ffd23a' : '#fff';
+    state.ctx.fillStyle = PAL[p.text.startsWith('ВДРЕБЕЗГИ') ? ROLE.gold : ROLE.paper];
     state.ctx.fillText(p.text, p.x, p.y - (40 - p.t) * 0.4);
   }
   const s = w.shake;

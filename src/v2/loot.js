@@ -1,11 +1,13 @@
+import { COLOURS } from './theme.js';
+
 const GRAVITY = 0.18;
 const BOUNCE = 0.45;
 const LIFE = 360;
 const BLINK_FROM = 90;
 const PICK_REACH = 9;
 export const LOOT = {
-  coin: { value: 25, throws: 0, shades: [[251, 185, 84], [249, 194, 43], [255, 246, 194]] },
-  gem: { value: 50, throws: 1, shades: [[48, 225, 185], [143, 211, 255], [214, 241, 255]] },
+  coin: { value: 25, throws: 0, shades: COLOURS.coin },
+  gem: { value: 50, throws: 1, shades: COLOURS.gem },
 };
 
 export function dropLoot(world, { x, y, ground, coins = 0, gems = 0 }, rng) {

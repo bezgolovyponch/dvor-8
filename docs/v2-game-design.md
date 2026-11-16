@@ -18,3 +18,17 @@
 4. **Chain reactions.** An exploding car damages cars and wall pieces around it; a car brought to zero catches and blows after a short fuse.
 5. **A round.** A limited stack of stones; gems refill it. The round ends when stones run out and nothing is moving, with a score card and a restart.
 6. **Damage states.** Car: whole → smoking → burning → explosion → burning wreck; wall piece: cracked → glass out → falls → rubble + dust (already in place).
+
+## Published pieces the v2 build stands on
+
+| Part | Published source | Where |
+|---|---|---|
+| Palette | Resurrect 64 (Kerrie Lake), Endesga 32, DawnBringer 32, AAP-64 (Adigun A. Polack), PICO-8 (Lexaloffle), all from lospec.com; each colour sits in a slot of the v13 8-ramp × 6-shade layout | `src/v2/palettes.js`, `src/v2/game-palette.js` |
+| Colour difference | CIEDE2000, Sharma, Wu & Dalal 2005 (checked against their test pairs) | `src/v2/ciede2000.js` |
+| UI colours | Palette roles as CSS custom properties; shades by CSS Color 5 `color-mix()` | `src/v2/theme.js`, `v2.html` |
+| Object outline | Inner boundary = mask minus its erosion, as Aseprite's Outline effect and OpenCV's morphological gradient; drawn only on object masks (cars, buildings), never on windows or ground | `src/v2/outline.js` |
+| Car detection | MediaPipe EfficientDet-Lite2 (COCO) | `src/detect.js` |
+| Scene parsing | SegFormer-b0 Cityscapes (transformers.js) | `src/scene-parse.js` |
+| Facades | Homography rectification (Heckbert 1989), procedural window grid (Müller et al. 2007) | `src/v2/facade.js` |
+| Background calm | Majority (mode) filter | `src/v2/roles.js` |
+| Renderer | v13 engine, byte-exact (`tools/engine-check.mjs` passes); v2 changes live in the `GameEngine` subclass | `src/v2/engine.js` |

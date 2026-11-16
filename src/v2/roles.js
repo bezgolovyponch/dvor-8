@@ -1,3 +1,5 @@
+import { outlineOf } from './outline.js';
+
 const MUTE_CHROMA = 0.5;
 const MUTE_LIGHT = 0.88;
 
@@ -52,7 +54,7 @@ export function simplifyCar({ px, glass, w, h, darker, outline }) {
   for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
     const k = y * w + x;
     if (px[k] < 0) continue;
-    if (!filled(x - 1, y) || !filled(x + 1, y) || !filled(x, y - 1) || !filled(x, y + 1)) out[k] = outline;
+    if (outlineOf((j) => px[j] >= 0, w, h, k)) out[k] = outline;
     else if (glass[k]) out[k] = glass[k - w] ? 1 : 3;
     else if (!filled(x, y - 2)) out[k] = lighter(body);
     else if (!filled(x, y + 3)) out[k] = darker[body];

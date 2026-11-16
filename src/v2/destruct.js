@@ -1,6 +1,8 @@
 import { CLASS } from './classes.js';
 import { EMPTY } from './sprites.js';
 import { hitFacade, stepRuin, drawRuin, roomColour } from './ruin.js';
+import { COLOURS } from './theme.js';
+import { skeleton } from './backdrop.js';
 
 export const WEAPONS = {
   stone: { radius: 2.6, push: 1.8, shake: 3, damage: 1 },
@@ -24,20 +26,20 @@ const CHAIN_DAMAGE = 2;
 const CHAIN_WALL_SHARE = 0.5;
 const FUSE_FRAMES = 18;
 const POINTS = { pixel: 10, glass: 5, wall: 3, wreck: 500 };
-const CHAR = [[18, 16, 20], [36, 34, 40], [56, 54, 60], [82, 78, 82]];
+const CHAR = COLOURS.char;
 const HULK_EDGE = -2;
 const HULK_GLASS = -2;
 const hulkShade = (c) => -3 - Math.min(2, Math.floor((0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 70));
-const FIRE = [[255, 241, 140], [255, 178, 56], [236, 92, 40], [168, 40, 44]];
-const SMOKE = [[92, 88, 96], [64, 60, 70]];
-const GLASS = [[220, 244, 255], [150, 206, 236]];
+const FIRE = COLOURS.fire;
+const SMOKE = COLOURS.smoke;
+const GLASS = COLOURS.glass;
 
 export const hitPointsFor = (pixels) => Math.max(MIN_HP, Math.min(MAX_HP, Math.round(pixels / PIXELS_PER_HIT_POINT) + 2));
 
-export function createWorld({ W, H, background, palette, darker, cls, sprites, ruin = null }) {
+export function createWorld({ W, H, background, palette, darker, cls, sprites, ruin = null, behind = null }) {
   for (const s of sprites) { s.hp0 = hitPointsFor(s.n0); s.hp = s.hp0; }
   return {
-    W, H, bg: background, palette, darker, cls, sprites,
+    W, H, bg: background, palette, darker, cls, sprites, behind,
     rubble: new Int32Array(W * H).fill(-1), interior: new Uint8Array(W * H),
     ruin, roomOf: new Map(), particles: [], blasts: [], events: [], loot: [], score: 0, shake: 0, popups: [], frame: 0, wrecked: 0,
   };
@@ -299,7 +301,7 @@ export function compose(world, out) {
       const v = s.px[y * s.w + x];
       if (v === EMPTY) continue;
       const i = (s.y0 + y) * W + s.x0 + x;
-      if (s.flash > 0 && s.flash % 2 === 1) { put(i, 255, 255, 255); continue; }
+      if (s.flash > 0 && s.flash % 2 === 1) { put(i, ...COLOURS.flash); continue; }
       const c = v <= -2 ? CHAR[-v - 2] : palette[v];
       put(i, c[0], c[1], c[2]);
     }
@@ -345,15 +347,18 @@ function drawBlast(b, put, W, H) {
     const x = Math.round(b.x + dx), y = Math.round(b.y + dy);
     if (x < 0 || y < 0 || x >= W || y >= H) continue;
     const ring = d / r;
-    const c = k < 0.15 ? [255, 255, 236] : FIRE[Math.min(FIRE.length - 1, Math.floor(ring * 2 + k * 2.2))];
+    const c = k < 0.15 ? COLOURS.flash : FIRE[Math.min(FIRE.length - 1, Math.floor(ring * 2 + k * 2.2))];
     put(y * W + x, c[0], c[1], c[2]);
   }
 }
 
-const INTERIOR = [[28, 24, 36], [40, 34, 48]];
+const INTERIOR = COLOURS.interior;
 const interiorShade = (i, W) => INTERIOR[(((i / W) | 0) >> 1) % 2];
 
 function roomAt(world, i) {
-  const piece = world.ruin && world.ruin.chunkOf[i] >= 0 ? world.ruin.pieces[world.ruin.chunkOf[i]] : null;
-  return piece ? roomColour(piece, i % world.W, (i / world.W) | 0) : interiorShade(i, world.W);
+  const ruin = world.ruin, j = ruin ? ruin.chunkOf[i] : -1, piece = j >= 0 ? ruin.pieces[j] : null;
+  const x = i % world.W, y = (i / world.W) | 0;
+  if (piece && world.interior[i] === 2 && !piece.gone) return roomColour(piece, x, y);
+  if (piece) { const f = skeleton(piece, x, y); if (f >= 0) return COLOURS.slab[f]; }
+  return world.behind ? world.palette[world.behind[i]] : interiorShade(i, world.W);
 }

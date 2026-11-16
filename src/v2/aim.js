@@ -1,6 +1,8 @@
+import { outlinePixels } from './outline.js';
+import { COLOURS } from './theme.js';
 import { EMPTY } from './sprites.js';
 
-export const AIM_COLOUR = [240, 79, 120];
+export const AIM_COLOUR = COLOURS.aim;
 
 function carAt(world, x, y) {
   return world.sprites.find((s) => {
@@ -19,14 +21,7 @@ export function targetAt(world, x, y) {
   return { bid: ruin.pieces[ruin.chunkOf[k]].bid };
 }
 
-function edgesOf(inside, W, H, cells) {
-  const out = [];
-  for (const k of cells) {
-    const x = k % W, y = (k / W) | 0;
-    if (x === 0 || y === 0 || x === W - 1 || y === H - 1 || !inside(k - 1) || !inside(k + 1) || !inside(k - W) || !inside(k + W)) out.push(k);
-  }
-  return out;
-}
+const edgesOf = (inside, W, H, cells) => outlinePixels(inside, W, H, cells);
 
 export function silhouette(world, target) {
   const { W, H } = world;
