@@ -1,14 +1,7 @@
-import { rgbToOklab, oklabToRgb } from './oklab.js';
 import { mulberry32 } from '../rng.js';
 
-export const SCENE_COLOURS = 14;
-export const ACCENT_COLOURS = 4;
 const KUWAHARA_RADIUS = 3;
-const PALETTE_SAMPLES = 20000;
 const KMEANS_ROUNDS = 12;
-const ORPHAN_PASSES = 2;
-export const SATURATION = 1.25;
-export const CONTRAST = 1.1;
 
 function integral(src, w, h) {
   const out = new Float64Array((w + 1) * (h + 1));
@@ -73,88 +66,4 @@ export function kmeans(points, k, seed = 1) {
     cs = cs.map((c, j) => (sum[j][3] ? [sum[j][0] / sum[j][3], sum[j][1] / sum[j][3], sum[j][2] / sum[j][3]] : c));
   }
   return cs;
-}
-
-function sampleLab(rgba, n, keep, limit) {
-  const chosen = [];
-  for (let i = 0; i < n; i += 1) if (!keep || keep(i)) chosen.push(i);
-  const stride = Math.max(1, Math.floor(chosen.length / limit));
-  const out = [];
-  for (let j = 0; j < chosen.length; j += stride) {
-    const i = chosen[j];
-    out.push(rgbToOklab(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]));
-  }
-  return out;
-}
-
-export function grade(lab) {
-  const mean = lab.reduce((t, c) => t + c[0], 0) / (lab.length || 1);
-  return lab.map(([L, a, b]) => [Math.min(0.98, Math.max(0.04, mean + (L - mean) * CONTRAST)), a * SATURATION, b * SATURATION]);
-}
-
-export function buildPalette(rgba, n, accentMask = null) {
-  const scene = kmeans(sampleLab(rgba, n, null, PALETTE_SAMPLES), SCENE_COLOURS);
-  const accents = accentMask ? kmeans(sampleLab(rgba, n, (i) => accentMask[i], PALETTE_SAMPLES / 4), ACCENT_COLOURS, 2) : [];
-  const lab = grade([...scene, ...accents]).sort((a, b) => a[0] - b[0]);
-  return { lab, rgb: lab.map(([L, a, b]) => oklabToRgb(L, a, b)) };
-}
-
-export function nearestIndex(rgba, n, paletteLab) {
-  const idx = new Uint8Array(n);
-  const cache = new Map();
-  for (let i = 0; i < n; i += 1) {
-    const key = ((rgba[i * 4] >> 2) << 12) | ((rgba[i * 4 + 1] >> 2) << 6) | (rgba[i * 4 + 2] >> 2);
-    let v = cache.get(key);
-    if (v === undefined) {
-      const p = rgbToOklab(rgba[i * 4], rgba[i * 4 + 1], rgba[i * 4 + 2]);
-      let bd = Infinity; v = 0;
-      paletteLab.forEach((c, j) => { const d = d2(p, c); if (d < bd) { bd = d; v = j; } });
-      cache.set(key, v);
-    }
-    idx[i] = v;
-  }
-  return idx;
-}
-
-export function modeDownsample(idx, sw, sh, W, H, colours) {
-  const out = new Uint8Array(W * H);
-  const count = new Uint16Array(colours);
-  for (let y = 0; y < H; y += 1) {
-    const y0 = Math.floor((y * sh) / H), y1 = Math.max(y0 + 1, Math.floor(((y + 1) * sh) / H));
-    for (let x = 0; x < W; x += 1) {
-      const x0 = Math.floor((x * sw) / W), x1 = Math.max(x0 + 1, Math.floor(((x + 1) * sw) / W));
-      count.fill(0);
-      for (let yy = y0; yy < y1; yy += 1) for (let xx = x0; xx < x1; xx += 1) count[idx[yy * sw + xx]] += 1;
-      const centre = idx[((y0 + y1) >> 1) * sw + ((x0 + x1) >> 1)];
-      let best = centre;
-      for (let c = 0; c < colours; c += 1) if (count[c] > count[best]) best = c;
-      out[y * W + x] = best;
-    }
-  }
-  return out;
-}
-
-export function removeOrphans(idx, W, H, passes = ORPHAN_PASSES) {
-  const counts = new Map();
-  for (let p = 0; p < passes; p += 1) {
-    const src = idx.slice();
-    for (let y = 1; y < H - 1; y += 1) for (let x = 1; x < W - 1; x += 1) {
-      const i = y * W + x, v = src[i];
-      if (src[i - 1] === v || src[i + 1] === v || src[i - W] === v || src[i + W] === v) continue;
-      counts.clear();
-      for (const j of [i - 1, i + 1, i - W, i + W, i - W - 1, i - W + 1, i + W - 1, i + W + 1]) counts.set(src[j], (counts.get(src[j]) || 0) + 1);
-      let best = v, bc = 0;
-      for (const [u, c] of counts) if (c > bc) { bc = c; best = u; }
-      idx[i] = best;
-    }
-  }
-  return idx;
-}
-
-export function convert(rgba, sw, sh, W, H, accentMask = null) {
-  const flat = kuwahara(rgba, sw, sh);
-  const palette = buildPalette(flat, sw * sh, accentMask);
-  const fine = nearestIndex(flat, sw * sh, palette.lab);
-  const idx = removeOrphans(modeDownsample(fine, sw, sh, W, H, palette.lab.length), W, H);
-  return { idx, palette };
 }

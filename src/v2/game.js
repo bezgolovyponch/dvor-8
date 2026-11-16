@@ -6,9 +6,10 @@ import { CLASS, classMap, downsample } from './classes.js';
 import { carInstances } from './instances.js';
 import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
 import { createRuin } from './ruin.js';
-import { convert } from './convert.js';
+import { kuwahara } from './convert.js';
+import { celShade } from './cel.js';
+import { carSprite } from './carsprite.js';
 import { tilePieces } from './pieces.js';
-import { cutSprites } from './sprites.js';
 
 const DETECT_LONG = 1600;
 const FLIGHT_FRAMES = 16;
@@ -48,13 +49,18 @@ function cropTo916(img, long) {
   return c;
 }
 
-function upsampleMask(mask, W, H, sw, sh) {
-  const out = new Uint8Array(sw * sh);
-  for (let y = 0; y < sh; y += 1) for (let x = 0; x < sw; x += 1) {
-    out[y * sw + x] = mask[Math.floor((y * H) / sh) * W + Math.floor((x * W) / sw)] ? 1 : 0;
-  }
-  return out;
+const PAINT_SHARE = 0.5;
+
+export function bodyOf(id, inst, lab) {
+  const px = [];
+  for (let i = 0; i < inst.length; i += 1) if (inst[i] === id) px.push([lab[i * 3], lab[i * 3 + 1], lab[i * 3 + 2]]);
+  if (!px.length) return [150, 150, 155];
+  px.sort((p, q) => q[0] - p[0]);
+  const paint = px.slice(0, Math.max(1, Math.round(px.length * PAINT_SHARE)));
+  const med = (k) => paint.map((p) => p[k]).sort((a, b) => a - b)[paint.length >> 1];
+  return oklabToRgb(med(0), med(1), med(2));
 }
+
 
 export async function build(img) {
   const t0 = performance.now();
@@ -76,15 +82,19 @@ export async function build(img) {
   src.width = sw; src.height = sh;
   src.getContext('2d').drawImage(crop, 0, 0, sw, sh);
   const rgba = src.getContext('2d').getImageData(0, 0, sw, sh).data;
-  const carsAt = cars.inst.map((v) => (v >= 0 ? 1 : 0));
-  const { idx, palette } = convert(rgba, sw, sh, W, H, upsampleMask(carsAt, W, H, sw, sh));
-  const colours = palette.rgb.map((c) => c.slice());
-  const darker = colours.map((_, i) => Math.max(0, i - 1));
-  const cut = cutSprites({ idx: Uint16Array.from(idx), palette: colours, cls, inst: cars.inst, list: cars.list, W, H });
-  const lightness = palette.lab.map((c) => c[0]);
-  const { chunks, chunkOf } = tilePieces({ cls, idx, lightness, W, H });
-  const ruin = createRuin({ W, chunks, chunkOf, crackColour: 0 });
-  state.world = createWorld({ W, H, background: cut.background, palette: colours, darker, cls, sprites: cut.sprites, ruin });
+  const flatLab = downsample(kuwahara(rgba, sw, sh), sw, sh, W, H);
+  const backdrop = cls.map((c) => (c === CLASS.CAR ? CLASS.ROAD : c));
+  const cel = celShade({ lab: flatLab, cls: backdrop, W, H });
+  const colours = cel.palette;
+  const darker = new Array(colours.length);
+  for (const r of cel.regionRamp) { darker[r.first] = r.ink; darker[r.first + 1] = r.first; darker[r.first + 2] = r.first + 1; darker[r.ink] = r.ink; }
+  const sprites = cars.list.map((c) => carSprite({ id: c.id, x0: c.x0, y0: c.y0, w: c.x1 - c.x0 + 1, h: c.y1 - c.y0 + 1, body: bodyOf(c.id, cars.inst, flatLab), palette: colours, darker }));
+  const lightness = colours.map(([r, g, b]) => (0.299 * r + 0.587 * g + 0.114 * b) / 255);
+  const { chunks, chunkOf } = tilePieces({ cls: backdrop, idx: cel.idx, lightness, W, H });
+  const ruin = createRuin({ W, chunks, chunkOf, crackColour: darker[cel.idx[0]] ?? 0 });
+  state.world = createWorld({ W, H, background: cel.idx, palette: colours, darker, cls: backdrop, sprites, ruin });
+  const cut = { sprites };
+  const palette = { rgb: colours };
   state.cls = cls;
   state.photo = labToRgba(lab, W * H);
   window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask) });
