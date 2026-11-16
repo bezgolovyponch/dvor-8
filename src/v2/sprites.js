@@ -47,8 +47,9 @@ export function cutSprites({ idx, palette, cls, inst, list, W, H }) {
     for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
       const k = y * w + x;
       if (px[k] === EMPTY) continue;
-      const edge = x === 0 || y === 0 || x === w - 1 || y === h - 1
-        || px[k - 1] === EMPTY || px[k + 1] === EMPTY || px[k - w] === EMPTY || px[k + w] === EMPTY;
+      const gx = c.x0 + x, gy = c.y0 + y;
+      const open = (nx, ny) => nx < 0 || ny < 0 || nx >= W || ny >= H || inst[ny * W + nx] < 0;
+      const edge = open(gx - 1, gy) || open(gx + 1, gy) || open(gx, gy - 1) || open(gx, gy + 1);
       if (edge) { px[k] = outline; glass[k] = 0; }
     }
     let n = 0;
