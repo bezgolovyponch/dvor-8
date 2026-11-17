@@ -299,7 +299,8 @@ export async function build(img, label = null) {
   const comp = LOOK.has('palette') ? new GameEngine() : LOOK.has('snap') ? new V13Snap(Object.fromEntries(['grey', 'match'].map((k) => [k, params.get(k)]).filter(([, v]) => v).concat(params.get('cool') ? [['coolGreys', true]] : []))) : new Component();
   const hand = label && params.get('scene') === 'hand' ? (comp.SCENES || []).find((s) => s.id === label) : null;
   const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H, L: lab.filter((_, i) => i % 3 === 0) });
-  const isBuilding = (k) => cls[k] === CLASS.BUILDING;
+  const facadeMask = parse && parse.masks && parse.masks.building;
+  const isBuilding = (k) => cls[k] === CLASS.BUILDING && (!facadeMask || facadeMask[k] === 1);
   const colour = LOOK.has('facades') ? correctedColour(crop, isBuilding, W, H) : null;
   if (colour && !hand) scene.buildings = scene.buildings.flatMap((b) => splitHouses(b, colour, isBuilding, (r, g, b2) => comp.lab(r, g, b2), W, H)).slice(0, MAX_BUILDINGS).map((b, i) => ({ ...b, id: i + 1 }));
   $('note').textContent = 'рисую…';
@@ -315,7 +316,7 @@ export async function build(img, label = null) {
     }
     if (rebuilt.size) outlineHouses(comp, new Set(rebuilt.keys()), W, H);
   }
-  state.rebuilt = [...rebuilt].map(([id, r]) => ({ id, wall: r.wall, bay: r.bay, floor: r.floor, panes: r.panes, evidence: +r.evidence.toFixed(3), share: +r.share.toFixed(2) }));
+  state.rebuilt = [...rebuilt].map(([id, r]) => ({ id, wall: r.wall, bay: r.bay, floor: r.floor, panes: r.panes, fit: +r.fit.toFixed(3), evidence: +r.evidence.toFixed(3), share: +r.share.toFixed(2) }));
   state.world = fromEngine(comp, cls, scene, lab, rebuilt);
   state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);

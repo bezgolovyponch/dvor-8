@@ -19,6 +19,7 @@ const BAND_ROW = 0.3;
 const SHOP_FROM = 0.6;
 const MIN_REGION = 20;
 export const V13_TILE = { bay: 5, floor: 4 };
+export const V13_REVEAL = 0.4;
 
 const median = (a) => { const s = Float64Array.from(a).sort(); return s.length ? s[s.length >> 1] : 0; };
 const quantile = (a, q) => { const s = Float64Array.from(a).sort(); return s[Math.min(s.length - 1, Math.max(0, Math.floor(q * (s.length - 1))))]; };
@@ -110,6 +111,14 @@ function nearestIndex(comp, rgb, from, to) {
     if (d < bd) { bd = d; best = i; }
   }
   return best;
+}
+
+export function standsFree(comp, id, W) {
+  const S = comp.S, top = new Map();
+  for (let k = 0; k < S.ID.length; k += 1) if (S.ID[k] === id && !top.has(k % W)) top.set(k % W, (k / W) | 0);
+  let open = 0;
+  for (const [x, y] of top) { const above = (y - 1) * W + x; if (y === 0 || comp.sky[above] || (S.ID[above] >= 1 && S.ID[above] < 10)) open += 1; }
+  return top.size > 0 && open / top.size >= V13_REVEAL;
 }
 
 export function v13PaneShare(comp, region) {
@@ -209,7 +218,7 @@ function drawArt({ comp, lbl, MW, MH, EU, EV, photo, colour, rects, bay, floor }
 export async function rebuildFacade({ comp, building, crop, colour, isBuilding, parse, W, H }) {
   const S = comp.S, id = building.id, region = [];
   for (let k = 0; k < W * H; k += 1) if (S.ID[k] === id && S.base[k] !== OUTLINE && isBuilding(k)) region.push(k);
-  if (region.length < MIN_REGION || v13PaneShare(comp, region) >= PANE_SHARE[0]) return null;
+  if (region.length < MIN_REGION || v13PaneShare(comp, region) >= PANE_SHARE[0] || !standsFree(comp, id, W)) return null;
   const toUnit = homography(building.quad, UNIT), toFrame = homography(UNIT, building.quad);
   const uv = region.map((k) => toUnit((k % W) + 0.5, ((k / W) | 0) + 0.5));
   const u0 = Math.min(0, Math.max(EXTENT_LIMIT.u[0], quantile(uv.map((p) => p[0]), EXTENT_CLIP[0]))), u1 = Math.max(1, Math.min(EXTENT_LIMIT.u[1], quantile(uv.map((p) => p[0]), EXTENT_CLIP[1])));
@@ -249,7 +258,7 @@ export async function rebuildFacade({ comp, building, crop, colour, isBuilding, 
     const p = paneAt(a, b);
     if (p >= 0) (wins.get(p) || wins.set(p, []).get(p)).push(k);
   });
-  return { wins: [...wins.values()].filter((w) => w.length >= 2), wall, bay: lattice.bay, floor: lattice.floor, panes: panes.length, evidence, share: region.length ? region.filter((k) => S.base[k] < GLASS_RAMP[1]).length / region.length : 0 };
+  return { wins: [...wins.values()].filter((w) => w.length >= 2), wall, bay: lattice.bay, floor: lattice.floor, fit: lattice.score, panes: panes.length, evidence, share: region.length ? region.filter((k) => S.base[k] < GLASS_RAMP[1]).length / region.length : 0 };
 }
 
 export function outlineHouses(comp, ids, W, H) {

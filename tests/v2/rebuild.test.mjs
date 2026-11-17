@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { homography, inPoly, splitHouses, twoTones, v13PaneShare } from '../../src/v2/rebuild.js';
+import { homography, inPoly, splitHouses, standsFree, twoTones, v13PaneShare } from '../../src/v2/rebuild.js';
 
 test('the homography maps the unit square onto the quad corners', () => {
   const quad = [[10, 20], [90, 40], [95, 200], [5, 180]], f = homography([[0, 0], [1, 0], [1, 1], [0, 1]], quad);
@@ -31,4 +31,12 @@ test('two tones split lit and shaded blocks at the widest gap', () => {
   const split = twoTones([70, 72, 71, 40, 42]);
   assert.equal(split.cut, 42);
   assert.ok(split.gap > 25);
+});
+
+test('a facade stands free when its top meets the sky, and not when trees cover it', () => {
+  const W = 4, ID = new Uint8Array(4 * 3), sky = new Uint8Array(12);
+  for (let x = 0; x < 4; x += 1) { ID[W + x] = 1; ID[2 * W + x] = 1; }
+  sky.fill(1, 0, 4);
+  assert.ok(standsFree({ S: { ID }, sky }, 1, W));
+  assert.ok(!standsFree({ S: { ID }, sky: new Uint8Array(12) }, 1, W));
 });
