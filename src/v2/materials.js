@@ -1,3 +1,7 @@
+import { CLASS } from './classes.js';
+
+const GROUND = new Set([CLASS.BUILDING, CLASS.GREEN, CLASS.TERRAIN, CLASS.ROAD, CLASS.CAR]);
+const FOLIAGE = new Set([CLASS.GREEN, CLASS.TERRAIN]);
 export const FOLIAGE_HUE_MIN = Math.PI / 2;
 export const FOLIAGE_HUE_MAX = Math.PI;
 export const FOLIAGE_CHROMA_MIN = 4;
@@ -28,7 +32,7 @@ export function applyMaterials({ base, ID, sky, seg, R, G, B, q, lab, rampLs, W,
   for (let k = 0; k < N; k += 1) {
     if (ID[k] !== 0) continue;
     const s = seg[k];
-    if ((s === 2 || s === 3 || s === 4 || s === 1 || s === 5) && sky[k] === 1) {
+    if (GROUND.has(s) && sky[k] === 1) {
       sky[k] = 0;
       base[k] = q[k];
       changed[k] = 1;
@@ -37,7 +41,7 @@ export function applyMaterials({ base, ID, sky, seg, R, G, B, q, lab, rampLs, W,
   for (let k = 0; k < N; k += 1) {
     if (ID[k] !== 0) continue;
     const s = seg[k];
-    if ((s === 2 || s === 3) && isFoliageHue(lab(R[k], G[k], B[k]))) {
+    if (FOLIAGE.has(s) && isFoliageHue(lab(R[k], G[k], B[k]))) {
       base[k] = 6 + greenShade(lab(R[k], G[k], B[k])[0], rampLs);
       changed[k] = 1;
     }
