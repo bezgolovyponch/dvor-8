@@ -69,6 +69,8 @@ test('splitHouses with paletteOf merges parts mapping to same palette index', ()
   assert.equal(parts.length, 1);
   assert.equal(parts[0].quad[0][0], 0);
   assert.equal(parts[0].quad[1][0], 100);
+  assert.equal(parts[0].quad[0][0], 0);
+  assert.equal(parts[0].quad[1][0], 100);
 });
 
 test('splitHouses with paletteOf still splits when parts map to different palette indices', () => {

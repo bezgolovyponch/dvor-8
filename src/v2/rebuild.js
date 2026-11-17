@@ -87,22 +87,17 @@ export function splitHouses(building, colour, isBuilding, lab, W, H, paletteOf =
   const bottomAt = (x) => Math.round(along(q[3], q[2], x)), topAt = (x) => Math.round(along(q[0], q[1], x));
   const upper = upperOf(building.clip || [[xa, topAt(xa)], [xb, topAt(xb)], q[2], q[3]]);
   const roofAt = (x) => { let best = upper[0]; for (const p of upper) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p; return best[1]; };
-  const parts = edges.slice(0, -1).map((a, i) => {
-    const b = edges[i + 1];
+  const shape = ({ a, b }) => {
     const clipTop = [[a, roofAt(a)], ...upper.filter((p) => p[0] > a && p[0] < b), [b, roofAt(b)]];
-    return { a, b, quad: [[a, topAt(a)], [b, topAt(b)], [b, bottomAt(b)], [a, bottomAt(a)]], clip: [...clipTop, [b, bottomAt(b)], [a, bottomAt(a)]] };
-  });
-  if (!paletteOf) {
-    return parts.map(({ a, b, quad, clip }) => ({ ...building, quad, clip }));
-  }
-  const getIndex = (part) => {
-    const cols = medians.slice(xs.indexOf(part.a), xs.indexOf(part.b) + 1);
-    if (!cols.length) return paletteOf([128, 128, 128]);
-    const medRgb = [0, 1, 2].map((c) => median(cols.map((m) => m[c])));
-    return paletteOf(medRgb);
+    return { ...building, quad: [[a, topAt(a)], [b, topAt(b)], [b, bottomAt(b)], [a, bottomAt(a)]], clip: [...clipTop, [b, bottomAt(b)], [a, bottomAt(a)]] };
   };
-  const merged = mergeSameColour(parts, getIndex);
-  return merged.map(({ a, b, quad, clip }) => ({ ...building, quad, clip }));
+  const ranges = edges.slice(0, -1).map((a, i) => ({ a, b: edges[i + 1] }));
+  if (!paletteOf) return ranges.map(shape);
+  const wallOf = ({ a, b }) => {
+    const cols = medians.filter((_, i) => xs[i] >= a && xs[i] < b);
+    return cols.length ? paletteOf([0, 1, 2].map((c) => median(cols.map((m) => m[c])))) : -1;
+  };
+  return mergeSameColour(ranges, wallOf).map(shape);
 }
 
 export function inPoly(P, x, y) {
