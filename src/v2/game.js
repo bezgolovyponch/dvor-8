@@ -315,7 +315,7 @@ export async function build(img, label = null) {
     }
     if (rebuilt.size) outlineHouses(comp, new Set(rebuilt.keys()), W, H);
   }
-  state.rebuilt = [...rebuilt].map(([id, r]) => ({ id, wall: r.wall, bay: r.bay, floor: r.floor, panes: r.panes }));
+  state.rebuilt = [...rebuilt].map(([id, r]) => ({ id, wall: r.wall, bay: r.bay, floor: r.floor, panes: r.panes, evidence: +r.evidence.toFixed(3), share: +r.share.toFixed(2) }));
   state.world = fromEngine(comp, cls, scene, lab, rebuilt);
   state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);

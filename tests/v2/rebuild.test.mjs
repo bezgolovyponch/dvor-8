@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { homography, inPoly, splitHouses, v13PaneShare } from '../../src/v2/rebuild.js';
+import { homography, inPoly, splitHouses, twoTones, v13PaneShare } from '../../src/v2/rebuild.js';
 
 test('the homography maps the unit square onto the quad corners', () => {
   const quad = [[10, 20], [90, 40], [95, 200], [5, 180]], f = homography([[0, 0], [1, 0], [1, 1], [0, 1]], quad);
@@ -25,4 +25,10 @@ test('a wall of two differently coloured houses is cut where the colour changes'
 test('the v13 pane share counts glass-ramp pixels', () => {
   const comp = { S: { base: Uint8Array.from([1, 2, 20, 20]) } };
   assert.equal(v13PaneShare(comp, [0, 1, 2, 3]), 0.5);
+});
+
+test('two tones split lit and shaded blocks at the widest gap', () => {
+  const split = twoTones([70, 72, 71, 40, 42]);
+  assert.equal(split.cut, 42);
+  assert.ok(split.gap > 25);
 });

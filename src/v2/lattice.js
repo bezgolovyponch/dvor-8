@@ -1,5 +1,6 @@
 export const FACADE_LABEL = { unknown: 0, background: 1, facade: 2, window: 3, door: 4, cornice: 5, sill: 6, balcony: 7, blind: 8, molding: 9, deco: 10, pillar: 11, shop: 12 };
 export const PANE_SHARE = [0.25, 0.4];
+export const TOWER_PANE_SHARE = 0.32;
 export const OPENING = 0.6;
 const L = FACADE_LABEL;
 const PEAKS_PER_PROFILE = 4;
@@ -10,6 +11,11 @@ const TEMPLATE_CUT = 0.5;
 const CELL_BACKGROUND = 0.5;
 const SHOP_ROW = 0.3;
 const SHOP_FROM = 0.6;
+const EDGE_KEEP = 0.5;
+const NEAR_BEST = 0.9;
+export const STOREY_M = [2.75, 3.5];
+export const BAY_M = [1.25, 3.75];
+const BAY_PER_FLOOR = [BAY_M[0] / STOREY_M[1], BAY_M[1] / STOREY_M[0]];
 
 export function autocorrPeaks(profile, lo, hi, k = PEAKS_PER_PROFILE) {
   const n = profile.length;
@@ -71,14 +77,16 @@ export function tileGrid(lbl, w, h, px, py, stop = shopStart(lbl, w, h)) {
   const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
   const ww = Math.min(x1 - x0, OPENING * px), wh = Math.min(y1 - y0, OPENING * py);
   const area = (ww * wh) / (px * py);
-  const k = Math.sqrt(Math.min(Math.max(area, PANE_SHARE[0]), PANE_SHARE[1]) / Math.max(area, 1e-6));
+  const want = area < PANE_SHARE[0] ? TOWER_PANE_SHARE : Math.min(area, PANE_SHARE[1]);
+  const k = Math.sqrt(want / Math.max(area, 1e-6));
   const hw = Math.min(OPENING * px, ww * k) / 2, hh = Math.min(OPENING * py, wh * k) / 2;
   const rx0 = Math.round(mx - hw), rx1 = Math.round(mx + hw), ry0 = Math.round(my - hh), ry1 = Math.round(my + hh);
   if (rx1 - rx0 < 1 || ry1 - ry0 < 1) return null;
   const out = [];
   for (let cy = oy - py; cy < h; cy += py) for (let cx = ox - px; cx < w; cx += px) {
-    const a0 = cx + rx0, a1 = cx + rx1, b0 = cy + ry0, b1 = cy + ry1;
-    if (a0 < 0 || b0 < 0 || a1 > w || b1 > h || b1 > stop) continue;
+    const full = (rx1 - rx0) * (ry1 - ry0);
+    const a0 = Math.max(0, cx + rx0), a1 = Math.min(w, cx + rx1), b0 = Math.max(0, cy + ry0), b1 = Math.min(h, cy + ry1, stop);
+    if (a1 <= a0 || b1 <= b0 || (a1 - a0) * (b1 - b0) < EDGE_KEEP * full) continue;
     let bg = 0;
     for (let y = b0; y < b1; y += 1) for (let x = a0; x < a1; x += 1) if (lbl[y * w + x] === L.background) bg += 1;
     if (bg / ((a1 - a0) * (b1 - b0)) > CELL_BACKGROUND) continue;
@@ -103,7 +111,7 @@ export function gridScore(rects, lbl, gray, w, h) {
   return (inter / Math.max(1, uni) + corr) / 2;
 }
 
-export function chooseLattice(lbl, gray, w, h) {
+export function chooseLattice(lbl, gray, w, h, minBay = MIN_BAY, minFloor = MIN_FLOOR) {
   const pane = Float64Array.from(lbl, (v) => (isPane(v) ? 1 : 0));
   const colG = new Float64Array(w - 1), rowG = new Float64Array(h - 1), colM = new Float64Array(w), rowM = new Float64Array(h);
   for (let y = 0; y < h; y += 1) for (let x = 0; x < w; x += 1) {
@@ -112,15 +120,32 @@ export function chooseLattice(lbl, gray, w, h) {
     if (y < h - 1) rowG[y] += Math.abs(gray[i + w] - gray[i]);
     colM[x] += pane[i]; rowM[y] += pane[i];
   }
-  const bays = new Set([...autocorrPeaks(Array.from(colG), MIN_BAY, w >> 1), ...autocorrPeaks(Array.from(colM), MIN_BAY, w >> 1)]);
-  const floors = new Set([...autocorrPeaks(Array.from(rowG), MIN_FLOOR, h >> 1), ...autocorrPeaks(Array.from(rowM), MIN_FLOOR, h >> 1)]);
+  const bays = new Set([...autocorrPeaks(Array.from(colG), minBay, w >> 1), ...autocorrPeaks(Array.from(colM), minBay, w >> 1)]);
+  const floors = new Set([...autocorrPeaks(Array.from(rowG), minFloor, h >> 1), ...autocorrPeaks(Array.from(rowM), minFloor, h >> 1)]);
   const stop = shopStart(lbl, w, h);
-  let best = null, bestScore = -1;
+  const fits = [];
   for (const px of bays) for (const py of floors) {
+    if (px / py < BAY_PER_FLOOR[0] || px / py > BAY_PER_FLOOR[1]) continue;
     const rects = tileGrid(lbl, w, h, px, py, stop);
     if (!rects || !rects.length) continue;
-    const score = gridScore(rects, lbl, gray, w, h);
-    if (score > bestScore) { bestScore = score; best = { rects, bay: px, floor: py, score }; }
+    fits.push({ rects, bay: px, floor: py, score: gridScore(rects, lbl, gray, w, h), share: paneShare(rects, lbl, w, h) });
   }
-  return best;
+  if (!fits.length) return null;
+  const top = Math.max(...fits.map((f) => f.score));
+  const off = (f) => Math.max(0, PANE_SHARE[0] - f.share, f.share - PANE_SHARE[1]);
+  return fits.filter((f) => f.score >= NEAR_BEST * top).sort((a, b) => off(a) - off(b) || b.score - a.score)[0];
+}
+
+export function paneShare(rects, lbl, w, h) {
+  let valid = 0, pane = 0;
+  const D = new Uint8Array(w * h);
+  for (const [a0, b0, a1, b1] of rects) for (let y = b0; y < b1; y += 1) D.fill(1, y * w + a0, y * w + a1);
+  for (let i = 0; i < w * h; i += 1) { if (lbl[i] === L.background) continue; valid += 1; pane += D[i]; }
+  return pane / Math.max(1, valid);
+}
+
+export function paneEvidence(lbl) {
+  let pane = 0, valid = 0;
+  for (const v of lbl) { if (v === L.background) continue; valid += 1; if (isPane(v)) pane += 1; }
+  return pane / Math.max(1, valid);
 }

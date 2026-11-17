@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FACADE_LABEL, OPENING, PANE_SHARE, autocorrPeaks, chooseLattice, shopStart, tileGrid } from '../../src/v2/lattice.js';
+import { BAY_M, FACADE_LABEL, OPENING, PANE_SHARE, STOREY_M, autocorrPeaks, chooseLattice, paneEvidence, shopStart, tileGrid } from '../../src/v2/lattice.js';
 
 const facade = (w, h, bay, floor, win) => {
   const lbl = new Uint8Array(w * h).fill(FACADE_LABEL.facade), gray = new Float64Array(w * h).fill(180);
@@ -37,4 +37,15 @@ test('a shop band in the lower part of the facade stops the window grid', () => 
   for (let y = 80; y < 100; y += 1) lbl.fill(FACADE_LABEL.shop, y * 100, (y + 1) * 100);
   assert.equal(shopStart(lbl, 100, 100), 80);
   assert.ok(tileGrid(lbl, 100, 100, 20, 25).every(([, , , b1]) => b1 <= 80));
+});
+
+test('window evidence is the pane share of the non-background labels', () => {
+  const lbl = Uint8Array.from([FACADE_LABEL.window, FACADE_LABEL.facade, FACADE_LABEL.facade, FACADE_LABEL.background]);
+  assert.equal(paneEvidence(lbl), 1 / 3);
+});
+
+test('a bay much wider than a storey is never chosen', () => {
+  const { lbl, gray } = facade(240, 60, 120, 30, [40, 80, 8, 22]);
+  const best = chooseLattice(lbl, gray, 240, 60);
+  assert.ok(!best || best.bay / best.floor <= BAY_M[1] / STOREY_M[0]);
 });

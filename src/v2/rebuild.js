@@ -1,4 +1,4 @@
-import { FACADE_LABEL, PANE_SHARE, chooseLattice } from './lattice.js';
+import { FACADE_LABEL, PANE_SHARE, chooseLattice, paneEvidence } from './lattice.js';
 import { pelt } from './pelt.js';
 import { msrcr, stretchHsv } from './retinex.js';
 
@@ -18,6 +18,7 @@ const HOUSE_PENALTY = 3;
 const BAND_ROW = 0.3;
 const SHOP_FROM = 0.6;
 const MIN_REGION = 20;
+export const V13_TILE = { bay: 5, floor: 4 };
 
 const median = (a) => { const s = Float64Array.from(a).sort(); return s.length ? s[s.length >> 1] : 0; };
 const quantile = (a, q) => { const s = Float64Array.from(a).sort(); return s[Math.min(s.length - 1, Math.max(0, Math.floor(q * (s.length - 1))))]; };
@@ -141,7 +142,19 @@ function rectify(src, srcW, toImage, MW, MH, smooth) {
   return out;
 }
 
-function drawArt({ comp, lbl, MW, MH, EU, EV, photo, colour, rects }) {
+export function twoTones(values) {
+  if (values.length < 2) return null;
+  const s = Float64Array.from(values).sort();
+  let best = null;
+  for (let i = 1; i < s.length; i += 1) {
+    const a = s.subarray(0, i), b = s.subarray(i), ma = a.reduce((t, v) => t + v, 0) / a.length, mb = b.reduce((t, v) => t + v, 0) / b.length;
+    const score = a.length * b.length * (mb - ma) ** 2;
+    if (!best || score > best.score) best = { score, cut: s[i - 1], gap: mb - ma };
+  }
+  return best;
+}
+
+function drawArt({ comp, lbl, MW, MH, EU, EV, photo, colour, rects, bay, floor }) {
   const at = (x, y) => lbl[Math.min(MH - 1, Math.floor(((y + 0.5) / EV) * MH)) * MW + Math.min(MW - 1, Math.floor(((x + 0.5) / EU) * MW))];
   const boxMedian = (img, keep) => {
     const v = [[], [], []];
@@ -155,22 +168,39 @@ function drawArt({ comp, lbl, MW, MH, EU, EV, photo, colour, rects }) {
   const wallRgb = boxMedian(colour, (v) => v === L.facade) || boxMedian(colour, () => true);
   const wall = nearestIndex(comp, wallRgb, 0, WORKING);
   const art = new Uint8Array(EU * EV).fill(wall);
+  const sx = MW / EU, sy = MH / EV, bx = Math.max(1, Math.round(bay / sx)), by = Math.max(1, Math.round(floor / sy));
+  const tone = new Int8Array(EU * EV), blocks = new Map();
+  for (let y = 0; y < EV; y += 1) for (let x = 0; x < EU; x += 1) {
+    if (at(x, y) !== L.facade) continue;
+    const o = (Math.min(MH - 1, Math.floor(((y + 0.5) / EV) * MH)) * MW + Math.min(MW - 1, Math.floor(((x + 0.5) / EU) * MW))) * 4, key = Math.floor(y / by) * 4096 + Math.floor(x / bx);
+    (blocks.get(key) || blocks.set(key, []).get(key)).push(0.299 * photo[o] + 0.587 * photo[o + 1] + 0.114 * photo[o + 2]);
+  }
+  const light = new Map([...blocks].map(([key, v]) => [key, comp.lab(median(v), median(v), median(v))[0]]));
+  const split = twoTones([...light.values()]);
+  const step = comp.lab(...comp.RGB[wall])[0] - comp.lab(...comp.RGB[shade(wall, -1)])[0];
+  if (split && split.gap >= step) {
+    for (let y = 0; y < EV; y += 1) for (let x = 0; x < EU; x += 1) {
+      const l = light.get(Math.floor(y / by) * 4096 + Math.floor(x / bx));
+      if (l !== undefined && l <= split.cut) { tone[y * EU + x] = -1; art[y * EU + x] = shade(wall, -1); }
+    }
+  }
   for (let y = 0; y < EV; y += 1) {
     let band = 0, shop = 0;
     for (let x = 0; x < EU; x += 1) { const v = at(x, y); if (v === L.cornice || v === L.sill || v === L.molding || v === L.deco) band += 1; if (v === L.shop || v === L.door) shop += 1; }
-    if (band / EU >= BAND_ROW) art.fill(shade(wall, 1), y * EU, (y + 1) * EU);
+    if (band / EU >= BAND_ROW) for (let x = 0; x < EU; x += 1) art[y * EU + x] = shade(wall, 1 + tone[y * EU + x]);
     if (y >= EV * SHOP_FROM && shop / EU >= BAND_ROW) { art.fill(shade(wall, -2), y * EU); art.fill(shade(wall, 1), y * EU, (y + 1) * EU); break; }
   }
   const glassRgb = boxMedian(photo, (v) => v === L.window) || [50, 60, 120];
   const glass = Math.min(GLASS_SHADES[1], Math.max(GLASS_SHADES[0], nearestIndex(comp, glassRgb, GLASS_RAMP[0], GLASS_RAMP[1])));
-  const sx = MW / EU, sy = MH / EV, panes = [];
+  const panes = [];
   for (const [x0, y0, x1, y1] of rects) {
     const a0 = Math.round(x0 / sx), a1 = Math.round(x1 / sx), b0 = Math.round(y0 / sy), b1 = Math.round(y1 / sy);
     if (a1 - a0 < 1 || b1 - b0 < 1) continue;
     const put = (x, y, v) => { if (x >= 0 && y >= 0 && x < EU && y < EV) art[y * EU + x] = v; };
-    for (let y = b0 - 1; y < b1; y += 1) for (let x = a0 - 1; x <= a1; x += 1) put(x, y, shade(wall, -1));
+    const t = tone[Math.min(EV - 1, Math.max(0, b0)) * EU + Math.min(EU - 1, Math.max(0, a0))];
+    for (let y = b0 - 1; y < b1; y += 1) for (let x = a0 - 1; x <= a1; x += 1) put(x, y, shade(wall, -1 + t));
     for (let y = b0; y < b1; y += 1) for (let x = a0; x < a1; x += 1) put(x, y, y === b0 || (x === a0 && a1 - a0 >= 3) ? glass + 1 : glass);
-    for (let x = a0 - 1; x <= a1; x += 1) if (b1 < EV) put(x, b1, shade(wall, 1));
+    for (let x = a0 - 1; x <= a1; x += 1) if (b1 < EV) put(x, b1, shade(wall, 1 + t));
     panes.push([a0, b0, a1, b1]);
   }
   return { art, wall, panes };
@@ -178,7 +208,7 @@ function drawArt({ comp, lbl, MW, MH, EU, EV, photo, colour, rects }) {
 
 export async function rebuildFacade({ comp, building, crop, colour, isBuilding, parse, W, H }) {
   const S = comp.S, id = building.id, region = [];
-  for (let k = 0; k < W * H; k += 1) if (S.ID[k] === id && S.base[k] !== OUTLINE) region.push(k);
+  for (let k = 0; k < W * H; k += 1) if (S.ID[k] === id && S.base[k] !== OUTLINE && isBuilding(k)) region.push(k);
   if (region.length < MIN_REGION || v13PaneShare(comp, region) >= PANE_SHARE[0]) return null;
   const toUnit = homography(building.quad, UNIT), toFrame = homography(UNIT, building.quad);
   const uv = region.map((k) => toUnit((k % W) + 0.5, ((k / W) | 0) + 0.5));
@@ -207,9 +237,10 @@ export async function rebuildFacade({ comp, building, crop, colour, isBuilding, 
     lbl[i] = !bld ? L.background : raw[i] === L.background ? L.facade : raw[i];
     gray[i] = 0.299 * photo[i * 4] + 0.587 * photo[i * 4 + 1] + 0.114 * photo[i * 4 + 2];
   }
-  const lattice = chooseLattice(lbl, gray, MW, MH);
+  const evidence = paneEvidence(lbl);
+  const lattice = chooseLattice(lbl, gray, MW, MH, Math.max(6, Math.ceil((V13_TILE.bay * MW) / EU)), Math.max(12, Math.ceil((V13_TILE.floor * MH) / EV)));
   if (!lattice) return null;
-  const { art, wall, panes } = drawArt({ comp, lbl, MW, MH, EU, EV, photo, colour: tinted, rects: lattice.rects });
+  const { art, wall, panes } = drawArt({ comp, lbl, MW, MH, EU, EV, photo, colour: tinted, rects: lattice.rects, bay: lattice.bay, floor: lattice.floor });
   const wins = new Map(), paneAt = (a, b) => panes.findIndex(([x0, y0, x1, y1]) => a >= x0 && a < x1 && b >= y0 && b < y1);
   region.forEach((k, i) => {
     const [u, v] = uv[i];
@@ -218,7 +249,7 @@ export async function rebuildFacade({ comp, building, crop, colour, isBuilding, 
     const p = paneAt(a, b);
     if (p >= 0) (wins.get(p) || wins.set(p, []).get(p)).push(k);
   });
-  return { wins: [...wins.values()].filter((w) => w.length >= 2), wall, bay: lattice.bay, floor: lattice.floor, panes: panes.length };
+  return { wins: [...wins.values()].filter((w) => w.length >= 2), wall, bay: lattice.bay, floor: lattice.floor, panes: panes.length, evidence, share: region.length ? region.filter((k) => S.base[k] < GLASS_RAMP[1]).length / region.length : 0 };
 }
 
 export function outlineHouses(comp, ids, W, H) {
