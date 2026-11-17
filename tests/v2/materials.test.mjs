@@ -29,11 +29,10 @@ test('isFoliageHue false for brown Lab [45, 12, 25]', () => {
 
 test('greenShade picks nearest L', () => {
   const rampLs = [20, 40, 60, 80, 100, 120];
-  assert.equal(greenShade(30, rampLs), 0);
-  assert.equal(greenShade(50, rampLs), 1);
-  assert.equal(greenShade(70, rampLs), 2);
-  assert.equal(greenShade(90, rampLs), 3);
-  assert.equal(greenShade(110, rampLs), 4);
+  assert.equal(greenShade(30, rampLs, [0, 1, 2, 3, 4, 5]), 0);
+  assert.equal(greenShade(70, rampLs, [0, 1, 2, 3, 4, 5]), 2);
+  assert.equal(greenShade(30, rampLs), 1);
+  assert.equal(greenShade(110, rampLs), 3);
   assert.equal(greenShade(130, rampLs), 5);
 });
 

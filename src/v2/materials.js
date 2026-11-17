@@ -5,6 +5,7 @@ const FOLIAGE = new Set([CLASS.GREEN, CLASS.TERRAIN]);
 export const FOLIAGE_HUE_MIN = Math.PI / 2;
 export const FOLIAGE_HUE_MAX = Math.PI;
 export const FOLIAGE_CHROMA_MIN = 4;
+export const FOLIAGE_SHADES = [1, 2, 3, 5];
 
 export function isFoliageHue(lab) {
   const [, a, b] = lab;
@@ -13,10 +14,10 @@ export function isFoliageHue(lab) {
   return hue >= FOLIAGE_HUE_MIN && hue <= FOLIAGE_HUE_MAX && chroma >= FOLIAGE_CHROMA_MIN;
 }
 
-export function greenShade(L, rampLs) {
-  let best = 0;
+export function greenShade(L, rampLs, shades = FOLIAGE_SHADES) {
+  let best = shades[0];
   let bestDist = Infinity;
-  for (let i = 0; i < 6; i += 1) {
+  for (const i of shades) {
     const d = Math.abs(rampLs[i] - L);
     if (d < bestDist) {
       bestDist = d;

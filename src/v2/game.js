@@ -316,6 +316,7 @@ export async function build(img, label = null) {
   const facadeMask = parse && parse.masks && parse.masks.building;
   const isBuilding = (k) => cls[k] === CLASS.BUILDING && (!facadeMask || facadeMask[k] === 1);
   const colour = LOOK.has('facades') ? correctedColour(crop, isBuilding, W, H) : null;
+  comp.initPal();
   if (colour && !hand) scene.buildings = scene.buildings.flatMap((b) => splitHouses(b, colour, isBuilding, (r, g, b2) => comp.lab(r, g, b2), W, H, (rgb) => nearestIndex(comp, rgb, 0, 48))).slice(0, MAX_BUILDINGS).map((b, i) => ({ ...b, id: i + 1 }));
   $('note').textContent = 'рисую…';
   comp.tok += 1; comp.S = null;
