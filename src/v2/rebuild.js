@@ -65,10 +65,10 @@ export function correctedColour(crop, isBuilding, W, H) {
 
 const upperOf = (clip) => clip.slice(0, -2);
 
-export function splitHouses(building, colour, isBuilding, lab, W, H) {
+export function splitHouses(building, colour, isBuilding, lab, W, H, paletteOf = null) {
   const [[xa], [xb]] = building.quad;
   if (xb - xa < 2 * HOUSE_MIN_WIDTH) return [building];
-  const inside = building.clip || building.quad, prof = [], xs = [];
+  const inside = building.clip || building.quad, prof = [], xs = [], medians = [];
   const sx = colour.w / W, sy = colour.h / H;
   for (let x = xa; x < xb; x += 1) {
     const px = [];
@@ -77,7 +77,7 @@ export function splitHouses(building, colour, isBuilding, lab, W, H) {
     const lum = px.map((p) => p[0] + p[1] + p[2]), m = median(lum), bright = px.filter((_, i) => lum[i] >= m);
     const med = [0, 1, 2].map((c) => median(bright.map((p) => p[c])));
     const l = lab(med[0], med[1], med[2]);
-    prof.push([l[1], l[2]]); xs.push(x);
+    prof.push([l[1], l[2]]); xs.push(x); medians.push(med);
   }
   if (prof.length < 2 * HOUSE_MIN_WIDTH) return [building];
   const cuts = pelt(prof, HOUSE_MIN_WIDTH, HOUSE_PENALTY).slice(0, -1).map((i) => xs[i]);
@@ -87,11 +87,22 @@ export function splitHouses(building, colour, isBuilding, lab, W, H) {
   const bottomAt = (x) => Math.round(along(q[3], q[2], x)), topAt = (x) => Math.round(along(q[0], q[1], x));
   const upper = upperOf(building.clip || [[xa, topAt(xa)], [xb, topAt(xb)], q[2], q[3]]);
   const roofAt = (x) => { let best = upper[0]; for (const p of upper) if (Math.abs(p[0] - x) < Math.abs(best[0] - x)) best = p; return best[1]; };
-  return edges.slice(0, -1).map((a, i) => {
+  const parts = edges.slice(0, -1).map((a, i) => {
     const b = edges[i + 1];
     const clipTop = [[a, roofAt(a)], ...upper.filter((p) => p[0] > a && p[0] < b), [b, roofAt(b)]];
-    return { ...building, quad: [[a, topAt(a)], [b, topAt(b)], [b, bottomAt(b)], [a, bottomAt(a)]], clip: [...clipTop, [b, bottomAt(b)], [a, bottomAt(a)]] };
+    return { a, b, quad: [[a, topAt(a)], [b, topAt(b)], [b, bottomAt(b)], [a, bottomAt(a)]], clip: [...clipTop, [b, bottomAt(b)], [a, bottomAt(a)]] };
   });
+  if (!paletteOf) {
+    return parts.map(({ a, b, quad, clip }) => ({ ...building, quad, clip }));
+  }
+  const getIndex = (part) => {
+    const cols = medians.slice(xs.indexOf(part.a), xs.indexOf(part.b) + 1);
+    if (!cols.length) return paletteOf([128, 128, 128]);
+    const medRgb = [0, 1, 2].map((c) => median(cols.map((m) => m[c])));
+    return paletteOf(medRgb);
+  };
+  const merged = mergeSameColour(parts, getIndex);
+  return merged.map(({ a, b, quad, clip }) => ({ ...building, quad, clip }));
 }
 
 export function inPoly(P, x, y) {
@@ -103,7 +114,7 @@ export function inPoly(P, x, y) {
   return c;
 }
 
-function nearestIndex(comp, rgb, from, to) {
+export function nearestIndex(comp, rgb, from, to) {
   const l = comp.lab(rgb[0], rgb[1], rgb[2]);
   let best = from, bd = Infinity;
   for (let i = from; i < to; i += 1) {
@@ -111,6 +122,23 @@ function nearestIndex(comp, rgb, from, to) {
     if (d < bd) { bd = d; best = i; }
   }
   return best;
+}
+
+export function mergeSameColour(parts, indexOf) {
+  if (parts.length <= 1) return parts;
+  const out = [];
+  let cur = { ...parts[0] };
+  for (let i = 1; i < parts.length; i += 1) {
+    const idxCur = indexOf(cur), idxNext = indexOf(parts[i]);
+    if (idxCur === idxNext) {
+      cur.b = parts[i].b;
+    } else {
+      out.push(cur);
+      cur = { ...parts[i] };
+    }
+  }
+  out.push(cur);
+  return out;
 }
 
 export function standsFree(comp, id, W) {

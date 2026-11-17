@@ -12,7 +12,7 @@ import { AIM_COLOUR, silhouette, targetAt } from './aim.js';
 import { collectAt, dropLoot, drawLoot, stepLoot } from './loot.js';
 import { addLoot, checkOver, createRound, registerStrike, spendThrow, tick } from './round.js';
 import { calm, muteTable, simplifyCar } from './roles.js';
-import { correctedColour, outlineHouses, rebuildFacade, splitHouses } from './rebuild.js';
+import { correctedColour, outlineHouses, rebuildFacade, splitHouses, nearestIndex } from './rebuild.js';
 import { parseFacade } from './facade-parse.js';
 import { CLASS_TINT, CSS_ROLES, PAL, ROLE } from './theme.js';
 import { backdrop } from './backdrop.js';
@@ -308,7 +308,7 @@ export async function build(img, label = null) {
   const facadeMask = parse && parse.masks && parse.masks.building;
   const isBuilding = (k) => cls[k] === CLASS.BUILDING && (!facadeMask || facadeMask[k] === 1);
   const colour = LOOK.has('facades') ? correctedColour(crop, isBuilding, W, H) : null;
-  if (colour && !hand) scene.buildings = scene.buildings.flatMap((b) => splitHouses(b, colour, isBuilding, (r, g, b2) => comp.lab(r, g, b2), W, H)).slice(0, MAX_BUILDINGS).map((b, i) => ({ ...b, id: i + 1 }));
+  if (colour && !hand) scene.buildings = scene.buildings.flatMap((b) => splitHouses(b, colour, isBuilding, (r, g, b2) => comp.lab(r, g, b2), W, H, (rgb) => nearestIndex(comp, rgb, 0, 48))).slice(0, MAX_BUILDINGS).map((b, i) => ({ ...b, id: i + 1 }));
   $('note').textContent = 'рисую…';
   comp.tok += 1; comp.S = null;
   comp.build(img, scene, 8);
