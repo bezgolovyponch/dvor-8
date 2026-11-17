@@ -38,45 +38,73 @@ function neighbours4(k) {
   return out;
 }
 
-async function measureFrame(page, photo, query) {
+async function measureFrame(page, photo) {
   await page.run('window.__v2tick(1)');
-  const frameData = await page.run(`
+  const data = await page.run(`
     const c = document.getElementById('screen');
-    return c.getContext('2d').getImageData(0, 0, 288, 512).data;
+    const ctx = c.getContext('2d');
+    const frame = Array.from(ctx.getImageData(0, 0, 288, 512).data);
+    const comp = window.__v2comp();
+    const dump = window.__v2dump();
+    const world = window.__v2world();
+    return {
+      frame,
+      id: Array.from(comp.S.ID),
+      sky: Array.from(comp.sky),
+      cls: dump.cls,
+      sprites: world.sprites.map(s => ({ x0: s.x0, y0: s.y0, w: s.w, h: s.h, px: Array.from(s.px) })),
+      palette: comp.RGB.map(c => [c[0], c[1], c[2]]),
+      rebuilt: window.__v2.rebuilt || [],
+      ready: window.__v2.ready,
+      error: window.__v2.error
+    };
   `);
-  const comp = await page.run('return window.__v2comp()');
-  const dump = await page.run('return window.__v2dump()');
-  const world = await page.run('return window.__v2world()');
-  const rebuilt = await page.run('return window.__v2.rebuilt || []');
-  const ready = await page.run('return window.__v2.ready');
-  const error = await page.run('return window.__v2.error');
 
-  const S = comp.S;
+  const frameData = data.frame;
+  const id = new Uint8Array(data.id);
+  const skyMask = new Uint8Array(data.sky);
+  const cls = new Uint8Array(data.cls);
+  const sprites = data.sprites;
+  const paletteRGB = data.palette;
+  const rebuilt = data.rebuilt;
+  const ready = data.ready;
+  const error = data.error;
+
   const outlineIdx = [48, 49];
   const isOutline = new Uint8Array(N);
   for (let k = 0; k < N; k++) {
-    if (outlineIdx.includes(S.base[k])) isOutline[k] = 1;
+    const r = frameData[k * 4], g = frameData[k * 4 + 1], b = frameData[k * 4 + 2];
+    const c48 = paletteRGB[48], c49 = paletteRGB[49];
+    if ((r === c48[0] && g === c48[1] && b === c48[2]) || (r === c49[0] && g === c49[1] && b === c49[2])) {
+      isOutline[k] = 1;
+    }
   }
 
   const objMask = new Uint8Array(N);
-  for (let k = 0; k < N; k++) objMask[k] = S.ID[k];
+  for (let k = 0; k < N; k++) {
+    const idVal = id[k];
+    if (idVal >= 1 && idVal < 10) objMask[k] = idVal;
+  }
+  const spriteIndices = spriteMask(sprites, W);
+  for (const { index, spriteId } of spriteIndices) {
+    if (index >= 0 && index < N) objMask[index] = spriteId;
+  }
 
-  const carSprites = world.sprites.map(s => ({
+  const carSprites = sprites.map((s, si) => ({
     bbox: [s.x0, s.y0, s.w, s.h],
-    pixels: Array.from(s.px).map((v, i) => v !== -1 ? s.y0 * W + s.x0 + (i % s.w) + Math.floor(i / s.w) * W : -1).filter(v => v !== -1)
+    pixels: Array.from(s.px)
+      .map((v, i) => v !== -1 ? (s.y0 + Math.floor(i / s.w)) * W + s.x0 + (i % s.w) : -1)
+      .filter(v => v !== -1)
   }));
 
-  const carClassMask = dump.cls;
-  const skyMask = comp.sky;
-  const cls = dump.cls;
-  const paletteRGB = comp.RGB;
+  const carClassMask = cls;
 
   const objectEdgeMask = new Uint8Array(N);
   for (let k = 0; k < N; k++) {
-    const id = objMask[k];
-    if (id === 0) continue;
+    const idVal = objMask[k];
+    if (idVal === 0) continue;
     for (const nk of neighbours4(k)) {
-      if (objMask[nk] !== id) { objectEdgeMask[k] = 1; break; }
+      if (objMask[nk] !== idVal) { objectEdgeMask[k] = 1; break; }
     }
   }
 
@@ -87,7 +115,7 @@ async function measureFrame(page, photo, query) {
 
   const G3 = carShapeIoU(carSprites, carClassMask);
 
-  const G4 = edgeContrast(frameData, objMask, isOutline, srgbToLab);
+  const G4 = edgeContrast(frameData, objMask, isOutline, (r, g, b) => srgbToLab(r, g, b));
 
   const G5 = splitBuildings(objMask, frameData);
 
@@ -104,14 +132,17 @@ async function measureFrame(page, photo, query) {
   return {
     photo,
     G1, G2, G3, G4, G5, G6, G7, G8_colours, G8_orphanPct, G8_skyIoU, G9,
-    frameData, comp, dump, world, rebuilt
+    frameData, id: data.id, sky: data.sky, cls: data.cls, sprites: data.sprites, palette: data.palette, rebuilt, ready, error
   };
 }
 
 async function runPhoto(photo, thresholds, baselineMode) {
-  const queryParts = ['scene=hand', 'look=v13'];
-  if (process.env.LOOK) queryParts.push(`look=${process.env.LOOK}`);
-  const query = '&' + queryParts.join('&');
+  let query = '';
+  if (baselineMode) {
+    query = '&scene=hand&look=v13';
+  } else if (process.env.LOOK) {
+    query = `&look=${process.env.LOOK}`;
+  }
   const url = `${BASE}v2.html?photo=${encodeURIComponent(`photos-test/${photo}`)}${query}`;
 
   return await withPage(url, { width: 412, height: 860 }, async (page) => {
@@ -121,12 +152,18 @@ async function runPhoto(photo, thresholds, baselineMode) {
       if (v2 && (v2.ready || v2.error)) break;
     }
     const error = await page.run('return window.__v2 && window.__v2.error');
-    if (error) throw new Error(`Page error: ${error}`);
+    if (error) {
+      return { photo, results: null, error: String(error) };
+    }
 
-    const m = await measureFrame(page, photo, query);
+    const m = await measureFrame(page, photo);
     const frameFile = `${OUT}${photo.replace(/[^a-z0-9.]/gi, '_')}.frame.png`;
     const url = await page.run("return document.getElementById('screen').toDataURL('image/png')");
     writeFileSync(frameFile, Buffer.from(url.split(',')[1], 'base64'));
+
+    if (m.error) {
+      return { photo, results: null, error: String(m.error) };
+    }
 
     const results = {
       photo,
@@ -212,19 +249,25 @@ async function main() {
       if (baselineMode) {
         allResults.push(res);
       } else {
-        const { photo: p, results } = res;
-        console.log(JSON.stringify({ photo: p, ...results }));
-        const fails = Object.entries(results).filter(([k, v]) => k !== 'photo' && !v.pass);
-        if (fails.length > 0) {
+        const { photo: p, results, error } = res;
+        if (error) {
+          console.log(JSON.stringify({ photo: p, G9: { value: false, threshold: true, pass: false }, error }));
           anyFail = true;
-          console.error(`FAIL ${p}: ${fails.map(([k,v]) => `${k}=${v.value} (threshold ${v.threshold})`).join(', ')}`);
+          allResults.push({ photo: p, error, G9: { value: false, threshold: true, pass: false } });
+        } else {
+          console.log(JSON.stringify({ photo: p, ...results }));
+          const fails = Object.entries(results).filter(([k, v]) => k !== 'photo' && !v.pass);
+          if (fails.length > 0) {
+            anyFail = true;
+            console.error(`FAIL ${p}: ${fails.map(([k,v]) => `${k}=${v.value} (threshold ${v.threshold})`).join(', ')}`);
+          }
+          allResults.push({ photo: p, results });
         }
-        allResults.push({ photo: p, results });
       }
     } catch (e) {
       console.error(`ERROR ${photo}: ${e.message}`);
       anyFail = true;
-      allResults.push({ photo, error: e.message });
+      allResults.push({ photo, error: e.message, G9: { value: false, threshold: true, pass: false } });
     }
   }
 

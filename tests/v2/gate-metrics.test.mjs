@@ -10,7 +10,8 @@ import {
   paneBand,
   coloursMetric,
   orphanPct,
-  skyIoU
+  skyIoU,
+  spriteMask
 } from '../../tools/gate-metrics.mjs';
 
 const W = 10, H = 10, N = W * H;
@@ -235,4 +236,39 @@ test('skyIoU: no overlap -> 0', () => {
   const seg = new Uint8Array(N6).fill(1);
   const val = skyIoU(compSky, seg, W6, H6);
   assert.equal(val, 0);
+});
+
+test('spriteMask: single sprite 2x2 at (1,1) -> correct frame indices', () => {
+  const sprites = [{ x0: 1, y0: 1, w: 2, h: 2, px: [0, 1, 2, 3] }];
+  const W = 10;
+  const res = spriteMask(sprites, W);
+  assert.deepEqual(res, [
+    { index: 11, spriteId: 10 },
+    { index: 12, spriteId: 10 },
+    { index: 21, spriteId: 10 },
+    { index: 22, spriteId: 10 }
+  ]);
+});
+
+test('spriteMask: skips -1 (transparent) pixels', () => {
+  const sprites = [{ x0: 0, y0: 0, w: 2, h: 2, px: [0, -1, -1, 3] }];
+  const W = 10;
+  const res = spriteMask(sprites, W);
+  assert.deepEqual(res, [
+    { index: 0, spriteId: 10 },
+    { index: 11, spriteId: 10 }
+  ]);
+});
+
+test('spriteMask: multiple sprites get incremental spriteId', () => {
+  const sprites = [
+    { x0: 0, y0: 0, w: 1, h: 1, px: [0] },
+    { x0: 5, y0: 5, w: 1, h: 1, px: [0] }
+  ];
+  const W = 10;
+  const res = spriteMask(sprites, W);
+  assert.deepEqual(res, [
+    { index: 0, spriteId: 10 },
+    { index: 55, spriteId: 11 }
+  ]);
 });

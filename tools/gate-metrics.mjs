@@ -2,6 +2,22 @@ import { deltaE00, srgbToLab } from '../src/v2/ciede2000.js';
 
 const DEFAULT_W = 288, DEFAULT_H = 512;
 
+export function spriteMask(sprites, W) {
+  const indices = [];
+  for (let si = 0; si < sprites.length; si++) {
+    const s = sprites[si];
+    const pw = s.w, ph = s.h;
+    for (let i = 0; i < s.px.length; i++) {
+      if (s.px[i] !== -1) {
+        const sy = s.y0 + Math.floor(i / pw);
+        const sx = s.x0 + (i % pw);
+        indices.push({ index: sy * W + sx, spriteId: 10 + si });
+      }
+    }
+  }
+  return indices;
+}
+
 function makeNeighbours4(W, H) {
   return (k) => {
     const x = k % W, y = (k / W) | 0;
