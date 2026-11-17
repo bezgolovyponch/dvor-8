@@ -3,7 +3,6 @@ import { sceneParse } from '../scene-parse.js';
 import { mulberry32 } from '../rng.js';
 import { oklabToRgb } from './oklab.js';
 import { CLASS, classMap, downsample } from './classes.js';
-import { applyMaterials } from './materials.js';
 import { carInstances } from './instances.js';
 import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
 import { createRuin } from './ruin.js';
@@ -30,7 +29,6 @@ const PANE_BLUE = 10;
 const SKY_AGREE = 0.85;
 const GROUND_SPECKLE = 0.07;
 const WALL_GREY_CHROMA = 15;
-const BLUE_RAMP_END = 6;
 const CAST_STRIDE = 5;
 const LEAF_PASSES = 2;
 const LEAF_SPECKLE = 0.12;
@@ -57,7 +55,7 @@ async function loadImage(src) {
 }
 
 const FRAME_W = 288, FRAME_H = 512;
-const LOOK = new Set((params.get('look') ?? 'glassfix,carhue,skyrepair,leafcalm,greyground,groundcalm,materials,facades').split(',').filter(Boolean));
+const LOOK = new Set((params.get('look') ?? 'glassfix,skyrepair,leafcalm,groundcalm,facades').split(',').filter(Boolean));
 const CRACK = 48;
 const MAX_BUILDINGS = 9;
 
@@ -200,15 +198,6 @@ function greyOf(comp, L) {
   return best;
 }
 
-function greyGround(comp) {
-  const S = comp.S;
-  if (comp.SKY && comp.SKY.theme === 'sunset') return;
-  for (let k = 0; k < S.ID.length; k += 1) {
-    if (S.ID[k] || comp.sky[k] || S.base[k] >= BLUE_RAMP_END) continue;
-    if (isPhotoGrey(comp, k)) S.base[k] = greyOf(comp, comp.Lp[k]);
-  }
-}
-
 function unglaze(comp, rebuilt = new Map()) {
   const S = comp.S;
   for (const rep of comp.REP || []) {
@@ -236,16 +225,7 @@ function fromEngine(comp, seg, scene, lab, rebuilt = new Map(), inst = null) {
   if (LOOK.has('glassfix')) unglaze(comp, rebuilt);
   if (LOOK.has('skyrepair')) repairSky(comp, seg, lab);
   if (LOOK.has('leafcalm')) calmLeaves(comp, seg);
-  if (LOOK.has('greyground')) greyGround(comp);
   if (LOOK.has('groundcalm')) calmGround(comp);
-  if (LOOK.has('materials')) {
-    const rampLs = [];
-    for (let i = 6; i <= 11; i += 1) {
-      const c = comp.RGB[i];
-      rampLs.push(comp.lab(c[0], c[1], c[2])[0]);
-    }
-    applyMaterials({ base: S.base, ID: S.ID, sky: comp.sky, seg, R: comp.R, G: comp.G, B: comp.B, q: comp.q, lab: comp.lab, rampLs, W: FRAME_W, H: FRAME_H });
-  }
   const bg = Uint16Array.from(S.base);
   const cls = new Uint8Array(N).fill(CLASS.ROAD);
   const isWall = (id) => id >= 1 && id < 10;
@@ -310,7 +290,7 @@ export async function build(img, label = null) {
   const { GameEngine } = await import('./engine.js');
   const { Component } = await import('../ref/engine.js');
   const { V13Snap } = await import('./v13-snap.js');
-  const comp = LOOK.has('palette') ? new GameEngine() : LOOK.has('snap') ? new V13Snap(Object.fromEntries(['grey', 'match'].map((k) => [k, params.get(k)]).filter(([, v]) => v).concat(params.get('cool') ? [['coolGreys', true]] : []))) : new Component();
+  const comp = LOOK.has('palette') ? new GameEngine() : LOOK.has('snap') ? new V13Snap(Object.fromEntries(['grey', 'match'].map((k) => [k, params.get(k)]).filter(([, v]) => v).concat(params.get('cool') ? [['coolGreys', true]] : []))) : LOOK.has('v13') ? new Component() : new V13Snap({ match: 'ciede2000' });
   const hand = label && params.get('scene') === 'hand' ? (comp.SCENES || []).find((s) => s.id === label) : null;
   const scene = hand ? JSON.parse(JSON.stringify(hand)) : autoScene({ cls, cars: cars.list, W, H, L: lab.filter((_, i) => i % 3 === 0) });
   const facadeMask = parse && parse.masks && parse.masks.building;

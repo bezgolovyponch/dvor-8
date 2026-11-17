@@ -1,14 +1,28 @@
 import { Component } from '../ref/engine.js';
+import { srgbToLab, deltaE00 } from './ciede2000.js';
 
 const GREY_CHROMA = 12;
 const GREY_SATURATION = 0.26;
 const HUE_WEIGHT = 2;
 const COOL_GREYS = [24, 25, 26, 27];
+const CACHE_SIZE = 32768;
+
+export function ciedeIndex(r, g, b, paletteLabs) {
+  const lab = srgbToLab(r, g, b);
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < 48; i += 1) {
+    const d = deltaE00(lab, paletteLabs[i]);
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
 
 export class V13Snap extends Component {
   constructor(rule = {}) {
     super();
     this.rule = { grey: 'sat', match: 'rgb', coolGreys: false, ...rule };
+    this._paletteLabs = null;
+    this._quantCache = null;
   }
 
   isGrey(r, g, b) {
@@ -18,7 +32,32 @@ export class V13Snap extends Component {
     return (mx ? (mx - mn) / mx : 0) < GREY_SATURATION;
   }
 
+  get paletteLabs() {
+    if (!this._paletteLabs) {
+      if (!this.RGB) this.initPal();
+      this._paletteLabs = this.RGB.slice(0, 48).map(([r, g, b]) => srgbToLab(r, g, b));
+    }
+    return this._paletteLabs;
+  }
+
+  get quantCache() {
+    if (!this._quantCache) {
+      this._quantCache = new Int16Array(CACHE_SIZE);
+      this._quantCache.fill(-1);
+    }
+    return this._quantCache;
+  }
+
   quant(r, g, b) {
+    if (this.rule.match === 'ciede2000') {
+      const key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+      const cache = this.quantCache;
+      if (cache[key] !== -1) return cache[key];
+      const idx = ciedeIndex(r, g, b, this.paletteLabs);
+      cache[key] = idx;
+      return idx;
+    }
+
     const L = 0.299 * r + 0.587 * g + 0.114 * b;
     let best = 0, bd = Infinity;
     if (this.isGrey(r, g, b)) {
