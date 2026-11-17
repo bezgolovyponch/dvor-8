@@ -12,7 +12,6 @@ import { AIM_COLOUR, silhouette, targetAt } from './aim.js';
 import { collectAt, dropLoot, drawLoot, stepLoot } from './loot.js';
 import { addLoot, checkOver, createRound, registerStrike, spendThrow, tick } from './round.js';
 import { calm, muteTable, simplifyCar } from './roles.js';
-import { drawFacade } from './facade.js';
 import { correctedColour, outlineHouses, rebuildFacade, splitHouses } from './rebuild.js';
 import { parseFacade } from './facade-parse.js';
 import { CLASS_TINT, CSS_ROLES, PAL, ROLE } from './theme.js';
@@ -26,7 +25,6 @@ const DROPS = { wreck: { coins: 3, gems: 1 }, piece: { coins: 1, gems: 0 } };
 const PIECE_GEM_CHANCE = 0.1;
 const SPRITE_CAR_H = 26;
 const GROUND_CALM = { radius: 2, passes: 2 };
-const FACADE = { pane: 0, paneRim: 2, paneLit: 4 };
 const PANE_BLUE = 10;
 const CAR_HUE_SHARE = 0.3;
 const SKY_AGREE = 0.85;
@@ -120,27 +118,6 @@ function paneBlue(comp, id) {
   let light = 0, nl = 0, dark = 0, nd = 0;
   for (const k of pix) { const d = comp.B[k] - comp.R[k]; if (comp.Lp[k] > cut) { light += d; nl += 1; } else { dark += d; nd += 1; } }
   return light / Math.max(1, nl) - dark / Math.max(1, nd);
-}
-
-function pieceWalls(comp) {
-  const S = comp.S, panes = new Set(), counts = comp.CH.map(() => new Map());
-  for (const w of comp.WN) for (const k of w.pix) panes.add(k);
-  for (let k = 0; k < S.ID.length; k += 1) {
-    const c = comp.chunkOf[k];
-    if (c < 0 || panes.has(k)) continue;
-    const v = snap(comp, k);
-    counts[c].set(v, (counts[c].get(v) || 0) + 1);
-  }
-  const near = (a, b) => a.bid === b.bid && b.x0 <= a.x1 + 2 && b.x1 >= a.x0 - 2 && b.y0 <= a.y1 + 2 && b.y1 >= a.y0 - 2;
-  return comp.CH.map((a, i) => {
-    const vote = new Map();
-    comp.CH.forEach((b, j) => {
-      if (i !== j && !near(a, b)) return;
-      const best = [...counts[j]].sort((x, y) => y[1] - x[1])[0];
-      if (best) vote.set(best[0], (vote.get(best[0]) || 0) + (i === j ? 2 : 1));
-    });
-    return vote.size ? [...vote].sort((x, y) => y[1] - x[1])[0][0] : -1;
-  });
 }
 
 function skyAgreement(comp, seg) {
@@ -244,15 +221,11 @@ function fromEngine(comp, seg, scene, lab, rebuilt = new Map()) {
   const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
   const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
   const darker = palette.map((_, i) => comp.scrape(i));
-  const facadeWins = new Map(), walls = pieceWalls(comp);
-  const wallAt = (k, fallback) => (comp.chunkOf[k] >= 0 && walls[comp.chunkOf[k]] >= 0 ? walls[comp.chunkOf[k]] : fallback);
+  const facadeWins = new Map();
   for (const rep of comp.REP || []) {
     const bd = scene.buildings.find((b) => b.id === rep.id);
     if (!bd || rep.kind !== 'facade' || (rep.glassDom && paneBlue(comp, rep.id) > PANE_BLUE)) continue;
     if (rebuilt.has(rep.id)) { facadeWins.set(rep.id, rebuilt.get(rep.id).wins); continue; }
-    if (!LOOK.has('redraw')) continue;
-    const colours = { ...FACADE, outline: CRACK, wall: (k) => wallAt(k, rep.wall), slab: (k) => comp.scrape(wallAt(k, rep.wall)) };
-    facadeWins.set(rep.id, drawFacade({ W, H, ID: S.ID, base: S.base, id: rep.id, quad: bd.quad, rows: rep.rows, cols: rep.cols, colours }));
   }
   if (LOOK.has('glassfix')) unglaze(comp, rebuilt);
   if (LOOK.has('skyrepair')) repairSky(comp, seg, lab);
