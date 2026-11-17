@@ -35,7 +35,7 @@ for (let k = 0; k < N; k += 3) {
   if (cp < 8) { neutral++; if (cq < 15) keptNeutral++; }
   else if (cp > 30) { vivid++; const dh = Math.abs(Math.atan2(p[2], p[1]) - Math.atan2(q[2], q[1])); if (cq > 12 && Math.min(dh, 2 * Math.PI - dh) < 0.6) keptHue++; }
 }
-const PANE_BAND = [0.25, 0.40];
+const PANE_BAND = ${JSON.stringify(PANE_BAND)};
 const panes = [];
 let facades = 0, panesInBand = 0;
 for (let id = 1; id < 10; id++) {
@@ -58,12 +58,11 @@ return { greyKept: +(keptNeutral / Math.max(1, neutral)).toFixed(2), hueKept: +(
 
 const rows = [];
 for (const photo of photos) {
-  await withPage(`${BASE}v2.html?photo=${encodeURIComponent(photo)}${query}`, { width: 412, height: 860 }, async (page) => {
+  await withPage(`${BASE}v2.html?photo=${encodeURIComponent(`photos-test/${photo}`)}${query}`, { width: 412, height: 860 }, async (page) => {
     for (let i = 0; i < 120; i += 1) { await page.wait(1000); if (await page.run('return Boolean(window.__v2 && (window.__v2.ready || window.__v2.error))')) break; }
-    const hasError = await page.run('return Boolean(window.__v2 && window.__v2.error)');
-    if (hasError) throw new Error('Game error');
-    await page.run('try { window.__v2tick(1) } catch(e) {}');
-    await page.wait(2000);
+    const error = await page.run('return window.__v2 && window.__v2.error');
+    if (error) { rows.push({ photo, error }); return; }
+    await page.run('window.__v2tick(1)');
     const url = await page.run("return document.getElementById('screen').toDataURL('image/png')");
     writeFileSync(`${out}/${photo.replace(/[^a-z0-9]/gi, '')}.png`, Buffer.from(url.split(',')[1], 'base64'));
     rows.push({ photo, ...(await page.run(MEASURE)) });
