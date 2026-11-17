@@ -83,22 +83,36 @@ function skyPixels(lab, cls) {
   return out;
 }
 
-function engineCars(comp, bg, cls) {
+function carShape(comp, id, scene, inst) {
+  const car = scene.cars[comp.CARIDS.indexOf(id)];
+  if (!inst || !car || car.inst === undefined) return null;
+  const own = new Set();
+  for (let k = 0; k < inst.length; k += 1) if (inst[k] === car.inst) own.add(k);
+  return own.size ? own : null;
+}
+
+function engineCars(comp, bg, cls, scene, inst) {
   const W = FRAME_W, S = comp.S, sprites = [];
   for (const id of comp.CARIDS) {
-    const box = S.bb[id];
-    if (!box) continue;
-    const [x0, y0, x1, y1] = box, w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const shape = carShape(comp, id, scene, inst);
+    const engineBox = S.bb[id];
+    if (!engineBox && !shape) continue;
+    const engine = [];
+    if (engineBox) for (let y = engineBox[1]; y <= engineBox[3]; y += 1) for (let x = engineBox[0]; x <= engineBox[2]; x += 1) if (S.ID[y * W + x] === id) engine.push(y * W + x);
+    const body = shape || new Set(engine);
+    for (const k of engine) if (!body.has(k)) { S.base[k] = S.back[k]; S.ID[k] = S.backID[k]; bg[k] = S.base[k]; cls[k] = S.ID[k] >= 1 && S.ID[k] < 10 ? CLASS.BUILDING : cls[k] === CLASS.CAR ? CLASS.ROAD : cls[k]; }
+    let x0 = W, y0 = FRAME_H, x1 = -1, y1 = -1;
+    for (const k of body) { const x = k % W, y = (k / W) | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
     const px = new Int32Array(w * h).fill(EMPTY), glass = new Uint8Array(w * h), panes = new Set(comp.carGlass[id] || []);
-    const hue = LOOK.has('carhue') ? carHue(comp, px, id) : -1;
+    const edge = (k) => !body.has(k - 1) || !body.has(k + 1) || !body.has(k - W) || !body.has(k + W);
     let n = 0;
-    for (let y = y0; y <= y1; y += 1) for (let x = x0; x <= x1; x += 1) {
-      const k = y * W + x;
-      if (S.ID[k] !== id) continue;
-      const j = (y - y0) * w + x - x0;
-      const v = snap(comp, k);
-      px[j] = S.base[k] === CRACK || panes.has(k) ? S.base[k] : LOOK.has('resnap') || (hue >= 0 && Math.floor(v / 6) === hue) ? v : S.base[k];
-      if (panes.has(k)) glass[j] = 1;
+    for (const k of body) {
+      const x = k % W, y = (k / W) | 0, j = (y - y0) * w + x - x0;
+      const mine = S.ID[k] === id, v = snap(comp, k);
+      if (!mine) { S.back[k] = S.base[k]; S.backID[k] = S.ID[k]; S.ID[k] = id; S.base[k] = comp.qc[k]; }
+      px[j] = edge(k) ? CRACK : panes.has(k) ? S.base[k] : v;
+      if (panes.has(k) && !edge(k)) glass[j] = 1;
       bg[k] = S.back[k];
       cls[k] = S.backID[k] >= 1 && S.backID[k] < 10 ? CLASS.BUILDING : CLASS.ROAD;
       n += 1;
@@ -209,15 +223,7 @@ function unglaze(comp, rebuilt = new Map()) {
   }
 }
 
-function carHue(comp, px, id) {
-  const S = comp.S, kept = new Set(comp.SUB.map((i) => Math.floor(i / 6)));
-  const count = new Map();
-  for (let k = 0; k < S.ID.length; k += 1) if (S.ID[k] === id) { const f = Math.floor(snap(comp, k) / 6); if (f < 8) count.set(f, (count.get(f) || 0) + 1); }
-  const chromatic = [...count].filter(([f]) => f !== 3 && f !== 4).sort((a, b) => b[1] - a[1])[0];
-  return chromatic && !kept.has(chromatic[0]) && chromatic[1] > CAR_HUE_SHARE * [...count.values()].reduce((t, v) => t + v, 0) ? chromatic[0] : -1;
-}
-
-function fromEngine(comp, seg, scene, lab, rebuilt = new Map()) {
+function fromEngine(comp, seg, scene, lab, rebuilt = new Map(), inst = null) {
   const W = FRAME_W, H = FRAME_H, N = W * H, S = comp.S;
   const palette = comp.RGB.map((c) => [c[0], c[1], c[2]]);
   const darker = palette.map((_, i) => comp.scrape(i));
@@ -246,7 +252,7 @@ function fromEngine(comp, seg, scene, lab, rebuilt = new Map()) {
     else if (!comp.sky[k] && segSky) { bg[k] = comp.skyL[k]; cls[k] = CLASS.SKY; }
     if (LOOK.has('resnap') && cls[k] !== CLASS.SKY) { const v = snap(comp, k); S.base[k] = v; bg[k] = v; }
   }
-  const sprites = engineCars(comp, bg, cls);
+  const sprites = engineCars(comp, bg, cls, scene, inst);
   const mute = muteTable(palette, (r, g, b) => comp.lab(r, g, b));
   const isGround = (k) => cls[k] !== CLASS.SKY && cls[k] !== CLASS.BUILDING;
   if (LOOK.has('mute')) for (let k = 0; k < N; k += 1) if (isGround(k)) bg[k] = mute[bg[k]];
@@ -317,7 +323,7 @@ export async function build(img, label = null) {
     if (rebuilt.size) outlineHouses(comp, new Set(rebuilt.keys()), W, H);
   }
   state.rebuilt = [...rebuilt].map(([id, r]) => ({ id, wall: r.wall, bay: r.bay, floor: r.floor, panes: r.panes, fit: +r.fit.toFixed(3), evidence: +r.evidence.toFixed(3), share: +r.share.toFixed(2) }));
-  state.world = fromEngine(comp, cls, scene, lab, rebuilt);
+  state.world = fromEngine(comp, cls, scene, lab, rebuilt, hand ? null : cars.inst);
   state.cls = state.world.cls;
   state.photo = labToRgba(lab, W * H);
   window.__v2dump = () => ({ W, H, lab: Array.from(lab), cls: Array.from(cls), detections: found.all, carMask: Array.from(carMask), scene });

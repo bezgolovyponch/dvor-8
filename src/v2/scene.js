@@ -116,7 +116,7 @@ export function autoScene({ cls, cars = [], W, H, L = null }) {
   return {
     id: 'auto', label: 'ДВОР', gy, sky: 'auto',
     buildings: kept.map(({ bottom, ...b }, i) => ({ ...b, id: i + 1, ground: bottom })),
-    cars: real.slice(0, MAX_CARS).map((c) => ({ x: c.x0, y: c.y0, w: c.x1 - c.x0 + 1, h: c.y1 - c.y0 + 1, type: 'box', name: 'МАШИНА' })),
+    cars: real.slice(0, MAX_CARS).map((c) => ({ x: c.x0, y: c.y0, w: c.x1 - c.x0 + 1, h: c.y1 - c.y0 + 1, type: 'box', name: 'МАШИНА', inst: c.id })),
   };
 }
 
