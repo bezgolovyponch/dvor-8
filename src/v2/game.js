@@ -3,6 +3,7 @@ import { sceneParse } from '../scene-parse.js';
 import { mulberry32 } from '../rng.js';
 import { oklabToRgb } from './oklab.js';
 import { CLASS, classMap, downsample } from './classes.js';
+import { applyMaterials } from './materials.js';
 import { carInstances } from './instances.js';
 import { WEAPONS, createWorld, strike, step, compose } from './destruct.js';
 import { createRuin } from './ruin.js';
@@ -26,7 +27,6 @@ const PIECE_GEM_CHANCE = 0.1;
 const SPRITE_CAR_H = 26;
 const GROUND_CALM = { radius: 2, passes: 2 };
 const PANE_BLUE = 10;
-const CAR_HUE_SHARE = 0.3;
 const SKY_AGREE = 0.85;
 const GROUND_SPECKLE = 0.07;
 const WALL_GREY_CHROMA = 15;
@@ -57,7 +57,7 @@ async function loadImage(src) {
 }
 
 const FRAME_W = 288, FRAME_H = 512;
-const LOOK = new Set((params.get('look') ?? 'glassfix,carhue,skyrepair,leafcalm,greyground,groundcalm,facades').split(',').filter(Boolean));
+const LOOK = new Set((params.get('look') ?? 'glassfix,carhue,skyrepair,leafcalm,greyground,groundcalm,materials,facades').split(',').filter(Boolean));
 const CRACK = 48;
 const MAX_BUILDINGS = 9;
 
@@ -238,6 +238,14 @@ function fromEngine(comp, seg, scene, lab, rebuilt = new Map(), inst = null) {
   if (LOOK.has('leafcalm')) calmLeaves(comp, seg);
   if (LOOK.has('greyground')) greyGround(comp);
   if (LOOK.has('groundcalm')) calmGround(comp);
+  if (LOOK.has('materials')) {
+    const rampLs = [];
+    for (let i = 6; i <= 11; i += 1) {
+      const c = comp.RGB[i];
+      rampLs.push(comp.lab(c[0], c[1], c[2])[0]);
+    }
+    applyMaterials({ base: S.base, ID: S.ID, sky: comp.sky, seg, R: comp.R, G: comp.G, B: comp.B, q: comp.q, lab: comp.lab, rampLs, W: FRAME_W, H: FRAME_H });
+  }
   const bg = Uint16Array.from(S.base);
   const cls = new Uint8Array(N).fill(CLASS.ROAD);
   const isWall = (id) => id >= 1 && id < 10;
