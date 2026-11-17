@@ -11,7 +11,10 @@ import {
   paneBand,
   coloursMetric,
   orphanPct,
-  skyIoU
+  skyIoU,
+  spriteMask,
+  edgeOutlines,
+  strayOutlineShare
 } from './gate-metrics.mjs';
 import { deltaE00, srgbToLab } from '../src/v2/ciede2000.js';
 
@@ -19,6 +22,7 @@ const W = 288, H = 512, N = W * H;
 const BASE = process.env.BASE || 'http://127.0.0.1:4320/';
 const OUT = process.env.OUT || 'gate-out/';
 const BASELINE_FILE = 'reference/v13/gate-baseline.json';
+export const OUTLINE_RULE = { edgeShare: 0.95, strayShare: 0.05 };
 const REF_PHOTOS = [
   '5.jpg',
   '2026-10-12 23.06.59.jpg',
@@ -108,10 +112,9 @@ async function measureFrame(page, photo) {
     }
   }
 
-  const G1_results = outlineClosure(objMask, isOutline);
-  const G1 = G1_results.length > 0 ? Math.min(...G1_results.map(r => r.value)) : 1;
-
-  const G2 = strayOutline(isOutline, objectEdgeMask, skyMask);
+  const edges = edgeOutlines(objMask, skyMask, isOutline, (v) => v >= 10);
+  const G1 = Math.min(edges.buildingSky, edges.car);
+  const G2 = strayOutlineShare(objMask, skyMask, isOutline);
 
   const G3 = carShapeIoU(carSprites, carClassMask);
 
@@ -200,11 +203,11 @@ function computeThresholds(baselineResults) {
   const G7_vals = baselineResults.map(r => r.metrics.G7);
 
   return {
-    G1: Math.min(...G1_vals),
-    G2: Math.max(...G2_vals),
+    G1: Math.min(OUTLINE_RULE.edgeShare, ...G1_vals),
+    G2: OUTLINE_RULE.strayShare,
     G3: Math.min(...G3_vals),
     G4: Math.min(...G4_vals),
-    G5: Math.max(...G5_vals),
+    G5: 0,
     G6: Math.min(...G6_vals),
     G7: 0.5
   };

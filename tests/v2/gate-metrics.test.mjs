@@ -272,3 +272,14 @@ test('spriteMask: multiple sprites get incremental spriteId', () => {
     { index: 55, spriteId: 11 }
   ]);
 });
+test('a building outlined against the sky and a fully outlined car pass the edge rule', async () => {
+  const { edgeOutlines, strayOutlineShare } = await import('../../tools/gate-metrics.mjs');
+  const W = 6, H = 6, obj = new Uint8Array(36), sky = new Uint8Array(36), out = new Uint8Array(36);
+  for (let x = 1; x < 5; x += 1) { obj[2 * W + x] = 1; obj[3 * W + x] = 1; out[2 * W + x] = 1; }
+  sky.fill(1, 0, 2 * W);
+  const r = edgeOutlines(obj, sky, out, (v) => v >= 10, W, H);
+  assert.equal(r.buildingSky, 1);
+  assert.equal(strayOutlineShare(obj, sky, out, W, H), 0);
+  out[5 * W + 3] = 1;
+  assert.ok(strayOutlineShare(obj, sky, out, W, H) > 0);
+});

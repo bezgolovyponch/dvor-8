@@ -263,3 +263,32 @@ export function skyIoU(compSky, seg, W = DEFAULT_W, H = DEFAULT_H) {
   }
   return uni === 0 ? 0 : +(inter / uni).toFixed(3);
 }
+export function edgeOutlines(objMask, skyMask, isOutline, isCar, W = DEFAULT_W, H = DEFAULT_H) {
+  const acc = { buildingSky: [0, 0], car: [0, 0] };
+  for (let k = 0; k < W * H; k += 1) {
+    const me = objMask[k];
+    if (!me) continue;
+    const x = k % W, y = (k / W) | 0;
+    for (const n of [x > 0 ? k - 1 : -1, x < W - 1 ? k + 1 : -1, y > 0 ? k - W : -1, y < H - 1 ? k + W : -1]) {
+      if (n < 0 || objMask[n] === me) continue;
+      const key = isCar(me) ? 'car' : !objMask[n] && skyMask[n] ? 'buildingSky' : null;
+      if (key) { acc[key][0] += 1; if (isOutline[k] || isOutline[n]) acc[key][1] += 1; }
+      break;
+    }
+  }
+  const share = ([n, o]) => (n ? o / n : 1);
+  return { buildingSky: share(acc.buildingSky), car: share(acc.car) };
+}
+
+export function strayOutlineShare(objMask, skyMask, isOutline, W = DEFAULT_W, H = DEFAULT_H) {
+  const kind = (k) => objMask[k] || (skyMask[k] ? -1 : 0);
+  let all = 0, stray = 0;
+  for (let k = 0; k < W * H; k += 1) {
+    if (!isOutline[k]) continue;
+    all += 1;
+    const x = k % W, y = (k / W) | 0, me = kind(k);
+    const onEdge = [x > 0 ? k - 1 : -1, x < W - 1 ? k + 1 : -1, y > 0 ? k - W : -1, y < H - 1 ? k + W : -1].some((n) => n >= 0 && kind(n) !== me);
+    if (!onEdge) stray += 1;
+  }
+  return all ? stray / all : 0;
+}
