@@ -1,5 +1,6 @@
 import { CLASS } from './classes.js';
 import { components } from './instances.js';
+import { strips, dominantVanishing, planes, perspectiveQuad } from './perspective.js';
 
 const BUILDING_MIN_AREA = 525;
 const BUILDING_MIN_WIDTH = 20;
@@ -78,12 +79,13 @@ const support = (cols, slope, key, share) => {
   return (x) => b + slope * x;
 };
 
-export function facadeOf(cols, L = null, W = 0, H = 0) {
+export function facadeOf(cols, L = null, W = 0, H = 0, vp = null) {
   const xa = cols[0].x, xb = cols[cols.length - 1].x + 1;
-  const slopes = L ? edgeSlopes(cols, L, W, H) : { top: null, bottom: null };
+  const persp = vp ? perspectiveQuad(cols, vp) : null;
+  const slopes = L && !persp ? edgeSlopes(cols, L, W, H) : { top: null, bottom: null };
   const top = slopes.top === null ? fitLine(cols.map((c) => [c.x, c.top])) : support(cols, slopes.top, 'top', ROOF_SHARE);
-  const bottom = slopes.bottom === null ? fitLine(cols.map((c) => [c.x, c.bottom + 1])) : support(cols.map((c) => ({ ...c, bottom: c.bottom + 1 })), slopes.bottom, 'bottom', BASE_SHARE);
-  const quad = [[xa, top(xa)], [xb, top(xb)], [xb, bottom(xb)], [xa, bottom(xa)]].map(([x, y]) => [Math.round(x), Math.round(y)]);
+  const bottom = persp ? persp.bottom : slopes.bottom === null ? fitLine(cols.map((c) => [c.x, c.bottom + 1])) : support(cols.map((c) => ({ ...c, bottom: c.bottom + 1 })), slopes.bottom, 'bottom', BASE_SHARE);
+  const quad = persp ? persp.quad : [[xa, top(xa)], [xb, top(xb)], [xb, bottom(xb)], [xa, bottom(xa)]].map(([x, y]) => [Math.round(x), Math.round(y)]);
   const upper = cols.filter((_, i) => i % CLIP_STEP === 0 || i === cols.length - 1);
   const clip = [
     ...upper.map((c) => [c.x, c.top]), [xb, upper[upper.length - 1].top],
@@ -95,12 +97,16 @@ export function facadeOf(cols, L = null, W = 0, H = 0) {
 export function autoScene({ cls, cars = [], W, H, L = null }) {
   const isWall = new Uint8Array(W * H);
   for (let i = 0; i < W * H; i += 1) if (cls[i] === CLASS.BUILDING) isWall[i] = 1;
-  const buildings = [];
+  const buildings = [], parts = [];
   for (const px of components(isWall, W, H).list) {
     if (px.length < BUILDING_MIN_AREA) continue;
-    for (const part of splitAtSteps(columnProfile(px, W))) {
-      if (part.length < BUILDING_MIN_WIDTH) continue;
-      const f = facadeOf(part, L, W, H);
+    for (const part of splitAtSteps(columnProfile(px, W))) if (part.length >= BUILDING_MIN_WIDTH) parts.push(L ? { cols: part, strips: strips(part, L, W, H) } : { cols: part });
+  }
+  const dominant = L ? dominantVanishing(parts.flatMap((p) => p.strips), W, H) : null;
+  for (const part of parts) {
+    const facets = L ? planes(part.strips, dominant, W, BUILDING_MIN_WIDTH) : [{ cols: part.cols, vp: null }];
+    for (const { cols, vp } of facets) {
+      const f = facadeOf(cols, L, W, H, vp);
       buildings.push({ id: buildings.length + 1, name: 'ДОМ', kind: 'auto', quad: f.quad, clip: f.clip, bottom: f.bottom });
     }
   }
